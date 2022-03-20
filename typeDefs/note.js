@@ -7,13 +7,11 @@ exports.typeDefs = `
   type Note {
     id: ID!
     account: ID!
-    title: String
     body: String!
   }
 
   input NoteInput {
     account: ID
-    title: String
     body: String
   }
 
