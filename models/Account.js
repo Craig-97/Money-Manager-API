@@ -6,5 +6,6 @@ export const Account = mongoose.model('Account', {
   monthlyIncome: Number,
   bankPaydayTotal: Number,
   bills: [{ type: Schema.Types.ObjectId, ref: 'Bill' }],
-  oneOffPayments: [{ type: Schema.Types.ObjectId, ref: 'OneOffPayment' }]
+  oneOffPayments: [{ type: Schema.Types.ObjectId, ref: 'OneOffPayment' }],
+  notes: [{ type: Schema.Types.ObjectId, ref: 'Note' }]
 });

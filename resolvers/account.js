@@ -62,11 +62,12 @@ const deleteAccount = async (_, { id }) => {
 
 exports.resolvers = {
   Query: {
-    accounts: () => Account.find().populate(['bills']),
+    accounts: () => Account.find(),
     account: (_, { id }) =>
       Account.findById(id)
         .populate({ path: 'bills', options: { sort: { amount: 1 } } })
         .populate({ path: 'oneOffPayments', options: { sort: { amount: 1 } } })
+        .populate({ path: 'notes' })
   },
   Mutation: {
     createAccount,
