@@ -8,6 +8,8 @@ exports.typeDefs = `
     id: ID!
     account: ID!
     body: String!
+    createdAt: String!
+    updatedAt: String!
   }
 
   input NoteInput {
