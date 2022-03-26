@@ -21,10 +21,9 @@ const editAccount = async (_, { id, account }) => {
   }
   const mergedAccount = Object.assign(currentAccount, account);
   mergedAccount.__v = mergedAccount.__v + 1;
-  const calculatedAccount = calculateAccountValues(mergedAccount);
 
   try {
-    const editedAccount = await Account.findOneAndUpdate({ _id: id }, calculatedAccount, {
+    const editedAccount = await Account.findOneAndUpdate({ _id: id }, mergedAccount, {
       new: true
     });
 

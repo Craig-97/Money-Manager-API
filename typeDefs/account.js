@@ -8,7 +8,6 @@ exports.typeDefs = `
     id: ID!
     bankBalance: Float!
     monthlyIncome: Float!
-    bankPaydayTotal: Float!
     bills: [Bill]
     oneOffPayments: [OneOffPayment]
     notes: [Note]
