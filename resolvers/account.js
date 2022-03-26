@@ -1,10 +1,8 @@
 import { Account } from '../models/Account';
-import { calculateAccountValues } from './utils';
 
 const createAccount = async (_, { account }) => {
   try {
-    let newAccount = calculateAccountValues(account);
-    newAccount = new Account(newAccount);
+    const newAccount = new Account(account);
     await newAccount.save();
     return { account: newAccount, success: true };
   } catch (err) {
