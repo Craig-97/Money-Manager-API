@@ -66,7 +66,7 @@ const deleteOneOffPayment = async (_, { id }) => {
   try {
     const oneOffPayment = await OneOffPayment.findById(id);
     const response = await OneOffPayment.deleteOne({ _id: id });
-    if (response.ok && response.deletedCount == 1 && oneOffPayment) {
+    if (oneOffPayment && response.deletedCount == 1) {
       return {
         oneOffPayment,
         success: true

@@ -63,7 +63,7 @@ const deleteNote = async (_, { id }) => {
   try {
     const note = await Note.findById(id);
     const response = await Note.deleteOne({ _id: id });
-    if (response.ok && response.deletedCount == 1) {
+    if (note && response.deletedCount == 1) {
       return {
         note,
         success: true

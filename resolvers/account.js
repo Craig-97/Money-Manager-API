@@ -42,8 +42,9 @@ const editAccount = async (_, { id, account }) => {
 
 const deleteAccount = async (_, { id }) => {
   try {
+    const account = await Account.findById(id);
     const response = await Account.deleteOne({ _id: id });
-    if (response.ok && response.deletedCount == 1) {
+    if (account && response.deletedCount == 1) {
       return {
         success: true
       };
