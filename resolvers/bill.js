@@ -81,8 +81,8 @@ const deleteBill = async (_, { id }) => {
 
 exports.resolvers = {
   Query: {
-    bills: () => Bill.find().sort({ amount: 1 }),
-    bill: (_, { id }) => Bill.findById(id)
+    bills: async () => Bill.find().sort({ amount: 1 }),
+    bill: async (_, { id }) => Bill.findById(id)
   },
   Mutation: {
     createBill,

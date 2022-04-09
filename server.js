@@ -12,6 +12,7 @@ const startServer = async () => {
     schema
   });
 
+  await server.start();
   server.applyMiddleware({ app });
 
   await connectToDatabase();

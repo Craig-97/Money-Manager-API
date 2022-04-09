@@ -59,8 +59,8 @@ const deleteAccount = async (_, { id }) => {
 
 exports.resolvers = {
   Query: {
-    accounts: () => Account.find(),
-    account: (_, { id }) =>
+    accounts: async () => Account.find(),
+    account: async (_, { id }) =>
       Account.findById(id)
         .populate({ path: 'bills', options: { sort: { amount: 1 } } })
         .populate({ path: 'oneOffPayments', options: { sort: { amount: 1 } } })

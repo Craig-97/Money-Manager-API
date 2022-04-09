@@ -81,8 +81,8 @@ const deleteNote = async (_, { id }) => {
 
 exports.resolvers = {
   Query: {
-    notes: () => Note.find(),
-    note: (_, { id }) => Note.findById(id)
+    notes: async () => Note.find(),
+    note: async (_, { id }) => Note.findById(id)
   },
   Mutation: {
     createNote,

@@ -84,8 +84,8 @@ const deleteOneOffPayment = async (_, { id }) => {
 
 exports.resolvers = {
   Query: {
-    oneOffPayments: () => OneOffPayment.find().sort({ amount: 1 }),
-    oneOffPayment: (_, { id }) => OneOffPayment.findById(id)
+    oneOffPayments: async () => OneOffPayment.find().sort({ amount: 1 }),
+    oneOffPayment: async (_, { id }) => OneOffPayment.findById(id)
   },
   Mutation: {
     createOneOffPayment,
