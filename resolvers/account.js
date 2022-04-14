@@ -1,5 +1,26 @@
 import { Account } from '../models/Account';
 
+const findAccounts = async () => {
+  const accounts = Account.find();
+  if (!accounts) {
+    throw new Error(`No accounts currently exist`);
+  }
+  return accounts;
+};
+
+const findAccount = async (_, { id }) => {
+  const account = await Account.findById(id)
+    .populate({ path: 'user' })
+    .populate({ path: 'bills', options: { sort: { amount: 1 } } })
+    .populate({ path: 'oneOffPayments', options: { sort: { amount: 1 } } })
+    .populate({ path: 'notes' });
+
+  if (!account) {
+    throw new Error(`Account with id: ${id} does not exist`);
+  }
+  return account;
+};
+
 const createAccount = async (_, { account }) => {
   try {
     const existingAccount = await Account.findOne({ userId: account.userId });
@@ -62,13 +83,8 @@ const deleteAccount = async (_, { id }) => {
 
 exports.resolvers = {
   Query: {
-    accounts: async () => Account.find(),
-    account: async (_, { id }) =>
-      Account.findById(id)
-        .populate({ path: 'user' })
-        .populate({ path: 'bills', options: { sort: { amount: 1 } } })
-        .populate({ path: 'oneOffPayments', options: { sort: { amount: 1 } } })
-        .populate({ path: 'notes' })
+    accounts: findAccounts,
+    account: findAccount
   },
   Mutation: {
     createAccount,

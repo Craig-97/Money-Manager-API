@@ -1,6 +1,22 @@
 import { Note } from '../models/Note';
 import { Account } from '../models/Account';
 
+const findNotes = async () => {
+  const notes = Note.find();
+  if (!notes) {
+    throw new Error(`No notes currently exist`);
+  }
+  return notes;
+};
+
+const findNote = async (_, { id }) => {
+  const note = await Note.findById(id);
+  if (!note) {
+    throw new Error(`Note with id: ${id} does not exist`);
+  }
+  return note;
+};
+
 const createNote = async (_, { note }) => {
   try {
     const existingNote = await Note.findOne({ body: note.body });
@@ -83,8 +99,8 @@ const deleteNote = async (_, { id }) => {
 
 exports.resolvers = {
   Query: {
-    notes: async () => Note.find(),
-    note: async (_, { id }) => Note.findById(id)
+    notes: findNotes,
+    note: findNote
   },
   Mutation: {
     createNote,

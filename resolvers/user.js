@@ -3,7 +3,39 @@ import { Account } from '../models/Account';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const createUser = async (_, { user }, req) => {
+const findUsers = async () => {
+  const users = User.find();
+  if (!users) {
+    throw new Error(`No users currently exist`);
+  }
+  return users;
+};
+
+const findUser = async (_, { id }) => {
+  const user = await User.findById(id);
+  if (!user) {
+    throw new Error(`User with id: ${id} does not exist`);
+  }
+  return user;
+};
+
+const login = async ({ email, password }) => {
+  const user = await User.findOne({ email: email });
+  if (!user) {
+    throw new Error('User does not exist!');
+  }
+  const isEqual = await bcrypt.compare(password, user.password);
+  if (!isEqual) {
+    throw new Error('Password is incorrect!');
+  }
+  const token = jwt.sign({ userId: user.id, email: user.email }, 'somesupersecretkey', {
+    expiresIn: '1h'
+  });
+
+  return { userId: user.id, token: token, tokenExpiration: 1 };
+};
+
+const createUser = async (_, { user }) => {
   try {
     const existingUser = await User.findOne({ email: user.email });
     if (existingUser) {
@@ -37,21 +69,6 @@ const createUser = async (_, { user }, req) => {
   } catch (err) {
     throw err;
   }
-};
-
-const login = async ({ email, password }) => {
-  const user = await User.findOne({ email: email });
-  if (!user) {
-    throw new Error('User does not exist!');
-  }
-  const isEqual = await bcrypt.compare(password, user.password);
-  if (!isEqual) {
-    throw new Error('Password is incorrect!');
-  }
-  const token = jwt.sign({ userId: user.id, email: user.email }, 'somesupersecretkey', {
-    expiresIn: '1h'
-  });
-  return { userId: user.id, token: token, tokenExpiration: 1 };
 };
 
 const editUser = async (_, { id, user }) => {
@@ -102,8 +119,8 @@ const deleteUser = async (_, { id }) => {
 
 exports.resolvers = {
   Query: {
-    users: async () => User.find(),
-    user: async (_, { id }) => User.findById(id),
+    users: findUsers,
+    user: findUser,
     login
   },
   Mutation: {

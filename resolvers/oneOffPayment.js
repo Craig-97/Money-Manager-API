@@ -1,9 +1,25 @@
 import { OneOffPayment } from '../models/OneOffPayment';
 import { Account } from '../models/Account';
 
+const findOneOffPayments = async () => {
+  const oneOffPayments = OneOffPayment.find().sort({ amount: 1 });
+  if (!oneOffPayments) {
+    throw new Error(`No oneOffPayments currently exist`);
+  }
+  return oneOffPayments;
+};
+
+const findOneOffPayment = async (_, { id }) => {
+  const oneOffPayment = await OneOffPayment.findById(id);
+  if (!oneOffPayment) {
+    throw new Error(`OneOffPayment with id: ${id} does not exist`);
+  }
+  return oneOffPayment;
+};
+
 const createOneOffPayment = async (_, { oneOffPayment }) => {
   try {
-    const existingPayment = await Bill.OneOffPayment({ name: oneOffPayment.name });
+    const existingPayment = await OneOffPayment.OneOffPayment({ name: oneOffPayment.name });
     if (existingPayment) {
       throw new Error(`OneOffPayment with name: ${oneOffPayment.name} already exists`);
     }
@@ -86,8 +102,8 @@ const deleteOneOffPayment = async (_, { id }) => {
 
 exports.resolvers = {
   Query: {
-    oneOffPayments: async () => OneOffPayment.find().sort({ amount: 1 }),
-    oneOffPayment: async (_, { id }) => OneOffPayment.findById(id)
+    oneOffPayments: findOneOffPayments,
+    oneOffPayment: findOneOffPayment
   },
   Mutation: {
     createOneOffPayment,

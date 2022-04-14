@@ -1,6 +1,22 @@
 import { Bill } from '../models/Bill';
 import { Account } from '../models/Account';
 
+const findBills = async () => {
+  const bills = Bill.find().sort({ amount: 1 });
+  if (!bills) {
+    throw new Error(`No bills currently exist`);
+  }
+  return bills;
+};
+
+const findBill = async (_, { id }) => {
+  const bill = await Bill.findById(id);
+  if (!bill) {
+    throw new Error(`Bill with id: ${id} does not exist`);
+  }
+  return bill;
+};
+
 const createBill = async (_, { bill }) => {
   try {
     const existingBill = await Bill.findOne({ name: bill.name });
@@ -82,8 +98,8 @@ const deleteBill = async (_, { id }) => {
 
 exports.resolvers = {
   Query: {
-    bills: async () => Bill.find().sort({ amount: 1 }),
-    bill: async (_, { id }) => Bill.findById(id)
+    bills: findBills,
+    bill: findBill
   },
   Mutation: {
     createBill,
