@@ -3,6 +3,11 @@ import { Account } from '../models/Account';
 
 const createNote = async (_, { note }) => {
   try {
+    const existingNote = await Note.findOne({ body: note.body });
+    if (existingNote) {
+      throw new Error(`Note with body: ${note.body} already exists`);
+    }
+
     const newNote = new Note(note);
     await newNote.save().then(() => {
       // UPDATE ACCOUNT TO NOTE ONE-TO-MANY LIST
@@ -21,7 +26,7 @@ const createNote = async (_, { note }) => {
     if (newNote) {
       return { note: newNote, success: true };
     } else {
-      return { success: false };
+      throw new Error(`Note could not be created`);
     }
   } catch (err) {
     throw err;
@@ -29,17 +34,15 @@ const createNote = async (_, { note }) => {
 };
 
 const editNote = async (_, { id, note }) => {
-  const currentNote = await Note.findById(id);
-  if (!currentNote) {
-    return {
-      success: false
-    };
-  }
-
-  const mergedNote = Object.assign(currentNote, note);
-  mergedNote.__v = mergedNote.__v + 1;
-
   try {
+    const currentNote = await Note.findById(id);
+    if (!currentNote) {
+      throw new Error(`Note with id: ${id} does not exist`);
+    }
+
+    const mergedNote = Object.assign(currentNote, note);
+    mergedNote.__v = mergedNote.__v + 1;
+
     const editedNote = await Note.findOneAndUpdate({ _id: id }, mergedNote, {
       new: true
     });
@@ -50,9 +53,7 @@ const editNote = async (_, { id, note }) => {
         success: true
       };
     } else {
-      return {
-        success: false
-      };
+      throw new Error('Note cannot be updated');
     }
   } catch (err) {
     throw err;
@@ -62,6 +63,10 @@ const editNote = async (_, { id, note }) => {
 const deleteNote = async (_, { id }) => {
   try {
     const note = await Note.findById(id);
+    if (!note) {
+      throw new Error(`Note with id: ${id} does not exist`);
+    }
+
     const response = await Note.deleteOne({ _id: id });
     if (note && response.deletedCount == 1) {
       return {
@@ -69,10 +74,7 @@ const deleteNote = async (_, { id }) => {
         success: true
       };
     } else {
-      return {
-        note,
-        success: false
-      };
+      throw new Error('Note cannot be deleted');
     }
   } catch (err) {
     throw err;

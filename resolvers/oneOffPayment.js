@@ -3,6 +3,11 @@ import { Account } from '../models/Account';
 
 const createOneOffPayment = async (_, { oneOffPayment }) => {
   try {
+    const existingPayment = await Bill.OneOffPayment({ name: oneOffPayment.name });
+    if (existingPayment) {
+      throw new Error(`OneOffPayment with name: ${oneOffPayment.name} already exists`);
+    }
+
     const newOneOffPayment = new OneOffPayment(oneOffPayment);
     await newOneOffPayment.save().then(() => {
       // UPDATE ACCOUNT TO ONEOFFPAYMENTS ONE-TO-MANY LIST
@@ -20,7 +25,7 @@ const createOneOffPayment = async (_, { oneOffPayment }) => {
     if (newOneOffPayment) {
       return { oneOffPayment: newOneOffPayment, success: true };
     } else {
-      return { success: false };
+      throw new Error(`OneOffPayment could not be created`);
     }
   } catch (err) {
     throw err;
@@ -28,17 +33,15 @@ const createOneOffPayment = async (_, { oneOffPayment }) => {
 };
 
 const editOneOffPayment = async (_, { id, oneOffPayment }) => {
-  const currentOneOffPayment = await OneOffPayment.findById(id);
-  if (!currentOneOffPayment) {
-    return {
-      success: false
-    };
-  }
-
-  const mergedOneOffPayment = Object.assign(currentOneOffPayment, oneOffPayment);
-  mergedOneOffPayment.__v = mergedOneOffPayment.__v + 1;
-
   try {
+    const currentOneOffPayment = await OneOffPayment.findById(id);
+    if (!currentOneOffPayment) {
+      throw new Error(`OneOffPayment with id: ${id} does not exist`);
+    }
+
+    const mergedOneOffPayment = Object.assign(currentOneOffPayment, oneOffPayment);
+    mergedOneOffPayment.__v = mergedOneOffPayment.__v + 1;
+
     const editedOneOffPayment = await OneOffPayment.findOneAndUpdate(
       { _id: id },
       mergedOneOffPayment,
@@ -53,9 +56,7 @@ const editOneOffPayment = async (_, { id, oneOffPayment }) => {
         success: true
       };
     } else {
-      return {
-        success: false
-      };
+      throw new Error('OneOffPayment cannot be updated');
     }
   } catch (err) {
     throw err;
@@ -65,6 +66,10 @@ const editOneOffPayment = async (_, { id, oneOffPayment }) => {
 const deleteOneOffPayment = async (_, { id }) => {
   try {
     const oneOffPayment = await OneOffPayment.findById(id);
+    if (!oneOffPayment) {
+      throw new Error(`OneOffPayment with id: ${id} does not exist`);
+    }
+
     const response = await OneOffPayment.deleteOne({ _id: id });
     if (oneOffPayment && response.deletedCount == 1) {
       return {
@@ -72,10 +77,7 @@ const deleteOneOffPayment = async (_, { id }) => {
         success: true
       };
     } else {
-      return {
-        oneOffPayment,
-        success: false
-      };
+      throw new Error('OneOffPayment cannot be deleted');
     }
   } catch (err) {
     throw err;

@@ -3,6 +3,11 @@ import { Account } from '../models/Account';
 
 const createBill = async (_, { bill }) => {
   try {
+    const existingBill = await Bill.findOne({ name: bill.name });
+    if (existingBill) {
+      throw new Error(`Bill with name: ${bill.name} already exists`);
+    }
+
     const newBill = new Bill(bill);
     await newBill.save().then(() => {
       // UPDATE ACCOUNT TO BILL ONE-TO-MANY LIST
@@ -11,7 +16,6 @@ const createBill = async (_, { bill }) => {
           if (err) {
             throw err;
           }
-
           account.bills.push(newBill);
           account.save();
         });
@@ -21,7 +25,7 @@ const createBill = async (_, { bill }) => {
     if (newBill) {
       return { bill: newBill, success: true };
     } else {
-      return { success: false };
+      throw new Error(`Bill could not be created`);
     }
   } catch (err) {
     throw err;
@@ -29,17 +33,15 @@ const createBill = async (_, { bill }) => {
 };
 
 const editBill = async (_, { id, bill }) => {
-  const currentBill = await Bill.findById(id);
-  if (!currentBill) {
-    return {
-      success: false
-    };
-  }
-
-  const mergedBill = Object.assign(currentBill, bill);
-  mergedBill.__v = mergedBill.__v + 1;
-
   try {
+    const currentBill = await Bill.findById(id);
+    if (!currentBill) {
+      throw new Error(`Bill with id: ${id} does not exist`);
+    }
+
+    const mergedBill = Object.assign(currentBill, bill);
+    mergedBill.__v = mergedBill.__v + 1;
+
     const editedBill = await Bill.findOneAndUpdate({ _id: id }, mergedBill, {
       new: true
     });
@@ -50,9 +52,7 @@ const editBill = async (_, { id, bill }) => {
         success: true
       };
     } else {
-      return {
-        success: false
-      };
+      throw new Error('Bill cannot be updated');
     }
   } catch (err) {
     throw err;
@@ -62,18 +62,18 @@ const editBill = async (_, { id, bill }) => {
 const deleteBill = async (_, { id }) => {
   try {
     const bill = await Bill.findById(id);
-    const response = await Bill.deleteOne({ _id: id });
+    if (!bill) {
+      throw new Error(`Bill with id: ${id} does not exist`);
+    }
 
+    const response = await Bill.deleteOne({ _id: id });
     if (bill && response.deletedCount == 1) {
       return {
         bill,
         success: true
       };
     } else {
-      return {
-        bill,
-        success: false
-      };
+      throw new Error('Bill cannot be deleted');
     }
   } catch (err) {
     throw err;

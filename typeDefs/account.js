@@ -6,6 +6,7 @@ exports.typeDefs = `
 
   type Account {
     id: ID!
+    user: User
     bankBalance: Float!
     monthlyIncome: Float!
     bills: [Bill]
