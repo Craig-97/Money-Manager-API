@@ -19,7 +19,7 @@ const findUser = async (_, { id }) => {
   return user;
 };
 
-const login = async ({ email, password }) => {
+const login = async (_, { email, password }) => {
   const user = await User.findOne({ email: email });
   if (!user) {
     throw new Error('User does not exist!');
