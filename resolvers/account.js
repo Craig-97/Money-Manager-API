@@ -1,4 +1,5 @@
 import { Account } from '../models/Account';
+import { User } from '../models/User';
 
 const findAccounts = async () => {
   const accounts = Account.find();
@@ -9,16 +10,28 @@ const findAccounts = async () => {
 };
 
 const findAccount = async (_, { id }) => {
-  const account = await Account.findById(id)
-    .populate({ path: 'user' })
-    .populate({ path: 'bills', options: { sort: { amount: 1 } } })
-    .populate({ path: 'oneOffPayments', options: { sort: { amount: 1 } } })
-    .populate({ path: 'notes' });
+  try {
+    const user = await User.findById(id);
 
-  if (!account) {
-    throw new Error(`Account with id: ${id} does not exist`);
+    if (!user) {
+      throw new Error(`Account with user id: ${id} does not exist`);
+    }
+
+    const account = await Account.findById(user.account)
+      .populate({ path: 'user' })
+      .populate({ path: 'bills', options: { sort: { amount: 1 } } })
+      .populate({ path: 'oneOffPayments', options: { sort: { amount: 1 } } })
+      .populate({ path: 'notes' });
+
+    if (!user.account) {
+      throw new Error(`User: ${email} does not have a linked account`);
+    } else if (!account) {
+      throw new Error(`Account with id: ${user.account} does not exist`);
+    }
+    return account;
+  } catch (err) {
+    throw err;
   }
-  return account;
 };
 
 const createAccount = async (_, { account }) => {

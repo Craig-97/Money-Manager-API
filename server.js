@@ -25,7 +25,12 @@ const startServer = async () => {
   app.use(isAuth);
 
   const server = new ApolloServer({
-    schema
+    schema,
+    context: ({ req }) => {
+      return {
+        ...req
+      };
+    }
   });
 
   await server.start();
