@@ -1,7 +1,10 @@
 import { OneOffPayment } from '../models/OneOffPayment';
 import { Account } from '../models/Account';
 
-const findOneOffPayments = async () => {
+const findOneOffPayments = async (_, _1, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
   const oneOffPayments = OneOffPayment.find().sort({ amount: 1 });
   if (!oneOffPayments) {
     throw new Error(`No oneOffPayments currently exist`);
@@ -9,7 +12,10 @@ const findOneOffPayments = async () => {
   return oneOffPayments;
 };
 
-const findOneOffPayment = async (_, { id }) => {
+const findOneOffPayment = async (_, { id }, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
   const oneOffPayment = await OneOffPayment.findById(id);
   if (!oneOffPayment) {
     throw new Error(`OneOffPayment with id: ${id} does not exist`);
@@ -17,7 +23,10 @@ const findOneOffPayment = async (_, { id }) => {
   return oneOffPayment;
 };
 
-const createOneOffPayment = async (_, { oneOffPayment }) => {
+const createOneOffPayment = async (_, { oneOffPayment }, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
   try {
     const existingPayment = await OneOffPayment.OneOffPayment({ name: oneOffPayment.name });
     if (existingPayment) {
@@ -48,7 +57,10 @@ const createOneOffPayment = async (_, { oneOffPayment }) => {
   }
 };
 
-const editOneOffPayment = async (_, { id, oneOffPayment }) => {
+const editOneOffPayment = async (_, { id, oneOffPayment }, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
   try {
     const currentOneOffPayment = await OneOffPayment.findById(id);
     if (!currentOneOffPayment) {
@@ -79,7 +91,10 @@ const editOneOffPayment = async (_, { id, oneOffPayment }) => {
   }
 };
 
-const deleteOneOffPayment = async (_, { id }) => {
+const deleteOneOffPayment = async (_, { id }, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
   try {
     const oneOffPayment = await OneOffPayment.findById(id);
     if (!oneOffPayment) {

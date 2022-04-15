@@ -1,7 +1,10 @@
 import { Bill } from '../models/Bill';
 import { Account } from '../models/Account';
 
-const findBills = async () => {
+const findBills = async (_, _1, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
   const bills = Bill.find().sort({ amount: 1 });
   if (!bills) {
     throw new Error(`No bills currently exist`);
@@ -9,7 +12,10 @@ const findBills = async () => {
   return bills;
 };
 
-const findBill = async (_, { id }) => {
+const findBill = async (_, { id }, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
   const bill = await Bill.findById(id);
   if (!bill) {
     throw new Error(`Bill with id: ${id} does not exist`);
@@ -17,7 +23,10 @@ const findBill = async (_, { id }) => {
   return bill;
 };
 
-const createBill = async (_, { bill }) => {
+const createBill = async (_, { bill }, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
   try {
     const existingBill = await Bill.findOne({ name: bill.name });
     if (existingBill) {
@@ -48,7 +57,10 @@ const createBill = async (_, { bill }) => {
   }
 };
 
-const editBill = async (_, { id, bill }) => {
+const editBill = async (_, { id, bill }, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
   try {
     const currentBill = await Bill.findById(id);
     if (!currentBill) {
@@ -75,7 +87,10 @@ const editBill = async (_, { id, bill }) => {
   }
 };
 
-const deleteBill = async (_, { id }) => {
+const deleteBill = async (_, { id }, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
   try {
     const bill = await Bill.findById(id);
     if (!bill) {

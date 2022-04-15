@@ -27,9 +27,7 @@ const startServer = async () => {
   const server = new ApolloServer({
     schema,
     context: ({ req }) => {
-      return {
-        ...req
-      };
+      return req;
     }
   });
 

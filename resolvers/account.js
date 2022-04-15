@@ -1,7 +1,10 @@
 import { Account } from '../models/Account';
 import { User } from '../models/User';
 
-const findAccounts = async () => {
+const findAccounts = async (_, _1, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
   const accounts = Account.find();
   if (!accounts) {
     throw new Error(`No accounts currently exist`);
@@ -9,7 +12,10 @@ const findAccounts = async () => {
   return accounts;
 };
 
-const findAccount = async (_, { id }) => {
+const findAccount = async (_, { id }, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
   try {
     const user = await User.findById(id);
 
@@ -34,7 +40,11 @@ const findAccount = async (_, { id }) => {
   }
 };
 
-const createAccount = async (_, { account }) => {
+const createAccount = async (_, { account }, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
+
   try {
     const existingAccount = await Account.findOne({ userId: account.userId });
     if (existingAccount) {
@@ -48,7 +58,10 @@ const createAccount = async (_, { account }) => {
   }
 };
 
-const editAccount = async (_, { id, account }) => {
+const editAccount = async (_, { id, account }, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
   try {
     const currentAccount = await Account.findById(id);
     if (!currentAccount) {
@@ -74,7 +87,10 @@ const editAccount = async (_, { id, account }) => {
   }
 };
 
-const deleteAccount = async (_, { id }) => {
+const deleteAccount = async (_, { id }, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
   try {
     const account = await Account.findById(id);
     if (!account) {

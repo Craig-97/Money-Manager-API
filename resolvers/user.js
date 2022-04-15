@@ -28,7 +28,7 @@ const login = async (_, { email, password }) => {
   if (!isEqual) {
     throw new Error('Password is incorrect');
   }
-  const token = jwt.sign({ userId: user.id, email: user.email }, 'somesupersecretkey', {
+  const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_KEY, {
     expiresIn: '1h'
   });
 
@@ -71,7 +71,10 @@ const createUser = async (_, { user }) => {
   }
 };
 
-const editUser = async (_, { id, user }) => {
+const editUser = async (_, { id, user }, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
   try {
     const currentUser = await User.findById(id);
     if (!currentUser) {
@@ -97,7 +100,10 @@ const editUser = async (_, { id, user }) => {
   }
 };
 
-const deleteUser = async (_, { id }) => {
+const deleteUser = async (_, { id }, req) => {
+  if (!req.isAuth) {
+    throw new Error('Unauthenticated!');
+  }
   try {
     const user = await User.findById(id);
     if (!user) {
