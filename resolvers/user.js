@@ -36,6 +36,11 @@ const login = async (_, { email, password }) => {
   return { userId: user.id, token: token, tokenExpiration: 1 };
 };
 
+const tokenFindUser = async (_, _1, req) => {
+  checkAuth(req);
+  return findUser(_, { id: req.userId }, req);
+};
+
 const createUser = async (_, { user }) => {
   try {
     const existingUser = await User.findOne({ email: user.email });
@@ -124,7 +129,8 @@ exports.resolvers = {
   Query: {
     users: findUsers,
     user: findUser,
-    login
+    login,
+    tokenFindUser
   },
   Mutation: {
     createUser,

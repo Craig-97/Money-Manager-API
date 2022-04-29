@@ -3,13 +3,13 @@ exports.typeDefs = `
     users: [User!]!
     user(id: ID): User
     login(email: String!, password: String!): AuthData!
+    tokenFindUser: User
   }
 
   type User {
     id: ID!
     account: ID
     email: String!
-    password: String
   }
 
   input UserInput {
