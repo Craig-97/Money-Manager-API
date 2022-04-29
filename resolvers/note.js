@@ -1,10 +1,9 @@
-import { Note } from '../models/Note';
+import { checkAuth } from '../middleware/isAuth';
 import { Account } from '../models/Account';
+import { Note } from '../models/Note';
 
 const findNotes = async (_, _1, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
   const notes = Note.find();
   if (!notes) {
     throw new Error(`No notes currently exist`);
@@ -13,9 +12,7 @@ const findNotes = async (_, _1, req) => {
 };
 
 const findNote = async (_, { id }, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
   const note = await Note.findById(id);
   if (!note) {
     throw new Error(`Note with id: ${id} does not exist`);
@@ -24,9 +21,7 @@ const findNote = async (_, { id }, req) => {
 };
 
 const createNote = async (_, { note }, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
   try {
     const existingNote = await Note.findOne({ body: note.body });
     if (existingNote) {
@@ -59,9 +54,7 @@ const createNote = async (_, { note }, req) => {
 };
 
 const editNote = async (_, { id, note }, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
   try {
     const currentNote = await Note.findById(id);
     if (!currentNote) {
@@ -89,9 +82,7 @@ const editNote = async (_, { id, note }, req) => {
 };
 
 const deleteNote = async (_, { id }, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
   try {
     const note = await Note.findById(id);
     if (!note) {

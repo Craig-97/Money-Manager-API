@@ -1,10 +1,9 @@
-import { OneOffPayment } from '../models/OneOffPayment';
+import { checkAuth } from '../middleware/isAuth';
 import { Account } from '../models/Account';
+import { OneOffPayment } from '../models/OneOffPayment';
 
 const findOneOffPayments = async (_, _1, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
   const oneOffPayments = OneOffPayment.find().sort({ amount: 1 });
   if (!oneOffPayments) {
     throw new Error(`No oneOffPayments currently exist`);
@@ -13,9 +12,7 @@ const findOneOffPayments = async (_, _1, req) => {
 };
 
 const findOneOffPayment = async (_, { id }, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
   const oneOffPayment = await OneOffPayment.findById(id);
   if (!oneOffPayment) {
     throw new Error(`OneOffPayment with id: ${id} does not exist`);
@@ -24,11 +21,9 @@ const findOneOffPayment = async (_, { id }, req) => {
 };
 
 const createOneOffPayment = async (_, { oneOffPayment }, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
   try {
-    const existingPayment = await OneOffPayment.OneOffPayment({ name: oneOffPayment.name });
+    const existingPayment = await OneOffPayment.findOne({ name: oneOffPayment.name });
     if (existingPayment) {
       throw new Error(`OneOffPayment with name: ${oneOffPayment.name} already exists`);
     }
@@ -58,9 +53,7 @@ const createOneOffPayment = async (_, { oneOffPayment }, req) => {
 };
 
 const editOneOffPayment = async (_, { id, oneOffPayment }, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
   try {
     const currentOneOffPayment = await OneOffPayment.findById(id);
     if (!currentOneOffPayment) {
@@ -92,9 +85,7 @@ const editOneOffPayment = async (_, { id, oneOffPayment }, req) => {
 };
 
 const deleteOneOffPayment = async (_, { id }, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
   try {
     const oneOffPayment = await OneOffPayment.findById(id);
     if (!oneOffPayment) {

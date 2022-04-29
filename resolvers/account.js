@@ -1,10 +1,9 @@
+import { checkAuth } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { User } from '../models/User';
 
 const findAccounts = async (_, _1, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
   const accounts = Account.find();
   if (!accounts) {
     throw new Error(`No accounts currently exist`);
@@ -13,9 +12,8 @@ const findAccounts = async (_, _1, req) => {
 };
 
 const findAccount = async (_, { id }, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
+
   try {
     const user = await User.findById(id);
 
@@ -41,9 +39,7 @@ const findAccount = async (_, { id }, req) => {
 };
 
 const createAccount = async (_, { account }, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
 
   try {
     const existingAccount = await Account.findOne({ userId: account.userId });
@@ -59,9 +55,7 @@ const createAccount = async (_, { account }, req) => {
 };
 
 const editAccount = async (_, { id, account }, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
   try {
     const currentAccount = await Account.findById(id);
     if (!currentAccount) {
@@ -88,9 +82,7 @@ const editAccount = async (_, { id, account }, req) => {
 };
 
 const deleteAccount = async (_, { id }, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
   try {
     const account = await Account.findById(id);
     if (!account) {

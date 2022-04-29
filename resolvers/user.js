@@ -1,7 +1,8 @@
-import { User } from '../models/User';
-import { Account } from '../models/Account';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { checkAuth } from '../middleware/isAuth';
+import { Account } from '../models/Account';
+import { User } from '../models/User';
 
 const findUsers = async () => {
   const users = User.find();
@@ -72,9 +73,7 @@ const createUser = async (_, { user }) => {
 };
 
 const editUser = async (_, { id, user }, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
   try {
     const currentUser = await User.findById(id);
     if (!currentUser) {
@@ -101,9 +100,7 @@ const editUser = async (_, { id, user }, req) => {
 };
 
 const deleteUser = async (_, { id }, req) => {
-  if (!req.isAuth) {
-    throw new Error('Unauthenticated!');
-  }
+  checkAuth(req);
   try {
     const user = await User.findById(id);
     if (!user) {
