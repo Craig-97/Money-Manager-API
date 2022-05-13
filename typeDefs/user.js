@@ -10,12 +10,16 @@ exports.typeDefs = `
     id: ID!
     account: ID
     email: String!
+    firstName: String!
+    surname: String!
   }
 
   input UserInput {
     email: String!
     password: String!
     account: ID
+    firstName: String!
+    surname: String!
   }
 
   type UserResponse {
@@ -25,7 +29,7 @@ exports.typeDefs = `
   }
 
   type AuthData {
-    userId: ID!
+    user: User!
     token: String!
     tokenExpiration: Int!
   }

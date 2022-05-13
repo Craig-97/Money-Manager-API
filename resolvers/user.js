@@ -33,7 +33,7 @@ const login = async (_, { email, password }) => {
     expiresIn: '1h'
   });
 
-  return { userId: user.id, token: token, tokenExpiration: 1 };
+  return { user, token: token, tokenExpiration: 1 };
 };
 
 const tokenFindUser = async (_, _1, req) => {
@@ -50,6 +50,8 @@ const createUser = async (_, { user }) => {
     const hashedPassword = await bcrypt.hash(user.password, 12);
 
     const newUser = new User({
+      firstName: user.firstName,
+      surname: user.surname,
       email: user.email,
       password: hashedPassword,
       account: user.account
