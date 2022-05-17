@@ -45,7 +45,7 @@ const createUser = async (_, { user }) => {
   try {
     const existingUser = await User.findOne({ email: user.email });
     if (existingUser) {
-      throw new Error(`User with email: ${user.email} already exists`);
+      throw new Error(`User with email already exists`);
     }
     const hashedPassword = await bcrypt.hash(user.password, 12);
 
