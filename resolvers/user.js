@@ -79,6 +79,11 @@ const createUser = async (_, { user }) => {
   }
 };
 
+const registerAndLogin = async (_, { user }) => {
+  createUser(_, { user });
+  return login(_, { email: user.email, password: user.password });
+};
+
 const editUser = async (_, { id, user }, req) => {
   checkAuth(req);
   try {
@@ -135,6 +140,7 @@ exports.resolvers = {
     tokenFindUser
   },
   Mutation: {
+    registerAndLogin,
     createUser,
     editUser,
     deleteUser

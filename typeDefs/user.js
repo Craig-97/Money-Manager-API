@@ -35,6 +35,7 @@ exports.typeDefs = `
   }
 
   type Mutation {
+    registerAndLogin(user: UserInput): AuthData!
     createUser(user: UserInput!): UserResponse!
     editUser(id: ID!, user: UserInput!): UserResponse!
     deleteUser(id: ID!): UserResponse!
