@@ -28,7 +28,7 @@ const findAccount = async (_, { id }, req) => {
       .populate({ path: 'notes' });
 
     if (!user.account) {
-      throw new Error(`User: ${email} does not have a linked account`);
+      throw new Error(`User does not have a linked account`);
     } else if (!account) {
       throw new Error(`Account with id: ${user.account} does not exist`);
     }

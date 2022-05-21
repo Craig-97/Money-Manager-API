@@ -80,7 +80,7 @@ const createUser = async (_, { user }) => {
 };
 
 const registerAndLogin = async (_, { user }) => {
-  createUser(_, { user });
+  await createUser(_, { user });
   return login(_, { email: user.email, password: user.password });
 };
 
