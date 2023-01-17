@@ -91,6 +91,12 @@ const editUser = async (_, { id, user }, req) => {
     if (!currentUser) {
       throw new Error(`User with id: ${id} does not exist`);
     }
+
+    if (user.password) {
+      const hashedPassword = await bcrypt.hash(user.password, 12);
+      user.password = hashedPassword;
+    }
+
     const mergedUser = Object.assign(currentUser, user);
     mergedUser.__v = mergedUser.__v + 1;
 
