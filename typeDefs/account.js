@@ -14,10 +14,17 @@ exports.typeDefs = `
     notes: [Note]
   }
 
-  input AccountInput {
+  input CreateAccountInput {
+    bankBalance: Float!
+    monthlyIncome: Float!
+    userId: ID!
+  }
+
+  input EditAccountInput {
     bankBalance: Float
     monthlyIncome: Float
   }
+
 
   type AccountResponse {
     account: Account
@@ -25,8 +32,8 @@ exports.typeDefs = `
   }
 
   type Mutation {
-    createAccount(account: AccountInput!): AccountResponse!
-    editAccount(id: ID!, account: AccountInput!): AccountResponse!
+    createAccount(account: CreateAccountInput!): AccountResponse!
+    editAccount(id: ID!, account: EditAccountInput!): AccountResponse!
     deleteAccount(id: ID!): AccountResponse!
   }
 `;

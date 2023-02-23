@@ -23,11 +23,6 @@ const findOneOffPayment = async (_, { id }, req) => {
 const createOneOffPayment = async (_, { oneOffPayment }, req) => {
   checkAuth(req);
   try {
-    const existingPayment = await OneOffPayment.findOne({ name: oneOffPayment.name });
-    if (existingPayment) {
-      throw new Error(`OneOffPayment with name: ${oneOffPayment.name} already exists`);
-    }
-
     const newOneOffPayment = new OneOffPayment(oneOffPayment);
     await newOneOffPayment.save().then(() => {
       // UPDATE ACCOUNT TO ONEOFFPAYMENTS ONE-TO-MANY LIST

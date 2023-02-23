@@ -23,11 +23,6 @@ const findNote = async (_, { id }, req) => {
 const createNote = async (_, { note }, req) => {
   checkAuth(req);
   try {
-    const existingNote = await Note.findOne({ body: note.body });
-    if (existingNote) {
-      throw new Error(`Note with body: ${note.body} already exists`);
-    }
-
     const newNote = new Note(note);
     await newNote.save().then(() => {
       // UPDATE ACCOUNT TO NOTE ONE-TO-MANY LIST
