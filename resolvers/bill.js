@@ -23,6 +23,11 @@ const findBill = async (_, { id }, req) => {
 const createBill = async (_, { bill }, req) => {
   checkAuth(req);
   try {
+    const existingBill = await Bill.findOne({ name: bill.name, account: bill.account });
+    if (existingBill) {
+      throw new Error(`Bill with name: ${bill.name} already exists`);
+    }
+
     const newBill = new Bill(bill);
     await newBill.save().then(() => {
       // UPDATE ACCOUNT TO BILL ONE-TO-MANY LIST
