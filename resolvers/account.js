@@ -40,7 +40,6 @@ const findAccount = async (_, { id }, req) => {
 
 const createAccount = async (_, { account }, req) => {
   checkAuth(req);
-
   try {
     const existingAccount = await Account.findOne({ user: account.userId });
     if (existingAccount) {
@@ -51,26 +50,26 @@ const createAccount = async (_, { account }, req) => {
     if (!existingUser) {
       throw new Error(`User with id: ${id} does not exist`);
     }
-  
+
     const newAccount = new Account({
       bankBalance: account.bankBalance,
       monthlyIncome: account.monthlyIncome,
       user: existingUser
     });
 
-    await newAccount.save().then(() => {
-      // UPDATE USER ACCOUNT FIELD
-      if (newAccount.user) {
-        User.findOne({ _id: newAccount.user }, (err, user) => {
-          if (err) {
-            throw err;
-          }
-          user.account = newAccount;
-          user.save();
-        });
-      }
-    });
+    await newAccount.save();
 
+    // UPDATE USER ACCOUNT FIELD
+    if (newAccount.user) {
+      const user = await User.findOne({
+        _id: newAccount.user
+      });
+
+      if (user?.account) {
+        user.account = newAccount;
+        user.save();
+      }
+    }
     return { account: newAccount, success: true };
   } catch (err) {
     throw err;

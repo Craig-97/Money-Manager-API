@@ -29,19 +29,19 @@ const createNote = async (_, { note }, req) => {
     }
 
     const newNote = new Note(note);
-    await newNote.save().then(() => {
-      // UPDATE ACCOUNT TO NOTE ONE-TO-MANY LIST
-      if (newNote.account) {
-        Account.findOne({ _id: newNote.account }, (err, account) => {
-          if (err) {
-            throw err;
-          }
+    await newNote.save();
 
-          account.notes.push(newNote);
-          account.save();
-        });
+    // UPDATE ACCOUNT TO NOTE ONE-TO-MANY LIST
+    if (newNote.account) {
+      const account = await Account.findOne({ _id: newNote.account });
+
+      if (account) {
+        account.notes.push(newNote);
+        account.save();
+      } else {
+        throw new Error(`Account with ID ${newNote.account} could not be found`);
       }
-    });
+    }
 
     if (newNote) {
       return { note: newNote, success: true };

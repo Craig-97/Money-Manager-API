@@ -1,6 +1,7 @@
 import { checkAuth } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { OneOffPayment } from '../models/OneOffPayment';
+import { Bill } from '../models/Bill';
 
 const findOneOffPayments = async (_, _1, req) => {
   checkAuth(req);
@@ -23,24 +24,37 @@ const findOneOffPayment = async (_, { id }, req) => {
 const createOneOffPayment = async (_, { oneOffPayment }, req) => {
   checkAuth(req);
   try {
-    const existingPayment = await OneOffPayment.findOne({ name: oneOffPayment.name, account: oneOffPayment.account });
+    const existingPayment = await OneOffPayment.findOne({
+      name: oneOffPayment.name,
+      account: oneOffPayment.account
+    });
     if (existingPayment) {
       throw new Error(`OneOffPayment with name: ${oneOffPayment.name} already exists`);
     }
-    const newOneOffPayment = new OneOffPayment(oneOffPayment);
-    await newOneOffPayment.save().then(() => {
-      // UPDATE ACCOUNT TO ONEOFFPAYMENTS ONE-TO-MANY LIST
-      if (newOneOffPayment.account) {
-        Account.findOne({ _id: newOneOffPayment.account }, (err, account) => {
-          if (err) {
-            throw err;
-          }
 
-          account.oneOffPayments.push(newOneOffPayment);
-          account.save();
-        });
-      }
+    const existingBill = await Bill.findOne({
+      name: oneOffPayment.name,
+      account: oneOffPayment.account
     });
+    if (existingBill) {
+      throw new Error(`Bill with name: ${oneOffPayment.name} already exists`);
+    }
+
+    const newOneOffPayment = new OneOffPayment(oneOffPayment);
+    await newOneOffPayment.save();
+
+    // UPDATE ACCOUNT TO ONEOFFPAYMENTS ONE-TO-MANY LIST
+    if (newOneOffPayment.account) {
+      const account = await Account.findOne({ _id: newOneOffPayment.account });
+
+      if (account) {
+        account.oneOffPayments.push(newOneOffPayment);
+        account.save();
+      } else {
+        throw new Error(`Account with ID ${newOneOffPayment.account} could not be found`);
+      }
+    }
+
     if (newOneOffPayment) {
       return { oneOffPayment: newOneOffPayment, success: true };
     } else {

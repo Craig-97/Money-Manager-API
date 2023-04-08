@@ -56,18 +56,19 @@ const createUser = async (_, { user }) => {
       password: hashedPassword,
       account: user.account
     });
-    await newUser.save().then(() => {
-      // UPDATE ACCOUNT USER FIELD
-      if (newUser.account) {
-        Account.findOne({ _id: newUser.account }, (err, account) => {
-          if (err) {
-            throw err;
-          }
-          account.user = newUser;
-          account.save();
-        });
+    await newUser.save();
+
+    // UPDATE ACCOUNT USER FIELD
+    if (newUser.account) {
+      const account = await Account.findOne({ _id: newUser.account });
+
+      if (account) {
+        account.user = newUser;
+        account.save();
+      } else {
+        throw new Error(`Account with ID ${newUser.account} could not be found`);
       }
-    });
+    }
 
     if (newUser) {
       return { user: newUser, success: true };

@@ -1,5 +1,6 @@
 import { checkAuth } from '../middleware/isAuth';
 import { Account } from '../models/Account';
+import { OneOffPayment } from '../models/OneOffPayment';
 import { Bill } from '../models/Bill';
 
 const findBills = async (_, _1, req) => {
@@ -28,19 +29,25 @@ const createBill = async (_, { bill }, req) => {
       throw new Error(`Bill with name: ${bill.name} already exists`);
     }
 
+    const existingPayment = await OneOffPayment.findOne({ name: bill.name, account: bill.account });
+    if (existingPayment) {
+      throw new Error(`OneOffPayment with name: ${bill.name} already exists`);
+    }
+
     const newBill = new Bill(bill);
-    await newBill.save().then(() => {
-      // UPDATE ACCOUNT TO BILL ONE-TO-MANY LIST
-      if (newBill.account) {
-        Account.findOne({ _id: newBill.account }, (err, account) => {
-          if (err) {
-            throw err;
-          }
-          account.bills.push(newBill);
-          account.save();
-        });
+    await newBill.save();
+
+    // UPDATE ACCOUNT TO BILL ONE-TO-MANY LIST
+    if (newBill.account) {
+      const account = await Account.findOne({ _id: newBill.account });
+
+      if (account) {
+        account.bills.push(newBill);
+        account.save();
+      } else {
+        throw new Error(`Account with ID ${newBill.account} could not be found`);
       }
-    });
+    }
 
     if (newBill) {
       return { bill: newBill, success: true };
