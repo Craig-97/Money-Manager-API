@@ -1,5 +1,5 @@
+import { GraphQLError } from 'graphql';
 import jwt from 'jsonwebtoken';
-import { AuthenticationError } from 'apollo-server-express';
 
 export const isAuth = (req, _, next) => {
   const authHeader = req.get('Authorization');
@@ -38,8 +38,18 @@ export const isAuth = (req, _, next) => {
 
 export const checkAuth = req => {
   if (req.isExpired) {
-    throw new AuthenticationError('Unauthenticated! - Expired token', { expired: true });
+    throw new GraphQLError('Unauthenticated! - Expired token', {
+      extensions: {
+        code: 'UNAUTHENTICATED',
+        expired: true
+      }
+    });
   } else if (!req.isAuth) {
-    throw new AuthenticationError('Unauthenticated! - Invalid token', { invalid: true });
+    throw new GraphQLError('Unauthenticated! - Invalid token', {
+      extensions: {
+        code: 'UNAUTHENTICATED',
+        invalid: true
+      }
+    });
   }
 };

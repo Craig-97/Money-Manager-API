@@ -1,6 +1,10 @@
-import { ApolloServer } from 'apollo-server-express';
-import bodyParser from 'body-parser';
+import { ApolloServer } from '@apollo/server';
+import { expressMiddleware } from '@apollo/server/express4';
+import { ApolloServerPluginDrainHttpServer } from '@apollo/server/plugin/drainHttpServer';
 import express from 'express';
+import http from 'http';
+import cors from 'cors';
+import { json } from 'body-parser';
 import { connectToDatabase } from './db/mongodb';
 import { isAuth } from './middleware/isAuth';
 import { schema } from './schema';
@@ -9,8 +13,6 @@ require('dotenv').config();
 
 const startServer = async () => {
   const app = express();
-
-  app.use(bodyParser.json());
 
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -24,20 +26,30 @@ const startServer = async () => {
 
   app.use(isAuth);
 
+  const httpServer = http.createServer(app);
   const server = new ApolloServer({
     schema,
-    context: ({ req }) => {
-      return req;
-    }
+    plugins: [ApolloServerPluginDrainHttpServer({ httpServer })]
   });
 
   await server.start();
-  server.applyMiddleware({ app });
+
+  app.use(
+    '/graphql',
+    cors(),
+    json(),
+    expressMiddleware(server, {
+      context: async ({ req }) => {
+        return req;
+      }
+    })
+  );
 
   await connectToDatabase();
 
   const PORT = process.env.PORT || 4000;
-  app.listen({ port: PORT }, () => console.log(`🚀 Server running on ${PORT}`));
+  await new Promise(resolve => httpServer.listen({ port: PORT }, resolve));
+  console.log(`🚀 Server running on ${PORT}`);
 };
 
 startServer();
