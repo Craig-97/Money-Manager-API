@@ -16,7 +16,7 @@ const findBill = async (_, { id }, req) => {
   checkAuth(req);
   const bill = await Bill.findById(id);
   if (!bill) {
-    throw new Error(`Bill with id: ${id} does not exist`);
+    throw new Error(`Bill with id '${id}' does not exist`);
   }
   return bill;
 };
@@ -26,12 +26,12 @@ const createBill = async (_, { bill }, req) => {
   try {
     const existingBill = await Bill.findOne({ name: bill.name, account: bill.account });
     if (existingBill) {
-      throw new Error(`Bill with name: ${bill.name} already exists`);
+      throw new Error(`Bill '${bill.name}' already exists`);
     }
 
     const existingPayment = await OneOffPayment.findOne({ name: bill.name, account: bill.account });
     if (existingPayment) {
-      throw new Error(`OneOffPayment with name: ${bill.name} already exists`);
+      throw new Error(`Payment '${bill.name}' already exists`);
     }
 
     const newBill = new Bill(bill);
@@ -64,7 +64,7 @@ const editBill = async (_, { id, bill }, req) => {
   try {
     const currentBill = await Bill.findById(id);
     if (!currentBill) {
-      throw new Error(`Bill with id: ${id} does not exist`);
+      throw new Error(`Bill with id '${id}' does not exist`);
     }
 
     const mergedBill = Object.assign(currentBill, bill);
@@ -92,7 +92,7 @@ const deleteBill = async (_, { id }, req) => {
   try {
     const bill = await Bill.findById(id);
     if (!bill) {
-      throw new Error(`Bill with id: ${id} does not exist`);
+      throw new Error(`Bill with id '${id}' does not exist`);
     }
 
     const response = await Bill.deleteOne({ _id: id });

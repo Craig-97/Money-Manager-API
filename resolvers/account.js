@@ -18,7 +18,7 @@ const findAccount = async (_, { id }, req) => {
     const user = await User.findById(id);
 
     if (!user) {
-      throw new Error(`Account with user id: ${id} does not exist`);
+      throw new Error(`Account with user id '${id}' does not exist`);
     }
 
     const account = await Account.findById(user.account)
@@ -30,7 +30,7 @@ const findAccount = async (_, { id }, req) => {
     if (!user.account) {
       throw new Error(`User does not have a linked account`);
     } else if (!account) {
-      throw new Error(`Account with id: ${user.account} does not exist`);
+      throw new Error(`Account with id '${user.account}' does not exist`);
     }
     return account;
   } catch (err) {
@@ -43,12 +43,12 @@ const createAccount = async (_, { account }, req) => {
   try {
     const existingAccount = await Account.findOne({ user: account.userId });
     if (existingAccount) {
-      throw new Error(`Account with userId: ${account.userId} already exists`);
+      throw new Error(`Account with userId '${account.userId}' already exists`);
     }
 
     const existingUser = await User.findById(account.userId);
     if (!existingUser) {
-      throw new Error(`User with id: ${id} does not exist`);
+      throw new Error(`User with id '${id}' does not exist`);
     }
 
     const newAccount = new Account({
@@ -81,7 +81,7 @@ const editAccount = async (_, { id, account }, req) => {
   try {
     const currentAccount = await Account.findById(id);
     if (!currentAccount) {
-      throw new Error(`Account with id: ${id} does not exist`);
+      throw new Error(`Account with id '${id}' does not exist`);
     }
     const mergedAccount = Object.assign(currentAccount, account);
     mergedAccount.__v = mergedAccount.__v + 1;
@@ -108,7 +108,7 @@ const deleteAccount = async (_, { id }, req) => {
   try {
     const account = await Account.findById(id);
     if (!account) {
-      throw new Error(`Account with id: ${id} does not exist`);
+      throw new Error(`Account with id '${id}' does not exist`);
     }
 
     const response = await Account.deleteOne({ _id: id });

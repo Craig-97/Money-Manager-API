@@ -16,7 +16,7 @@ const findOneOffPayment = async (_, { id }, req) => {
   checkAuth(req);
   const oneOffPayment = await OneOffPayment.findById(id);
   if (!oneOffPayment) {
-    throw new Error(`OneOffPayment with id: ${id} does not exist`);
+    throw new Error(`Payment with id '${id}' does not exist`);
   }
   return oneOffPayment;
 };
@@ -29,7 +29,7 @@ const createOneOffPayment = async (_, { oneOffPayment }, req) => {
       account: oneOffPayment.account
     });
     if (existingPayment) {
-      throw new Error(`OneOffPayment with name: ${oneOffPayment.name} already exists`);
+      throw new Error(`Payment '${oneOffPayment.name}' already exists`);
     }
 
     const existingBill = await Bill.findOne({
@@ -37,7 +37,7 @@ const createOneOffPayment = async (_, { oneOffPayment }, req) => {
       account: oneOffPayment.account
     });
     if (existingBill) {
-      throw new Error(`Bill with name: ${oneOffPayment.name} already exists`);
+      throw new Error(`Bill '${oneOffPayment.name}' already exists`);
     }
 
     const newOneOffPayment = new OneOffPayment(oneOffPayment);
@@ -70,7 +70,7 @@ const editOneOffPayment = async (_, { id, oneOffPayment }, req) => {
   try {
     const currentOneOffPayment = await OneOffPayment.findById(id);
     if (!currentOneOffPayment) {
-      throw new Error(`OneOffPayment with id: ${id} does not exist`);
+      throw new Error(`Payment with id '${id}' does not exist`);
     }
 
     const mergedOneOffPayment = Object.assign(currentOneOffPayment, oneOffPayment);
@@ -102,7 +102,7 @@ const deleteOneOffPayment = async (_, { id }, req) => {
   try {
     const oneOffPayment = await OneOffPayment.findById(id);
     if (!oneOffPayment) {
-      throw new Error(`OneOffPayment with id: ${id} does not exist`);
+      throw new Error(`Payment with id '${id}' does not exist`);
     }
 
     const response = await OneOffPayment.deleteOne({ _id: id });

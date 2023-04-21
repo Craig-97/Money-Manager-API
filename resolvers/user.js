@@ -15,7 +15,7 @@ const findUsers = async () => {
 const findUser = async (_, { id }) => {
   const user = await User.findById(id);
   if (!user) {
-    throw new Error(`User with id: ${id} does not exist`);
+    throw new Error(`User with id '${id}' does not exist`);
   }
   return user;
 };
@@ -90,7 +90,7 @@ const editUser = async (_, { id, user }, req) => {
   try {
     const currentUser = await User.findById(id);
     if (!currentUser) {
-      throw new Error(`User with id: ${id} does not exist`);
+      throw new Error(`User with id '${id}' does not exist`);
     }
 
     if (user.password) {
@@ -123,7 +123,7 @@ const deleteUser = async (_, { id }, req) => {
   try {
     const user = await User.findById(id);
     if (!user) {
-      throw new Error(`User with id: ${id} does not exist`);
+      throw new Error(`User with id '${id}' does not exist`);
     }
 
     const response = await User.deleteOne({ _id: id });
