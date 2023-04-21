@@ -15,7 +15,7 @@ const findNote = async (_, { id }, req) => {
   checkAuth(req);
   const note = await Note.findById(id);
   if (!note) {
-    throw new Error(`Note with id: ${id} does not exist`);
+    throw new Error(`Note with id '${id}' does not exist`);
   }
   return note;
 };
@@ -58,7 +58,7 @@ const editNote = async (_, { id, note }, req) => {
   try {
     const currentNote = await Note.findById(id);
     if (!currentNote) {
-      throw new Error(`Note with id: ${id} does not exist`);
+      throw new Error(`Note with id '${id}' does not exist`);
     }
 
     const mergedNote = Object.assign(currentNote, note);
@@ -86,7 +86,7 @@ const deleteNote = async (_, { id }, req) => {
   try {
     const note = await Note.findById(id);
     if (!note) {
-      throw new Error(`Note with id: ${id} does not exist`);
+      throw new Error(`Note with id '${id}' does not exist`);
     }
 
     const response = await Note.deleteOne({ _id: id });
