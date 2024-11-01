@@ -1,11 +1,11 @@
-import { checkAuth } from '../middleware/isAuth';
+import { checkAuth, checkAccountAccess } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { OneOffPayment } from '../models/OneOffPayment';
 import { Bill } from '../models/Bill';
 
 const findOneOffPayments = async (_, _1, req) => {
-  checkAuth(req);
-  const oneOffPayments = OneOffPayment.find().sort({ amount: 1 });
+  await checkAuth(req);
+  const oneOffPayments = await OneOffPayment.find({ account: req.accountId }).sort({ amount: 1 });
   if (!oneOffPayments) {
     throw new Error(`No oneOffPayments currently exist`);
   }
@@ -13,16 +13,18 @@ const findOneOffPayments = async (_, _1, req) => {
 };
 
 const findOneOffPayment = async (_, { id }, req) => {
-  checkAuth(req);
+  await checkAuth(req);
   const oneOffPayment = await OneOffPayment.findById(id);
   if (!oneOffPayment) {
     throw new Error(`Payment with id '${id}' does not exist`);
   }
+  await checkAccountAccess(oneOffPayment.account, req);
   return oneOffPayment;
 };
 
 const createOneOffPayment = async (_, { oneOffPayment }, req) => {
-  checkAuth(req);
+  await checkAuth(req);
+  await checkAccountAccess(oneOffPayment.account, req);
   try {
     const existingPayment = await OneOffPayment.findOne({
       name: oneOffPayment.name,
@@ -66,13 +68,14 @@ const createOneOffPayment = async (_, { oneOffPayment }, req) => {
 };
 
 const editOneOffPayment = async (_, { id, oneOffPayment }, req) => {
-  checkAuth(req);
-  try {
-    const currentOneOffPayment = await OneOffPayment.findById(id);
-    if (!currentOneOffPayment) {
-      throw new Error(`Payment with id '${id}' does not exist`);
-    }
+  await checkAuth(req);
+  const currentOneOffPayment = await OneOffPayment.findById(id);
+  if (!currentOneOffPayment) {
+    throw new Error(`Payment with id '${id}' does not exist`);
+  }
+  await checkAccountAccess(currentOneOffPayment.account, req);
 
+  try {
     const mergedOneOffPayment = Object.assign(currentOneOffPayment, oneOffPayment);
     mergedOneOffPayment.__v = mergedOneOffPayment.__v + 1;
 
@@ -84,7 +87,7 @@ const editOneOffPayment = async (_, { id, oneOffPayment }, req) => {
       }
     );
 
-    if (editOneOffPayment) {
+    if (editedOneOffPayment) {
       return {
         oneOffPayment: editedOneOffPayment,
         success: true
@@ -98,13 +101,14 @@ const editOneOffPayment = async (_, { id, oneOffPayment }, req) => {
 };
 
 const deleteOneOffPayment = async (_, { id }, req) => {
-  checkAuth(req);
-  try {
-    const oneOffPayment = await OneOffPayment.findById(id);
-    if (!oneOffPayment) {
-      throw new Error(`Payment with id '${id}' does not exist`);
-    }
+  await checkAuth(req);
+  const oneOffPayment = await OneOffPayment.findById(id);
+  if (!oneOffPayment) {
+    throw new Error(`Payment with id '${id}' does not exist`);
+  }
+  await checkAccountAccess(oneOffPayment.account, req);
 
+  try {
     const response = await OneOffPayment.deleteOne({ _id: id });
     if (oneOffPayment && response.deletedCount == 1) {
       return {
@@ -119,6 +123,39 @@ const deleteOneOffPayment = async (_, { id }, req) => {
   }
 };
 
+const batchDeleteOneOffPayments = async (_, { ids }, req) => {
+  await checkAuth(req);
+
+  try {
+    // Verify all payments exist and belong to the user's account
+    const payments = await OneOffPayment.find({ _id: { $in: ids } });
+    if (payments.length !== ids.length) {
+      throw new Error('One or more payments not found');
+    }
+
+    // Check access for each payment
+    await Promise.all(payments.map(payment => checkAccountAccess(payment.account, req)));
+
+    // Delete all payments
+    const result = await OneOffPayment.deleteMany({ _id: { $in: ids } });
+
+    // Update account's oneOffPayments array
+    const accountIds = [...new Set(payments.map(payment => payment.account))];
+    await Account.updateMany(
+      { _id: { $in: accountIds } },
+      { $pull: { oneOffPayments: { $in: ids } } }
+    );
+
+    return {
+      oneOffPayments: payments,
+      success: true,
+      deletedCount: result.deletedCount
+    };
+  } catch (err) {
+    throw err;
+  }
+};
+
 exports.resolvers = {
   Query: {
     oneOffPayments: findOneOffPayments,
@@ -127,6 +164,7 @@ exports.resolvers = {
   Mutation: {
     createOneOffPayment,
     editOneOffPayment,
-    deleteOneOffPayment
+    deleteOneOffPayment,
+    batchDeleteOneOffPayments
   }
 };

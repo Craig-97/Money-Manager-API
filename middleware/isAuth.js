@@ -1,7 +1,8 @@
 import { GraphQLError } from 'graphql';
 import jwt from 'jsonwebtoken';
+import { User } from '../models/User';
 
-export const isAuth = (req, _, next) => {
+export const isAuth = async (req, _, next) => {
   const authHeader = req.get('Authorization');
   const token = authHeader?.split(' ')[1];
   req.isAuth = false;
@@ -28,6 +29,12 @@ export const isAuth = (req, _, next) => {
     return next();
   }
 
+  // Get user and their account ID
+  const user = await User.findById(decodedToken.userId);
+  if (user) {
+    req.accountId = user.account;
+  }
+
   // Request is now authorised and user id attached so user can be found via a token
   req.isAuth = true;
   req.userId = decodedToken.userId;
@@ -48,6 +55,18 @@ export const checkAuth = req => {
       extensions: {
         code: 'UNAUTHENTICATED',
         invalid: true
+      }
+    });
+  }
+};
+
+// Check if user has permission to modify the resource
+export const checkAccountAccess = async (resourceAccountId, req) => {
+  if (!req.accountId || resourceAccountId.toString() !== req.accountId.toString()) {
+    throw new GraphQLError('Unauthorized! You can only modify your own data', {
+      extensions: {
+        code: 'FORBIDDEN',
+        unauthorized: true
       }
     });
   }

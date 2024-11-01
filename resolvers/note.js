@@ -1,10 +1,10 @@
-import { checkAuth } from '../middleware/isAuth';
+import { checkAuth, checkAccountAccess } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { Note } from '../models/Note';
 
 const findNotes = async (_, _1, req) => {
-  checkAuth(req);
-  const notes = Note.find();
+  await checkAuth(req);
+  const notes = await Note.find({ account: req.accountId });
   if (!notes) {
     throw new Error(`No notes currently exist`);
   }
@@ -12,16 +12,18 @@ const findNotes = async (_, _1, req) => {
 };
 
 const findNote = async (_, { id }, req) => {
-  checkAuth(req);
+  await checkAuth(req);
   const note = await Note.findById(id);
   if (!note) {
     throw new Error(`Note with id '${id}' does not exist`);
   }
+  await checkAccountAccess(note.account, req);
   return note;
 };
 
 const createNote = async (_, { note }, req) => {
-  checkAuth(req);
+  await checkAuth(req);
+  await checkAccountAccess(note.account, req);
   try {
     const existingNote = await Note.findOne({ body: note.body, account: note.account });
     if (existingNote) {
@@ -54,13 +56,14 @@ const createNote = async (_, { note }, req) => {
 };
 
 const editNote = async (_, { id, note }, req) => {
-  checkAuth(req);
-  try {
-    const currentNote = await Note.findById(id);
-    if (!currentNote) {
-      throw new Error(`Note with id '${id}' does not exist`);
-    }
+  await checkAuth(req);
+  const currentNote = await Note.findById(id);
+  if (!currentNote) {
+    throw new Error(`Note with id '${id}' does not exist`);
+  }
+  await checkAccountAccess(currentNote.account, req);
 
+  try {
     const mergedNote = Object.assign(currentNote, note);
     mergedNote.__v = mergedNote.__v + 1;
 
@@ -82,13 +85,14 @@ const editNote = async (_, { id, note }, req) => {
 };
 
 const deleteNote = async (_, { id }, req) => {
-  checkAuth(req);
-  try {
-    const note = await Note.findById(id);
-    if (!note) {
-      throw new Error(`Note with id '${id}' does not exist`);
-    }
+  await checkAuth(req);
+  const note = await Note.findById(id);
+  if (!note) {
+    throw new Error(`Note with id '${id}' does not exist`);
+  }
+  await checkAccountAccess(note.account, req);
 
+  try {
     const response = await Note.deleteOne({ _id: id });
     if (note && response.deletedCount == 1) {
       return {

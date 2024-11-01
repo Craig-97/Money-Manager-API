@@ -1,8 +1,9 @@
 import { checkAuth } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { User } from '../models/User';
-import { Bill } from '../models/Bill'; // Assuming you have this model
-import { OneOffPayment } from '../models/OneOffPayment'; // Assuming you have this model
+import { Bill } from '../models/Bill';
+import { OneOffPayment } from '../models/OneOffPayment';
+import { Payday } from '../models/Payday';
 
 // Helper function to validate user
 const findUserById = async userId => {
@@ -37,7 +38,8 @@ const findAccount = async (_, { id }, req) => {
     .populate({ path: 'user' })
     .populate({ path: 'bills', options: { sort: { amount: 1 } } })
     .populate({ path: 'oneOffPayments', options: { sort: { amount: 1 } } })
-    .populate({ path: 'notes' });
+    .populate({ path: 'notes' })
+    .populate({ path: 'payday' });
 
   if (!account) {
     throw new Error(`Account with id '${user.account}' does not exist`);
@@ -49,7 +51,7 @@ const findAccount = async (_, { id }, req) => {
 const createAccount = async (_, { account }, req) => {
   checkAuth(req);
 
-  const { userId, bankBalance, monthlyIncome, bills = [], oneOffPayments = [] } = account;
+  const { userId, bankBalance, monthlyIncome, bills = [], oneOffPayments = [], payday } = account;
   const existingUser = await findUserById(userId);
 
   // Check if account already exists
@@ -89,9 +91,27 @@ const createAccount = async (_, { account }, req) => {
     newAccount.oneOffPayments.push(...createdPayments);
   }
 
+  // Handle payday creation if provided
+  if (payday) {
+    const newPayday = new Payday({
+      ...payday,
+      account: newAccount._id
+    });
+    await newPayday.save();
+    newAccount.payday = newPayday._id;
+  }
+
   await newAccount.save();
 
-  return { account: newAccount, success: true };
+  // Fetch the fully populated account
+  const populatedAccount = await Account.findById(newAccount._id)
+    .populate('user')
+    .populate('bills')
+    .populate('oneOffPayments')
+    .populate('notes')
+    .populate('payday');
+
+  return { account: populatedAccount, success: true };
 };
 
 // Edit an account
@@ -131,7 +151,8 @@ const deleteAccount = async (_, { id }, req) => {
     .populate('user')
     .populate('bills')
     .populate('notes')
-    .populate('oneOffPayments');
+    .populate('oneOffPayments')
+    .populate('payday');
 
   if (!account) {
     throw new Error(`Account with id '${id}' does not exist`);
@@ -157,6 +178,11 @@ const deleteAccount = async (_, { id }, req) => {
     await OneOffPayment.deleteMany({
       _id: { $in: account.oneOffPayments.map(payment => payment._id) }
     });
+  }
+
+  // Delete the payday configuration if it exists
+  if (account.payday) {
+    await Payday.deleteOne({ _id: account.payday._id });
   }
 
   // Delete the account itself

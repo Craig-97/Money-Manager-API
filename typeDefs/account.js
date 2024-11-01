@@ -12,13 +12,15 @@ exports.typeDefs = `
     bills: [Bill]
     oneOffPayments: [OneOffPayment]
     notes: [Note]
+    payday: Payday
   }
 
  input CreateAccountInput {
     bankBalance: Float!
     monthlyIncome: Float!
     bills: [BillInput]  
-    oneOffPayments: [OneOffPaymentInput] 
+    oneOffPayments: [OneOffPaymentInput]
+    payday: PaydayInput
     userId: ID!
   }
 
@@ -26,7 +28,6 @@ exports.typeDefs = `
     bankBalance: Float
     monthlyIncome: Float
   }
-
 
   type AccountResponse {
     account: Account
