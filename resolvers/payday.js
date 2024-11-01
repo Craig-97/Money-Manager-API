@@ -1,6 +1,7 @@
 import { checkAuth, checkAccountAccess } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { Payday } from '../models/Payday';
+import { incrementVersion } from '../utils/documentHelpers';
 
 const findPaydays = async (_, _1, req) => {
   await checkAuth(req);
@@ -54,26 +55,25 @@ const editPayday = async (_, { id, payday }, req) => {
   await checkAuth(req);
   const currentPayday = await Payday.findById(id);
   if (!currentPayday) {
-    throw new Error(`Payday with id '${id}' does not exist`);
+    throw new Error(`Payday with ID '${id}' does not exist`);
   }
   await checkAccountAccess(currentPayday.account, req);
 
   try {
-    const mergedPayday = Object.assign(currentPayday, payday);
-    mergedPayday.__v = mergedPayday.__v + 1;
+    const mergedPayday = incrementVersion(Object.assign(currentPayday, payday));
 
     const editedPayday = await Payday.findOneAndUpdate({ _id: id }, mergedPayday, {
       new: true
     });
 
-    if (editedPayday) {
-      return {
-        payday: editedPayday,
-        success: true
-      };
-    } else {
-      throw new Error('Payday cannot be updated');
+    if (!editedPayday) {
+      throw new Error('Payday could not be updated');
     }
+
+    return {
+      payday: editedPayday,
+      success: true
+    };
   } catch (err) {
     throw err;
   }
@@ -89,7 +89,7 @@ const deletePayday = async (_, { id }, req) => {
 
   try {
     // Remove payday reference from account
-    const account = await Account.findOne({ payday: id });
+    const account = await Account.findOne({ payday: payday._id });
     if (account) {
       account.payday = undefined;
       await account.save();

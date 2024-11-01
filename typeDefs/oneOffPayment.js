@@ -1,6 +1,6 @@
 exports.typeDefs = `
   type Query {
-    oneOffPayments: [OneOffPayment!]!
+    oneOffPayments(accountId: ID!): [OneOffPayment!]!
     oneOffPayment(id: ID): OneOffPayment
   }
 

@@ -31,7 +31,7 @@ export const isAuth = async (req, _, next) => {
 
   // Get user and their account ID
   const user = await User.findById(decodedToken.userId);
-  if (user) {
+  if (user && !req.accountId) {
     req.accountId = user.account;
   }
 

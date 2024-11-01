@@ -17,3 +17,10 @@ export const User = mongoose.model('User', {
     ref: 'Account'
   }
 });
+
+// Used for login authentication - quickly find user by email
+User.schema.index({ email: 1 }, { unique: true });
+
+// Used for token-based authentication - quickly find user by ID
+// Also used when linking accounts to users
+User.schema.index({ _id: 1 });

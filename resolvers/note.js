@@ -2,12 +2,23 @@ import { checkAuth, checkAccountAccess } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { Note } from '../models/Note';
 
-const findNotes = async (_, _1, req) => {
+const findNotes = async (_, { accountId }, req) => {
   await checkAuth(req);
-  const notes = await Note.find({ account: req.accountId });
-  if (!notes) {
-    throw new Error(`No notes currently exist`);
+  await checkAccountAccess(accountId, req);
+
+  // Fetch the account associated with the authenticated user
+  const userAccount = await Account.findOne({ _id: accountId });
+
+  if (!userAccount) {
+    throw new Error(`No account exists for user with ID '${accountId}'`);
   }
+
+  const notes = await Note.find({ account: accountId });
+
+  if (!notes || notes.length === 0) {
+    throw new Error(`No notes exist for account with ID '${accountId}'`);
+  }
+
   return notes;
 };
 
@@ -15,7 +26,7 @@ const findNote = async (_, { id }, req) => {
   await checkAuth(req);
   const note = await Note.findById(id);
   if (!note) {
-    throw new Error(`Note with id '${id}' does not exist`);
+    throw new Error(`Note with ID '${id}' does not exist`);
   }
   await checkAccountAccess(note.account, req);
   return note;
@@ -24,35 +35,26 @@ const findNote = async (_, { id }, req) => {
 const createNote = async (_, { note }, req) => {
   await checkAuth(req);
   await checkAccountAccess(note.account, req);
-  try {
-    const existingNote = await Note.findOne({ body: note.body, account: note.account });
-    if (existingNote) {
-      throw new Error(`Note already exists`);
-    }
 
-    const newNote = new Note(note);
-    await newNote.save();
-
-    // UPDATE ACCOUNT TO NOTE ONE-TO-MANY LIST
-    if (newNote.account) {
-      const account = await Account.findOne({ _id: newNote.account });
-
-      if (account) {
-        account.notes.push(newNote);
-        account.save();
-      } else {
-        throw new Error(`Account with ID ${newNote.account} could not be found`);
-      }
-    }
-
-    if (newNote) {
-      return { note: newNote, success: true };
-    } else {
-      throw new Error(`Note could not be created`);
-    }
-  } catch (err) {
-    throw err;
+  // Check account exists first
+  const account = await Account.findOne({ _id: note.account });
+  if (!account) {
+    throw new Error(`Account with ID '${note.account}' does not exist`);
   }
+
+  const existingNote = await Note.findOne({ body: note.body, account: note.account });
+  if (existingNote) {
+    throw new Error('Note with this content already exists');
+  }
+
+  const newNote = new Note(note);
+  await newNote.save();
+
+  // Update account's notes array
+  account.notes.push(newNote);
+  await account.save();
+
+  return { note: newNote, success: true };
 };
 
 const editNote = async (_, { id, note }, req) => {
@@ -63,25 +65,21 @@ const editNote = async (_, { id, note }, req) => {
   }
   await checkAccountAccess(currentNote.account, req);
 
-  try {
-    const mergedNote = Object.assign(currentNote, note);
-    mergedNote.__v = mergedNote.__v + 1;
+  const mergedNote = Object.assign(currentNote, note);
+  mergedNote.__v = mergedNote.__v + 1;
 
-    const editedNote = await Note.findOneAndUpdate({ _id: id }, mergedNote, {
-      new: true
-    });
+  const editedNote = await Note.findOneAndUpdate({ _id: id }, mergedNote, {
+    new: true
+  });
 
-    if (editedNote) {
-      return {
-        note: editedNote,
-        success: true
-      };
-    } else {
-      throw new Error('Note cannot be updated');
-    }
-  } catch (err) {
-    throw err;
+  if (!editedNote) {
+    throw new Error('Note cannot be updated');
   }
+
+  return {
+    note: editedNote,
+    success: true
+  };
 };
 
 const deleteNote = async (_, { id }, req) => {
@@ -93,8 +91,15 @@ const deleteNote = async (_, { id }, req) => {
   await checkAccountAccess(note.account, req);
 
   try {
+    // Remove note reference from account
+    const account = await Account.findOne({ notes: note._id });
+    if (account) {
+      account.notes.pull(note._id);
+      await account.save();
+    }
+
     const response = await Note.deleteOne({ _id: id });
-    if (note && response.deletedCount == 1) {
+    if (note && response.deletedCount === 1) {
       return {
         note,
         success: true

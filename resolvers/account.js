@@ -4,12 +4,13 @@ import { User } from '../models/User';
 import { Bill } from '../models/Bill';
 import { OneOffPayment } from '../models/OneOffPayment';
 import { Payday } from '../models/Payday';
+import { incrementVersion } from '../utils/documentHelpers';
 
 // Helper function to validate user
 const findUserById = async userId => {
   const user = await User.findById(userId);
   if (!user) {
-    throw new Error(`User with id '${userId}' does not exist`);
+    throw new Error(`User with ID '${userId}' does not exist`);
   }
   return user;
 };
@@ -19,7 +20,7 @@ const findAccounts = async (_, _1, req) => {
   checkAuth(req);
   const accounts = await Account.find();
   if (!accounts.length) {
-    throw new Error('No accounts currently exist');
+    throw new Error('No accounts exist');
   }
   return accounts;
 };
@@ -136,8 +137,7 @@ const editAccount = async (_, { id, account }, req) => {
   if (bankBalance !== undefined) currentAccount.bankBalance = bankBalance;
   if (monthlyIncome !== undefined) currentAccount.monthlyIncome = monthlyIncome;
 
-  currentAccount.__v += 1; // Increment the version number
-
+  incrementVersion(currentAccount);
   await currentAccount.save();
 
   return { account: currentAccount, success: true };
