@@ -22,8 +22,6 @@ exports.typeDefs = `
     WEDNESDAY
     THURSDAY
     FRIDAY
-    SATURDAY
-    SUNDAY
   }
 
   enum BankHolidayRegion {
