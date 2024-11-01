@@ -1,130 +1,175 @@
 import { checkAuth } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { User } from '../models/User';
+import { Bill } from '../models/Bill'; // Assuming you have this model
+import { OneOffPayment } from '../models/OneOffPayment'; // Assuming you have this model
 
+// Helper function to validate user
+const findUserById = async userId => {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error(`User with id '${userId}' does not exist`);
+  }
+  return user;
+};
+
+// Fetch all accounts
 const findAccounts = async (_, _1, req) => {
   checkAuth(req);
-  const accounts = Account.find();
-  if (!accounts) {
-    throw new Error(`No accounts currently exist`);
+  const accounts = await Account.find();
+  if (!accounts.length) {
+    throw new Error('No accounts currently exist');
   }
   return accounts;
 };
 
+// Fetch an account by user id
 const findAccount = async (_, { id }, req) => {
   checkAuth(req);
+  const user = await findUserById(id);
 
-  try {
-    const user = await User.findById(id);
-
-    if (!user) {
-      throw new Error(`Account with user id '${id}' does not exist`);
-    }
-
-    const account = await Account.findById(user.account)
-      .populate({ path: 'user' })
-      .populate({ path: 'bills', options: { sort: { amount: 1 } } })
-      .populate({ path: 'oneOffPayments', options: { sort: { amount: 1 } } })
-      .populate({ path: 'notes' });
-
-    if (!user.account) {
-      throw new Error(`User does not have a linked account`);
-    } else if (!account) {
-      throw new Error(`Account with id '${user.account}' does not exist`);
-    }
-    return account;
-  } catch (err) {
-    throw err;
+  // Ensure user has an account linked
+  if (!user.account) {
+    throw new Error('User does not have a linked account');
   }
+
+  const account = await Account.findById(user.account)
+    .populate({ path: 'user' })
+    .populate({ path: 'bills', options: { sort: { amount: 1 } } })
+    .populate({ path: 'oneOffPayments', options: { sort: { amount: 1 } } })
+    .populate({ path: 'notes' });
+
+  if (!account) {
+    throw new Error(`Account with id '${user.account}' does not exist`);
+  }
+  return account;
 };
 
+// Create a new account
 const createAccount = async (_, { account }, req) => {
   checkAuth(req);
-  try {
-    const existingAccount = await Account.findOne({ user: account.userId });
-    if (existingAccount) {
-      throw new Error(`Account with userId '${account.userId}' already exists`);
-    }
 
-    const existingUser = await User.findById(account.userId);
-    if (!existingUser) {
-      throw new Error(`User with id '${id}' does not exist`);
-    }
+  const { userId, bankBalance, monthlyIncome, bills = [], oneOffPayments = [] } = account;
+  const existingUser = await findUserById(userId);
 
-    const newAccount = new Account({
-      bankBalance: account.bankBalance,
-      monthlyIncome: account.monthlyIncome,
-      user: existingUser
-    });
-
-    await newAccount.save();
-
-    // UPDATE USER ACCOUNT FIELD
-    if (newAccount.user) {
-      const user = await User.findOne({
-        _id: newAccount.user
-      });
-
-      if (user?.account) {
-        user.account = newAccount;
-        user.save();
-      }
-    }
-    return { account: newAccount, success: true };
-  } catch (err) {
-    throw err;
+  // Check if account already exists
+  const existingAccount = await Account.findOne({ user: userId });
+  if (existingAccount) {
+    throw new Error(`Account with userId '${userId}' already exists`);
   }
+
+  // Create the new account
+  const newAccount = new Account({
+    bankBalance,
+    monthlyIncome,
+    user: existingUser._id
+  });
+
+  await newAccount.save();
+
+  // Link the new account to the user
+  existingUser.account = newAccount._id;
+  await existingUser.save();
+
+  // Handle bills creation if provided
+  if (bills.length > 0) {
+    const createdBills = await Promise.all(
+      bills.map(bill => new Bill({ ...bill, account: newAccount._id }).save())
+    );
+    newAccount.bills.push(...createdBills);
+  }
+
+  // Handle one-off payments creation if provided
+  if (oneOffPayments.length > 0) {
+    const createdPayments = await Promise.all(
+      oneOffPayments.map(payment =>
+        new OneOffPayment({ ...payment, account: newAccount._id }).save()
+      )
+    );
+    newAccount.oneOffPayments.push(...createdPayments);
+  }
+
+  await newAccount.save();
+
+  return { account: newAccount, success: true };
 };
 
+// Edit an account
 const editAccount = async (_, { id, account }, req) => {
   checkAuth(req);
-  try {
-    const currentAccount = await Account.findById(id);
-    if (!currentAccount) {
-      throw new Error(`Account with id '${id}' does not exist`);
-    }
-    const mergedAccount = Object.assign(currentAccount, account);
-    mergedAccount.__v = mergedAccount.__v + 1;
 
-    const editedAccount = await Account.findOneAndUpdate({ _id: id }, mergedAccount, {
-      new: true
-    });
+  const { bankBalance, monthlyIncome } = account;
+  const currentAccount = await Account.findById(id);
 
-    if (editedAccount) {
-      return {
-        account: editedAccount,
-        success: true
-      };
-    } else {
-      throw new Error('Account cannot be updated');
-    }
-  } catch (err) {
-    throw err;
+  if (!currentAccount) {
+    throw new Error(`Account with id '${id}' does not exist`);
   }
+
+  // Check if neither bankBalance nor monthlyIncome is provided
+  if (bankBalance === undefined && monthlyIncome === undefined) {
+    throw new Error(
+      'No valid fields provided for update. Please provide at least one of: bankBalance, monthlyIncome.'
+    );
+  }
+
+  // Only update fields that are provided
+  if (bankBalance !== undefined) currentAccount.bankBalance = bankBalance;
+  if (monthlyIncome !== undefined) currentAccount.monthlyIncome = monthlyIncome;
+
+  currentAccount.__v += 1; // Increment the version number
+
+  await currentAccount.save();
+
+  return { account: currentAccount, success: true };
 };
 
+// Delete an account
 const deleteAccount = async (_, { id }, req) => {
   checkAuth(req);
-  try {
-    const account = await Account.findById(id);
-    if (!account) {
-      throw new Error(`Account with id '${id}' does not exist`);
-    }
 
-    const response = await Account.deleteOne({ _id: id });
-    if (account && response.deletedCount == 1) {
-      return {
-        success: true
-      };
-    } else {
-      throw new Error('Account cannot be deleted');
-    }
-  } catch (err) {
-    throw err;
+  const account = await Account.findById(id)
+    .populate('user')
+    .populate('bills')
+    .populate('notes')
+    .populate('oneOffPayments');
+
+  if (!account) {
+    throw new Error(`Account with id '${id}' does not exist`);
   }
+
+  // Delete the user associated with the account
+  if (account.user) {
+    await User.deleteOne({ _id: account.user._id });
+  }
+
+  // Delete all bills linked to the account
+  if (account.bills && account.bills.length > 0) {
+    await Bill.deleteMany({ _id: { $in: account.bills.map(bill => bill._id) } });
+  }
+
+  // Delete all notes linked to the account
+  if (account.notes && account.notes.length > 0) {
+    await Note.deleteMany({ _id: { $in: account.notes.map(note => note._id) } });
+  }
+
+  // Delete all one-off payments linked to the account
+  if (account.oneOffPayments && account.oneOffPayments.length > 0) {
+    await OneOffPayment.deleteMany({
+      _id: { $in: account.oneOffPayments.map(payment => payment._id) }
+    });
+  }
+
+  // Delete the account itself
+  const response = await Account.deleteOne({ _id: id });
+  if (response.deletedCount !== 1) {
+    throw new Error('Account could not be deleted');
+  }
+
+  return { success: true };
 };
 
-exports.resolvers = {
+// Export the resolvers
+export const resolvers = {
   Query: {
     accounts: findAccounts,
     account: findAccount

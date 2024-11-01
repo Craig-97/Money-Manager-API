@@ -3,12 +3,23 @@ import { Account } from '../models/Account';
 import { OneOffPayment } from '../models/OneOffPayment';
 import { Bill } from '../models/Bill';
 
-const findBills = async (_, _1, req) => {
+const findBills = async (_, { accountId }, req) => {
   checkAuth(req);
-  const bills = Bill.find().sort({ amount: 1 });
-  if (!bills) {
-    throw new Error(`No bills currently exist`);
+
+  // Fetch the account associated with the authenticated user
+  const userAccount = await Account.findOne({ id: accountId });
+
+  if (!userAccount) {
+    throw new Error(`No account found for user with ID '${accountId}'`);
   }
+
+  // Fetch only the bills associated with the authenticated user's account
+  const bills = await Bill.find({ account: userAccount._id }).sort({ amount: 1 });
+
+  if (!bills || bills.length === 0) {
+    throw new Error(`No bills currently exist for this account`);
+  }
+
   return bills;
 };
 

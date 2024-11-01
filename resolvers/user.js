@@ -120,20 +120,49 @@ const editUser = async (_, { id, user }, req) => {
 
 const deleteUser = async (_, { id }, req) => {
   checkAuth(req);
+
   try {
-    const user = await User.findById(id);
+    // Find the user
+    const user = await User.findById(id).populate('account');
     if (!user) {
       throw new Error(`User with id '${id}' does not exist`);
     }
 
+    // If the user has an associated account, delete the account and all related data
+    if (user.account) {
+      const account = await Account.findById(user.account._id)
+        .populate('bills')
+        .populate('notes')
+        .populate('oneOffPayments');
+
+      // Delete bills associated with the account
+      if (account.bills && account.bills.length > 0) {
+        await Bill.deleteMany({ _id: { $in: account.bills.map(bill => bill._id) } });
+      }
+
+      // Delete notes associated with the account
+      if (account.notes && account.notes.length > 0) {
+        await Note.deleteMany({ _id: { $in: account.notes.map(note => note._id) } });
+      }
+
+      // Delete one-off payments associated with the account
+      if (account.oneOffPayments && account.oneOffPayments.length > 0) {
+        await OneOffPayment.deleteMany({
+          _id: { $in: account.oneOffPayments.map(payment => payment._id) }
+        });
+      }
+
+      // Delete the account itself
+      await Account.deleteOne({ _id: account._id });
+    }
+
+    // Finally, delete the user
     const response = await User.deleteOne({ _id: id });
-    if (user && response.deletedCount == 1) {
-      return {
-        success: true
-      };
-    } else {
+    if (response.deletedCount !== 1) {
       throw new Error('User cannot be deleted');
     }
+
+    return { success: true };
   } catch (err) {
     throw err;
   }

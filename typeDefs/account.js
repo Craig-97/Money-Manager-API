@@ -14,9 +14,11 @@ exports.typeDefs = `
     notes: [Note]
   }
 
-  input CreateAccountInput {
+ input CreateAccountInput {
     bankBalance: Float!
     monthlyIncome: Float!
+    bills: [BillInput]  
+    oneOffPayments: [OneOffPaymentInput] 
     userId: ID!
   }
 
