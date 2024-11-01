@@ -2,6 +2,7 @@ import { checkAuth, checkAccountAccess } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { Payday } from '../models/Payday';
 import { incrementVersion } from '../utils/documentHelpers';
+import { withTransaction } from '../utils/transactionHelpers';
 
 const findPaydays = async (_, _1, req) => {
   await checkAuth(req);
@@ -59,24 +60,20 @@ const editPayday = async (_, { id, payday }, req) => {
   }
   await checkAccountAccess(currentPayday.account, req);
 
-  try {
-    const mergedPayday = incrementVersion(Object.assign(currentPayday, payday));
+  const mergedPayday = incrementVersion(Object.assign(currentPayday, payday));
 
-    const editedPayday = await Payday.findOneAndUpdate({ _id: id }, mergedPayday, {
-      new: true
-    });
+  const editedPayday = await Payday.findOneAndUpdate({ _id: id }, mergedPayday, {
+    new: true
+  });
 
-    if (!editedPayday) {
-      throw new Error('Payday could not be updated');
-    }
-
-    return {
-      payday: editedPayday,
-      success: true
-    };
-  } catch (err) {
-    throw err;
+  if (!editedPayday) {
+    throw new Error('Payday could not be updated');
   }
+
+  return {
+    payday: editedPayday,
+    success: true
+  };
 };
 
 const deletePayday = async (_, { id }, req) => {
@@ -87,15 +84,15 @@ const deletePayday = async (_, { id }, req) => {
   }
   await checkAccountAccess(payday.account, req);
 
-  try {
+  return withTransaction(async session => {
     // Remove payday reference from account
-    const account = await Account.findOne({ payday: payday._id });
+    const account = await Account.findOne({ payday: payday._id }).session(session);
     if (account) {
       account.payday = undefined;
-      await account.save();
+      await account.save({ session });
     }
 
-    const response = await Payday.deleteOne({ _id: id });
+    const response = await Payday.deleteOne({ _id: id }).session(session);
     if (payday && response.deletedCount === 1) {
       return {
         payday,
@@ -104,9 +101,7 @@ const deletePayday = async (_, { id }, req) => {
     } else {
       throw new Error('Payday cannot be deleted');
     }
-  } catch (err) {
-    throw err;
-  }
+  });
 };
 
 exports.resolvers = {

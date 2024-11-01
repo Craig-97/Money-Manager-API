@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 const Schema = mongoose.Schema;
 
-export const OneOffPaymentSchema = new Schema({
+const OneOffPaymentSchema = new Schema({
   name: String,
   amount: Number,
   account: {
@@ -11,14 +11,14 @@ export const OneOffPaymentSchema = new Schema({
   }
 });
 
+// Add indexes to the schema
 // Used to ensure unique payment names within an account
 // Also speeds up duplicate name checks during creation
 OneOffPaymentSchema.index({ name: 1, account: 1 }, { unique: true });
 
-// Used for quick lookups during edit/delete operations
-// Also helps with auth checks that need both ID and account
-OneOffPaymentSchema.index({ _id: 1, account: 1 });
-
 // Used for finding all payments belonging to an account
 // Helps with batch operations and account population
 OneOffPaymentSchema.index({ account: 1 });
+
+// Create and export the model using the schema
+export const OneOffPayment = mongoose.model('OneOffPayment', OneOffPaymentSchema);

@@ -32,7 +32,7 @@ const BankHolidayRegion = {
   NORTHERN_IRELAND: 'NORTHERN_IRELAND'
 };
 
-export const Payday = mongoose.model('Payday', {
+const PaydaySchema = new Schema({
   frequency: {
     type: String,
     enum: Object.values(PayFrequency),
@@ -71,3 +71,8 @@ export const Payday = mongoose.model('Payday', {
     required: 'Account ID required'
   }
 });
+
+// Each account can only have one payday setup
+PaydaySchema.index({ account: 1 }, { unique: true });
+
+export const Payday = mongoose.model('Payday', PaydaySchema);

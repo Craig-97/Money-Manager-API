@@ -65,8 +65,7 @@ const editNote = async (_, { id, note }, req) => {
   }
   await checkAccountAccess(currentNote.account, req);
 
-  const mergedNote = Object.assign(currentNote, note);
-  mergedNote.__v = mergedNote.__v + 1;
+  const mergedNote = incrementVersion(Object.assign(currentNote, note));
 
   const editedNote = await Note.findOneAndUpdate({ _id: id }, mergedNote, {
     new: true

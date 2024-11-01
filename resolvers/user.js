@@ -3,6 +3,11 @@ import jwt from 'jsonwebtoken';
 import { checkAuth } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { User } from '../models/User';
+import { withTransaction } from '../utils/transactionHelpers';
+import { Bill } from '../models/Bill';
+import { Note } from '../models/Note';
+import { OneOffPayment } from '../models/OneOffPayment';
+import { Payday } from '../models/Payday';
 
 const findUsers = async () => {
   const users = User.find();
@@ -98,8 +103,7 @@ const editUser = async (_, { id, user }, req) => {
       user.password = hashedPassword;
     }
 
-    const mergedUser = Object.assign(currentUser, user);
-    mergedUser.__v = mergedUser.__v + 1;
+    const mergedUser = incrementVersion(Object.assign(currentUser, user));
 
     const editedUser = await User.findOneAndUpdate({ _id: id }, mergedUser, {
       new: true
@@ -121,51 +125,52 @@ const editUser = async (_, { id, user }, req) => {
 const deleteUser = async (_, { id }, req) => {
   checkAuth(req);
 
-  try {
-    // Find the user
-    const user = await User.findById(id).populate('account');
+  return withTransaction(async session => {
+    const user = await User.findById(id).populate('account').session(session);
     if (!user) {
       throw new Error(`User with id '${id}' does not exist`);
     }
 
-    // If the user has an associated account, delete the account and all related data
     if (user.account) {
       const account = await Account.findById(user.account._id)
         .populate('bills')
         .populate('notes')
-        .populate('oneOffPayments');
+        .populate('oneOffPayments')
+        .populate('payday')
+        .session(session);
 
-      // Delete bills associated with the account
-      if (account.bills && account.bills.length > 0) {
-        await Bill.deleteMany({ _id: { $in: account.bills.map(bill => bill._id) } });
+      if (account.bills?.length > 0) {
+        await Bill.deleteMany({
+          _id: { $in: account.bills.map(bill => bill._id) }
+        }).session(session);
       }
 
-      // Delete notes associated with the account
-      if (account.notes && account.notes.length > 0) {
-        await Note.deleteMany({ _id: { $in: account.notes.map(note => note._id) } });
+      if (account.notes?.length > 0) {
+        await Note.deleteMany({
+          _id: { $in: account.notes.map(note => note._id) }
+        }).session(session);
       }
 
-      // Delete one-off payments associated with the account
-      if (account.oneOffPayments && account.oneOffPayments.length > 0) {
+      if (account.oneOffPayments?.length > 0) {
         await OneOffPayment.deleteMany({
           _id: { $in: account.oneOffPayments.map(payment => payment._id) }
-        });
+        }).session(session);
       }
 
-      // Delete the account itself
-      await Account.deleteOne({ _id: account._id });
+      if (account.payday) {
+        await Payday.deleteOne({ _id: account.payday._id }).session(session);
+      }
+
+      await Account.deleteOne({ _id: account._id }).session(session);
     }
 
-    // Finally, delete the user
-    const response = await User.deleteOne({ _id: id });
+    const response = await User.deleteOne({ _id: id }).session(session);
     if (response.deletedCount !== 1) {
       throw new Error('User cannot be deleted');
     }
 
     return { success: true };
-  } catch (err) {
-    throw err;
-  }
+  });
 };
 
 exports.resolvers = {

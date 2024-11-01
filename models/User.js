@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 const Schema = mongoose.Schema;
 
-export const User = mongoose.model('User', {
+const UserSchema = new Schema({
   firstName: String,
   surname: String,
   email: {
@@ -18,9 +18,8 @@ export const User = mongoose.model('User', {
   }
 });
 
-// Used for login authentication - quickly find user by email
-User.schema.index({ email: 1 }, { unique: true });
+// Add indexes to the schema
+UserSchema.index({ email: 1 }, { unique: true }); // For login authentication
 
-// Used for token-based authentication - quickly find user by ID
-// Also used when linking accounts to users
-User.schema.index({ _id: 1 });
+// Create and export the model using the schema
+export const User = mongoose.model('User', UserSchema);

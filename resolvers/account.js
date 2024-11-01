@@ -5,6 +5,7 @@ import { Bill } from '../models/Bill';
 import { OneOffPayment } from '../models/OneOffPayment';
 import { Payday } from '../models/Payday';
 import { incrementVersion } from '../utils/documentHelpers';
+import { withTransaction } from '../utils/transactionHelpers';
 
 // Helper function to validate user
 const findUserById = async userId => {
@@ -52,67 +53,69 @@ const findAccount = async (_, { id }, req) => {
 const createAccount = async (_, { account }, req) => {
   checkAuth(req);
 
-  const { userId, bankBalance, monthlyIncome, bills = [], oneOffPayments = [], payday } = account;
-  const existingUser = await findUserById(userId);
+  return withTransaction(async session => {
+    const { userId, bankBalance, monthlyIncome, bills = [], oneOffPayments = [], payday } = account;
+    const existingUser = await findUserById(userId);
 
-  // Check if account already exists
-  const existingAccount = await Account.findOne({ user: userId });
-  if (existingAccount) {
-    throw new Error(`Account with userId '${userId}' already exists`);
-  }
+    // Check if account already exists
+    const existingAccount = await Account.findOne({ user: userId }).session(session);
+    if (existingAccount) {
+      throw new Error(`Account with userId '${userId}' already exists`);
+    }
 
-  // Create the new account
-  const newAccount = new Account({
-    bankBalance,
-    monthlyIncome,
-    user: existingUser._id
-  });
-
-  await newAccount.save();
-
-  // Link the new account to the user
-  existingUser.account = newAccount._id;
-  await existingUser.save();
-
-  // Handle bills creation if provided
-  if (bills.length > 0) {
-    const createdBills = await Promise.all(
-      bills.map(bill => new Bill({ ...bill, account: newAccount._id }).save())
-    );
-    newAccount.bills.push(...createdBills);
-  }
-
-  // Handle one-off payments creation if provided
-  if (oneOffPayments.length > 0) {
-    const createdPayments = await Promise.all(
-      oneOffPayments.map(payment =>
-        new OneOffPayment({ ...payment, account: newAccount._id }).save()
-      )
-    );
-    newAccount.oneOffPayments.push(...createdPayments);
-  }
-
-  // Handle payday creation if provided
-  if (payday) {
-    const newPayday = new Payday({
-      ...payday,
-      account: newAccount._id
+    // Create the new account
+    const newAccount = new Account({
+      bankBalance,
+      monthlyIncome,
+      user: existingUser._id
     });
-    await newPayday.save();
-    newAccount.payday = newPayday._id;
-  }
+    await newAccount.save({ session });
 
-  await newAccount.save();
+    // Link the new account to the user
+    existingUser.account = newAccount._id;
+    await existingUser.save({ session });
 
-  // Fetch the fully populated account
-  const populatedAccount = await Account.findById(newAccount._id)
-    .populate('user')
-    .populate('bills')
-    .populate('oneOffPayments')
-    .populate('notes')
-    .populate('payday');
+    // Handle bills creation if provided
+    if (bills.length > 0) {
+      const createdBills = await Promise.all(
+        bills.map(bill => new Bill({ ...bill, account: newAccount._id }).save({ session }))
+      );
+      newAccount.bills.push(...createdBills);
+    }
 
-  return { account: populatedAccount, success: true };
+    // Handle one-off payments creation if provided
+    if (oneOffPayments.length > 0) {
+      const createdPayments = await Promise.all(
+        oneOffPayments.map(payment =>
+          new OneOffPayment({ ...payment, account: newAccount._id }).save({ session })
+        )
+      );
+      newAccount.oneOffPayments.push(...createdPayments);
+    }
+
+    // Handle payday creation if provided
+    if (payday) {
+      const newPayday = new Payday({
+        ...payday,
+        account: newAccount._id
+      });
+      await newPayday.save({ session });
+      newAccount.payday = newPayday._id;
+    }
+
+    await newAccount.save({ session });
+
+    // Fetch the fully populated account
+    const populatedAccount = await Account.findById(newAccount._id)
+      .populate('user')
+      .populate('bills')
+      .populate('oneOffPayments')
+      .populate('notes')
+      .populate('payday')
+      .session(session);
+
+    return { account: populatedAccount, success: true };
+  });
 };
 
 // Edit an account
@@ -147,51 +150,42 @@ const editAccount = async (_, { id, account }, req) => {
 const deleteAccount = async (_, { id }, req) => {
   checkAuth(req);
 
-  const account = await Account.findById(id)
-    .populate('user')
-    .populate('bills')
-    .populate('notes')
-    .populate('oneOffPayments')
-    .populate('payday');
+  return withTransaction(async session => {
+    const account = await Account.findById(id)
+      .populate('user')
+      .populate('bills')
+      .populate('notes')
+      .populate('oneOffPayments')
+      .populate('payday')
+      .session(session);
 
-  if (!account) {
-    throw new Error(`Account with id '${id}' does not exist`);
-  }
+    if (!account) {
+      throw new Error(`Account with id '${id}' does not exist`);
+    }
 
-  // Delete the user associated with the account
-  if (account.user) {
-    await User.deleteOne({ _id: account.user._id });
-  }
+    // Batch all delete operations into a single Promise.all
+    await Promise.all(
+      [
+        account.user && User.deleteOne({ _id: account.user._id }).session(session),
+        account.bills?.length > 0 &&
+          Bill.deleteMany({
+            _id: { $in: account.bills.map(bill => bill._id) }
+          }).session(session),
+        account.notes?.length > 0 &&
+          Note.deleteMany({
+            _id: { $in: account.notes.map(note => note._id) }
+          }).session(session),
+        account.oneOffPayments?.length > 0 &&
+          OneOffPayment.deleteMany({
+            _id: { $in: account.oneOffPayments.map(payment => payment._id) }
+          }).session(session),
+        account.payday && Payday.deleteOne({ _id: account.payday._id }).session(session),
+        Account.deleteOne({ _id: id }).session(session)
+      ].filter(Boolean)
+    );
 
-  // Delete all bills linked to the account
-  if (account.bills && account.bills.length > 0) {
-    await Bill.deleteMany({ _id: { $in: account.bills.map(bill => bill._id) } });
-  }
-
-  // Delete all notes linked to the account
-  if (account.notes && account.notes.length > 0) {
-    await Note.deleteMany({ _id: { $in: account.notes.map(note => note._id) } });
-  }
-
-  // Delete all one-off payments linked to the account
-  if (account.oneOffPayments && account.oneOffPayments.length > 0) {
-    await OneOffPayment.deleteMany({
-      _id: { $in: account.oneOffPayments.map(payment => payment._id) }
-    });
-  }
-
-  // Delete the payday configuration if it exists
-  if (account.payday) {
-    await Payday.deleteOne({ _id: account.payday._id });
-  }
-
-  // Delete the account itself
-  const response = await Account.deleteOne({ _id: id });
-  if (response.deletedCount !== 1) {
-    throw new Error('Account could not be deleted');
-  }
-
-  return { success: true };
+    return { success: true };
+  });
 };
 
 // Export the resolvers
