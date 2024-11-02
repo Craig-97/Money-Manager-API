@@ -1,6 +1,14 @@
 import { checkAuth, checkAccountAccess } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { Note } from '../models/Note';
+import {
+  ACCOUNT_NOT_FOUND,
+  NOTES_NOT_FOUND,
+  NOTE_NOT_FOUND,
+  NOTE_UPDATE_FAILED,
+  NOTE_DELETE_FAILED,
+  NOTE_EXISTS
+} from '../utils';
 
 const findNotes = async (_, { accountId }, req) => {
   await checkAuth(req);
@@ -10,13 +18,13 @@ const findNotes = async (_, { accountId }, req) => {
   const userAccount = await Account.findOne({ _id: accountId });
 
   if (!userAccount) {
-    throw new Error(`No account exists for user with ID '${accountId}'`);
+    throw ACCOUNT_NOT_FOUND(accountId);
   }
 
   const notes = await Note.find({ account: accountId });
 
   if (!notes || notes.length === 0) {
-    throw new Error(`No notes exist for account with ID '${accountId}'`);
+    throw NOTES_NOT_FOUND(accountId);
   }
 
   return notes;
@@ -26,7 +34,7 @@ const findNote = async (_, { id }, req) => {
   await checkAuth(req);
   const note = await Note.findById(id);
   if (!note) {
-    throw new Error(`Note with ID '${id}' does not exist`);
+    throw NOTE_NOT_FOUND(id);
   }
   await checkAccountAccess(note.account, req);
   return note;
@@ -39,12 +47,12 @@ const createNote = async (_, { note }, req) => {
   // Check account exists first
   const account = await Account.findOne({ _id: note.account });
   if (!account) {
-    throw new Error(`Account with ID '${note.account}' does not exist`);
+    throw ACCOUNT_NOT_FOUND(note.account);
   }
 
   const existingNote = await Note.findOne({ body: note.body, account: note.account });
   if (existingNote) {
-    throw new Error('Note with this content already exists');
+    throw NOTE_EXISTS(note.body);
   }
 
   const newNote = new Note(note);
@@ -61,7 +69,7 @@ const editNote = async (_, { id, note }, req) => {
   await checkAuth(req);
   const currentNote = await Note.findById(id);
   if (!currentNote) {
-    throw new Error(`Note with id '${id}' does not exist`);
+    throw NOTE_NOT_FOUND(id);
   }
   await checkAccountAccess(currentNote.account, req);
 
@@ -72,7 +80,7 @@ const editNote = async (_, { id, note }, req) => {
   });
 
   if (!editedNote) {
-    throw new Error('Note cannot be updated');
+    throw NOTE_UPDATE_FAILED();
   }
 
   return {
@@ -85,8 +93,9 @@ const deleteNote = async (_, { id }, req) => {
   await checkAuth(req);
   const note = await Note.findById(id);
   if (!note) {
-    throw new Error(`Note with id '${id}' does not exist`);
+    throw NOTE_NOT_FOUND(id);
   }
+
   await checkAccountAccess(note.account, req);
 
   try {
@@ -104,7 +113,7 @@ const deleteNote = async (_, { id }, req) => {
         success: true
       };
     } else {
-      throw new Error('Note cannot be deleted');
+      throw NOTE_DELETE_FAILED();
     }
   } catch (err) {
     throw err;

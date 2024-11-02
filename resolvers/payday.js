@@ -1,14 +1,22 @@
 import { checkAuth, checkAccountAccess } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { Payday } from '../models/Payday';
-import { incrementVersion } from '../utils/documentHelpers';
-import { withTransaction } from '../utils/transactionHelpers';
+import {
+  ACCOUNT_NOT_FOUND,
+  PAYDAY_NOT_FOUND,
+  PAYDAYS_NOT_FOUND,
+  PAYDAY_EXISTS,
+  PAYDAY_UPDATE_FAILED,
+  PAYDAY_DELETE_FAILED,
+  withTransaction,
+  incrementVersion
+} from '../utils';
 
 const findPaydays = async (_, _1, req) => {
   await checkAuth(req);
   const paydays = await Payday.find({ account: req.accountId });
   if (!paydays) {
-    throw new Error('No paydays currently exist');
+    throw PAYDAYS_NOT_FOUND();
   }
   return paydays;
 };
@@ -17,7 +25,7 @@ const findPayday = async (_, { id }, req) => {
   await checkAuth(req);
   const payday = await Payday.findById(id);
   if (!payday) {
-    throw new Error(`Payday with id '${id}' does not exist`);
+    throw PAYDAY_NOT_FOUND(id);
   }
   await checkAccountAccess(payday.account, req);
   return payday;
@@ -29,7 +37,7 @@ const createPayday = async (_, { payday }, req) => {
   try {
     const existingPayday = await Payday.findOne({ account: payday.account });
     if (existingPayday) {
-      throw new Error('Account already has a payday configuration');
+      throw PAYDAY_EXISTS();
     }
 
     const newPayday = new Payday(payday);
@@ -42,7 +50,7 @@ const createPayday = async (_, { payday }, req) => {
         account.payday = newPayday;
         await account.save();
       } else {
-        throw new Error(`Account with ID ${newPayday.account} could not be found`);
+        throw ACCOUNT_NOT_FOUND(newPayday.account);
       }
     }
 
@@ -56,7 +64,7 @@ const editPayday = async (_, { id, payday }, req) => {
   await checkAuth(req);
   const currentPayday = await Payday.findById(id);
   if (!currentPayday) {
-    throw new Error(`Payday with ID '${id}' does not exist`);
+    throw PAYDAY_NOT_FOUND(id);
   }
   await checkAccountAccess(currentPayday.account, req);
 
@@ -67,7 +75,7 @@ const editPayday = async (_, { id, payday }, req) => {
   });
 
   if (!editedPayday) {
-    throw new Error('Payday could not be updated');
+    throw PAYDAY_UPDATE_FAILED();
   }
 
   return {
@@ -80,7 +88,7 @@ const deletePayday = async (_, { id }, req) => {
   await checkAuth(req);
   const payday = await Payday.findById(id);
   if (!payday) {
-    throw new Error(`Payday with id '${id}' does not exist`);
+    throw PAYDAY_NOT_FOUND(id);
   }
   await checkAccountAccess(payday.account, req);
 
@@ -99,7 +107,7 @@ const deletePayday = async (_, { id }, req) => {
         success: true
       };
     } else {
-      throw new Error('Payday cannot be deleted');
+      throw PAYDAY_DELETE_FAILED();
     }
   });
 };

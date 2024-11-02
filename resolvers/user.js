@@ -3,16 +3,26 @@ import jwt from 'jsonwebtoken';
 import { checkAuth } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { User } from '../models/User';
-import { withTransaction } from '../utils/transactionHelpers';
 import { Bill } from '../models/Bill';
 import { Note } from '../models/Note';
 import { OneOffPayment } from '../models/OneOffPayment';
 import { Payday } from '../models/Payday';
+import {
+  USER_NOT_FOUND,
+  USERS_NOT_FOUND,
+  USER_EMAIL_NOT_FOUND,
+  USER_EXISTS,
+  USER_UPDATE_FAILED,
+  USER_DELETE_FAILED,
+  INVALID_CREDENTIALS,
+  ACCOUNT_NOT_FOUND,
+  withTransaction
+} from '../utils';
 
 const findUsers = async () => {
   const users = User.find();
   if (!users) {
-    throw new Error(`No users currently exist`);
+    throw USERS_NOT_FOUND();
   }
   return users;
 };
@@ -20,7 +30,7 @@ const findUsers = async () => {
 const findUser = async (_, { id }) => {
   const user = await User.findById(id);
   if (!user) {
-    throw new Error(`User with id '${id}' does not exist`);
+    throw USER_NOT_FOUND(id);
   }
   return user;
 };
@@ -28,11 +38,11 @@ const findUser = async (_, { id }) => {
 const login = async (_, { email, password }) => {
   const user = await User.findOne({ email: email });
   if (!user) {
-    throw new Error('User does not exist');
+    throw USER_EMAIL_NOT_FOUND();
   }
   const isEqual = await bcrypt.compare(password, user.password);
   if (!isEqual) {
-    throw new Error('Password is incorrect');
+    throw INVALID_CREDENTIALS();
   }
   const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_KEY, {
     expiresIn: '1h'
@@ -46,11 +56,16 @@ const tokenFindUser = async (_, _1, req) => {
   return findUser(_, { id: req.userId }, req);
 };
 
+const registerAndLogin = async (_, { user }) => {
+  await createUser(_, { user });
+  return login(_, { email: user.email, password: user.password });
+};
+
 const createUser = async (_, { user }) => {
   try {
     const existingUser = await User.findOne({ email: user.email });
     if (existingUser) {
-      throw new Error(`User with email already exists`);
+      throw USER_EXISTS();
     }
     const hashedPassword = await bcrypt.hash(user.password, 12);
 
@@ -66,60 +81,47 @@ const createUser = async (_, { user }) => {
     // UPDATE ACCOUNT USER FIELD
     if (newUser.account) {
       const account = await Account.findOne({ _id: newUser.account });
-
       if (account) {
         account.user = newUser;
-        account.save();
+        await account.save();
       } else {
-        throw new Error(`Account with ID ${newUser.account} could not be found`);
+        throw ACCOUNT_NOT_FOUND(newUser.account);
       }
     }
 
-    if (newUser) {
-      return { user: newUser, success: true };
-    } else {
-      throw new Error(`User could not be created`);
-    }
+    return { user: newUser, success: true };
   } catch (err) {
     throw err;
   }
-};
-
-const registerAndLogin = async (_, { user }) => {
-  await createUser(_, { user });
-  return login(_, { email: user.email, password: user.password });
 };
 
 const editUser = async (_, { id, user }, req) => {
   checkAuth(req);
-  try {
-    const currentUser = await User.findById(id);
-    if (!currentUser) {
-      throw new Error(`User with id '${id}' does not exist`);
-    }
 
-    if (user.password) {
-      const hashedPassword = await bcrypt.hash(user.password, 12);
-      user.password = hashedPassword;
-    }
-
-    const mergedUser = incrementVersion(Object.assign(currentUser, user));
-
-    const editedUser = await User.findOneAndUpdate({ _id: id }, mergedUser, {
-      new: true
-    });
-
-    if (editedUser) {
-      return {
-        user: editedUser,
-        success: true
-      };
-    } else {
-      throw new Error('User cannot be updated');
-    }
-  } catch (err) {
-    throw err;
+  const currentUser = await User.findById(id);
+  if (!currentUser) {
+    throw USER_NOT_FOUND(id);
   }
+
+  if (user.password) {
+    const hashedPassword = await bcrypt.hash(user.password, 12);
+    user.password = hashedPassword;
+  }
+
+  const mergedUser = incrementVersion(Object.assign(currentUser, user));
+
+  const editedUser = await User.findOneAndUpdate({ _id: id }, mergedUser, {
+    new: true
+  });
+
+  if (!editedUser) {
+    throw USER_UPDATE_FAILED();
+  }
+
+  return {
+    user: editedUser,
+    success: true
+  };
 };
 
 const deleteUser = async (_, { id }, req) => {
@@ -128,7 +130,7 @@ const deleteUser = async (_, { id }, req) => {
   return withTransaction(async session => {
     const user = await User.findById(id).populate('account').session(session);
     if (!user) {
-      throw new Error(`User with id '${id}' does not exist`);
+      throw USER_NOT_FOUND(id);
     }
 
     if (user.account) {
@@ -166,7 +168,7 @@ const deleteUser = async (_, { id }, req) => {
 
     const response = await User.deleteOne({ _id: id }).session(session);
     if (response.deletedCount !== 1) {
-      throw new Error('User cannot be deleted');
+      throw USER_DELETE_FAILED();
     }
 
     return { success: true };

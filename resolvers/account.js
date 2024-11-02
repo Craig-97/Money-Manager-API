@@ -4,14 +4,22 @@ import { User } from '../models/User';
 import { Bill } from '../models/Bill';
 import { OneOffPayment } from '../models/OneOffPayment';
 import { Payday } from '../models/Payday';
-import { incrementVersion } from '../utils/documentHelpers';
-import { withTransaction } from '../utils/transactionHelpers';
+import {
+  USER_NOT_FOUND,
+  ACCOUNT_NOT_FOUND,
+  ACCOUNT_NOT_LINKED,
+  NO_ACCOUNTS,
+  ACCOUNT_EXISTS,
+  ACCOUNT_UPDATE_FAILED,
+  incrementVersion,
+  withTransaction
+} from '../utils';
 
 // Helper function to validate user
 const findUserById = async userId => {
   const user = await User.findById(userId);
   if (!user) {
-    throw new Error(`User with ID '${userId}' does not exist`);
+    throw USER_NOT_FOUND(userId);
   }
   return user;
 };
@@ -21,7 +29,7 @@ const findAccounts = async (_, _1, req) => {
   checkAuth(req);
   const accounts = await Account.find();
   if (!accounts.length) {
-    throw new Error('No accounts exist');
+    throw NO_ACCOUNTS();
   }
   return accounts;
 };
@@ -33,7 +41,7 @@ const findAccount = async (_, { id }, req) => {
 
   // Ensure user has an account linked
   if (!user.account) {
-    throw new Error('User does not have a linked account');
+    throw ACCOUNT_NOT_LINKED();
   }
 
   const account = await Account.findById(user.account)
@@ -44,7 +52,7 @@ const findAccount = async (_, { id }, req) => {
     .populate({ path: 'payday' });
 
   if (!account) {
-    throw new Error(`Account with id '${user.account}' does not exist`);
+    throw ACCOUNT_NOT_FOUND(user.account);
   }
   return account;
 };
@@ -60,7 +68,7 @@ const createAccount = async (_, { account }, req) => {
     // Check if account already exists
     const existingAccount = await Account.findOne({ user: userId }).session(session);
     if (existingAccount) {
-      throw new Error(`Account with userId '${userId}' already exists`);
+      throw ACCOUNT_EXISTS(existingAccount.id);
     }
 
     // Create the new account
@@ -126,14 +134,12 @@ const editAccount = async (_, { id, account }, req) => {
   const currentAccount = await Account.findById(id);
 
   if (!currentAccount) {
-    throw new Error(`Account with id '${id}' does not exist`);
+    throw ACCOUNT_NOT_FOUND(id);
   }
 
   // Check if neither bankBalance nor monthlyIncome is provided
   if (bankBalance === undefined && monthlyIncome === undefined) {
-    throw new Error(
-      'No valid fields provided for update. Please provide at least one of: bankBalance, monthlyIncome.'
-    );
+    throw ACCOUNT_UPDATE_FAILED();
   }
 
   // Only update fields that are provided
@@ -160,7 +166,7 @@ const deleteAccount = async (_, { id }, req) => {
       .session(session);
 
     if (!account) {
-      throw new Error(`Account with id '${id}' does not exist`);
+      throw ACCOUNT_NOT_FOUND(id);
     }
 
     // Batch all delete operations into a single Promise.all

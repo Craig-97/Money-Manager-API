@@ -2,22 +2,30 @@ import { checkAuth, checkAccountAccess } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { OneOffPayment } from '../models/OneOffPayment';
 import { Bill } from '../models/Bill';
-import { incrementVersion } from '../utils/documentHelpers';
-import { withTransaction } from '../utils/transactionHelpers';
+import {
+  ACCOUNT_NOT_FOUND,
+  PAYMENT_NOT_FOUND,
+  PAYMENTS_NOT_FOUND,
+  PAYMENT_EXISTS,
+  PAYMENT_UPDATE_FAILED,
+  PAYMENT_DELETE_FAILED,
+  BILL_EXISTS,
+  withTransaction,
+  incrementVersion
+} from '../utils';
 
 const findOneOffPayments = async (_, { accountId }, req) => {
   await checkAuth(req);
   await checkAccountAccess(accountId, req);
-  // Fetch the account associated with the authenticated user
   const userAccount = await Account.findOne({ _id: accountId });
 
   if (!userAccount) {
-    throw new Error(`No account exists for user with ID '${accountId}'`);
+    throw ACCOUNT_NOT_FOUND(accountId);
   }
   const oneOffPayments = await OneOffPayment.find({ account: accountId }).sort({ amount: 1 });
 
   if (!oneOffPayments || oneOffPayments.length === 0) {
-    throw new Error(`No one-off payments exist for account with ID '${accountId}'`);
+    throw PAYMENTS_NOT_FOUND(accountId);
   }
 
   return oneOffPayments;
@@ -27,7 +35,7 @@ const findOneOffPayment = async (_, { id }, req) => {
   await checkAuth(req);
   const oneOffPayment = await OneOffPayment.findById(id);
   if (!oneOffPayment) {
-    throw new Error(`One-off payment with ID '${id}' does not exist`);
+    throw PAYMENT_NOT_FOUND(id);
   }
   await checkAccountAccess(oneOffPayment.account, req);
   return oneOffPayment;
@@ -41,7 +49,7 @@ const createOneOffPayment = async (_, { oneOffPayment }, req) => {
     // Check account exists first
     const account = await Account.findOne({ _id: oneOffPayment.account }).session(session);
     if (!account) {
-      throw new Error(`Account with ID '${oneOffPayment.account}' does not exist`);
+      throw ACCOUNT_NOT_FOUND(oneOffPayment.account);
     }
 
     const existingPayment = await OneOffPayment.findOne({
@@ -49,7 +57,7 @@ const createOneOffPayment = async (_, { oneOffPayment }, req) => {
       account: oneOffPayment.account
     }).session(session);
     if (existingPayment) {
-      throw new Error(`Payment with name '${oneOffPayment.name}' already exists`);
+      throw PAYMENT_EXISTS(oneOffPayment.name);
     }
 
     const existingBill = await Bill.findOne({
@@ -57,7 +65,7 @@ const createOneOffPayment = async (_, { oneOffPayment }, req) => {
       account: oneOffPayment.account
     }).session(session);
     if (existingBill) {
-      throw new Error(`Bill with name '${oneOffPayment.name}' already exists`);
+      throw BILL_EXISTS(oneOffPayment.name);
     }
 
     const newOneOffPayment = new OneOffPayment(oneOffPayment);
@@ -75,7 +83,7 @@ const editOneOffPayment = async (_, { id, oneOffPayment }, req) => {
   await checkAuth(req);
   const currentOneOffPayment = await OneOffPayment.findById(id);
   if (!currentOneOffPayment) {
-    throw new Error(`Payment with id '${id}' does not exist`);
+    throw PAYMENT_NOT_FOUND(id);
   }
   await checkAccountAccess(currentOneOffPayment.account, req);
 
@@ -90,7 +98,7 @@ const editOneOffPayment = async (_, { id, oneOffPayment }, req) => {
   );
 
   if (!editedOneOffPayment) {
-    throw new Error('OneOffPayment cannot be updated');
+    throw PAYMENT_UPDATE_FAILED(id);
   }
 
   return {
@@ -103,7 +111,7 @@ const deleteOneOffPayment = async (_, { id }, req) => {
   await checkAuth(req);
   const oneOffPayment = await OneOffPayment.findById(id);
   if (!oneOffPayment) {
-    throw new Error(`Payment with id '${id}' does not exist`);
+    throw PAYMENT_NOT_FOUND(id);
   }
   await checkAccountAccess(oneOffPayment.account, req);
 
@@ -122,7 +130,7 @@ const deleteOneOffPayment = async (_, { id }, req) => {
         success: true
       };
     } else {
-      throw new Error('OneOffPayment cannot be deleted');
+      throw PAYMENT_DELETE_FAILED(id);
     }
   });
 };
@@ -134,7 +142,7 @@ const batchDeleteOneOffPayments = async (_, { ids }, req) => {
     // Verify all payments exist and belong to the user's account
     const payments = await OneOffPayment.find({ _id: { $in: ids } }).session(session);
     if (payments.length !== ids.length) {
-      throw new Error('One or more payments not found');
+      throw PAYMENTS_NOT_FOUND(ids);
     }
 
     // Check access for each payment

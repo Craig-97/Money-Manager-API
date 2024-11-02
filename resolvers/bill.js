@@ -2,8 +2,15 @@ import { checkAuth, checkAccountAccess } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { OneOffPayment } from '../models/OneOffPayment';
 import { Bill } from '../models/Bill';
-import { incrementVersion } from '../utils/documentHelpers';
-import { withTransaction } from '../utils/transactionHelpers';
+import {
+  ACCOUNT_NOT_FOUND,
+  BILL_NOT_FOUND,
+  BILLS_NOT_FOUND,
+  BILL_UPDATE_FAILED,
+  BILL_DELETE_FAILED,
+  withTransaction,
+  incrementVersion
+} from '../utils';
 
 const findBills = async (_, { accountId }, req) => {
   await checkAuth(req);
@@ -13,13 +20,13 @@ const findBills = async (_, { accountId }, req) => {
   const userAccount = await Account.findOne({ _id: accountId });
 
   if (!userAccount) {
-    throw new Error(`No account exists for user with ID '${accountId}'`);
+    throw ACCOUNT_NOT_FOUND(accountId);
   }
 
   const bills = await Bill.find({ account: accountId }).sort({ amount: 1 });
 
   if (!bills || bills.length === 0) {
-    throw new Error(`No bills exist for account with ID '${accountId}'`);
+    throw BILLS_NOT_FOUND(accountId);
   }
 
   return bills;
@@ -29,7 +36,7 @@ const findBill = async (_, { id }, req) => {
   await checkAuth(req);
   const bill = await Bill.findById(id);
   if (!bill) {
-    throw new Error(`Bill with ID '${id}' does not exist`);
+    throw BILL_NOT_FOUND(id);
   }
   await checkAccountAccess(bill.account, req);
   return bill;
@@ -43,7 +50,7 @@ const createBill = async (_, { bill }, req) => {
     // Check account exists first
     const account = await Account.findOne({ _id: bill.account }).session(session);
     if (!account) {
-      throw new Error(`Account with ID '${bill.account}' does not exist`);
+      throw ACCOUNT_NOT_FOUND(bill.account);
     }
 
     const existingBill = await Bill.findOne({
@@ -51,7 +58,7 @@ const createBill = async (_, { bill }, req) => {
       account: bill.account
     }).session(session);
     if (existingBill) {
-      throw new Error(`Bill with name '${bill.name}' already exists`);
+      throw BILL_EXISTS(bill.name);
     }
 
     const existingPayment = await OneOffPayment.findOne({
@@ -59,7 +66,7 @@ const createBill = async (_, { bill }, req) => {
       account: bill.account
     }).session(session);
     if (existingPayment) {
-      throw new Error(`Payment with name '${bill.name}' already exists`);
+      throw PAYMENT_EXISTS(bill.name);
     }
 
     const newBill = new Bill(bill);
@@ -77,7 +84,7 @@ const editBill = async (_, { id, bill }, req) => {
   await checkAuth(req);
   const currentBill = await Bill.findById(id);
   if (!currentBill) {
-    throw new Error(`Bill with id '${id}' does not exist`);
+    throw BILL_NOT_FOUND(id);
   }
   await checkAccountAccess(currentBill.account, req);
 
@@ -86,7 +93,7 @@ const editBill = async (_, { id, bill }, req) => {
   const editedBill = await Bill.findOneAndUpdate({ _id: id }, mergedBill, { new: true });
 
   if (!editedBill) {
-    throw new Error('Bill cannot be updated');
+    throw BILL_UPDATE_FAILED();
   }
 
   return {
@@ -99,7 +106,7 @@ const deleteBill = async (_, { id }, req) => {
   await checkAuth(req);
   const bill = await Bill.findById(id);
   if (!bill) {
-    throw new Error(`Bill with id '${id}' does not exist`);
+    throw BILL_NOT_FOUND(id);
   }
   await checkAccountAccess(bill.account, req);
 
@@ -118,7 +125,7 @@ const deleteBill = async (_, { id }, req) => {
         success: true
       };
     } else {
-      throw new Error('Bill cannot be deleted');
+      throw BILL_DELETE_FAILED();
     }
   });
 };
@@ -131,7 +138,7 @@ const batchUpdateBills = async (_, { input }, req) => {
     // Verify all bills exist and belong to the user's account
     const bills = await Bill.find({ _id: { $in: ids } }).session(session);
     if (bills.length !== ids.length) {
-      throw new Error('One or more bills not found');
+      throw BILLS_NOT_FOUND();
     }
 
     // Check access for each bill
@@ -161,7 +168,7 @@ const batchDeleteBills = async (_, { ids }, req) => {
     // Verify all bills exist and belong to the user's account
     const bills = await Bill.find({ _id: { $in: ids } }).session(session);
     if (bills.length !== ids.length) {
-      throw new Error('One or more bills not found');
+      throw BILLS_NOT_FOUND();
     }
 
     // Check access for each bill
