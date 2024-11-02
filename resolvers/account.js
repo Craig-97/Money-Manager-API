@@ -12,7 +12,8 @@ import {
   ACCOUNT_EXISTS,
   ACCOUNT_UPDATE_FAILED,
   incrementVersion,
-  withTransaction
+  withTransaction,
+  validateUniqueName
 } from '../utils';
 
 // Helper function to validate user
@@ -82,6 +83,14 @@ const createAccount = async (_, { account }, req) => {
     // Link the new account to the user
     existingUser.account = newAccount._id;
     await existingUser.save({ session });
+
+    // Check for name conflicts for all bills and payments
+    if (bills.length > 0 || oneOffPayments.length > 0) {
+      await Promise.all([
+        ...bills.map(bill => validateUniqueName(bill.name, newAccount._id, session)),
+        ...oneOffPayments.map(payment => validateUniqueName(payment.name, newAccount._id, session))
+      ]);
+    }
 
     // Handle bills creation if provided
     if (bills.length > 0) {

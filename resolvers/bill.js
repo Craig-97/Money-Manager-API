@@ -1,6 +1,5 @@
 import { checkAuth, checkAccountAccess } from '../middleware/isAuth';
 import { Account } from '../models/Account';
-import { OneOffPayment } from '../models/OneOffPayment';
 import { Bill } from '../models/Bill';
 import {
   ACCOUNT_NOT_FOUND,
@@ -9,7 +8,8 @@ import {
   BILL_UPDATE_FAILED,
   BILL_DELETE_FAILED,
   withTransaction,
-  incrementVersion
+  incrementVersion,
+  validateUniqueName
 } from '../utils';
 
 const findBills = async (_, { accountId }, req) => {
@@ -53,21 +53,7 @@ const createBill = async (_, { bill }, req) => {
       throw ACCOUNT_NOT_FOUND(bill.account);
     }
 
-    const existingBill = await Bill.findOne({
-      name: bill.name,
-      account: bill.account
-    }).session(session);
-    if (existingBill) {
-      throw BILL_EXISTS(bill.name);
-    }
-
-    const existingPayment = await OneOffPayment.findOne({
-      name: bill.name,
-      account: bill.account
-    }).session(session);
-    if (existingPayment) {
-      throw PAYMENT_EXISTS(bill.name);
-    }
+    await validateUniqueName(bill.name, bill.account, session);
 
     const newBill = new Bill(bill);
     await newBill.save({ session });
