@@ -7,7 +7,8 @@ import {
   NOTE_NOT_FOUND,
   NOTE_UPDATE_FAILED,
   NOTE_DELETE_FAILED,
-  NOTE_EXISTS
+  NOTE_EXISTS,
+  incrementVersion
 } from '../utils';
 
 const findNotes = async (_, { accountId }, req) => {
