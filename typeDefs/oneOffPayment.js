@@ -1,6 +1,6 @@
 exports.typeDefs = `
   type Query {
-    oneOffPayments: [OneOffPayment!]!
+    oneOffPayments(accountId: ID!): [OneOffPayment!]!
     oneOffPayment(id: ID): OneOffPayment
   }
 
@@ -22,9 +22,16 @@ exports.typeDefs = `
     success: Boolean
   }
 
+  type BatchOneOffPaymentResponse {
+    oneOffPayments: [OneOffPayment]!
+    success: Boolean!
+    deletedCount: Int!
+  }
+
   type Mutation {
     createOneOffPayment(oneOffPayment: OneOffPaymentInput!): OneOffPaymentResponse!
     editOneOffPayment(id: ID!, oneOffPayment: OneOffPaymentInput!): OneOffPaymentResponse!
     deleteOneOffPayment(id: ID!): OneOffPaymentResponse!
+    batchDeleteOneOffPayments(ids: [ID!]!): BatchOneOffPaymentResponse!
   }
 `;

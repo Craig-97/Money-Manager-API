@@ -1,112 +1,180 @@
-import { checkAuth } from '../middleware/isAuth';
+import { checkAuth, checkAccountAccess } from '../middleware/isAuth';
 import { Account } from '../models/Account';
-import { OneOffPayment } from '../models/OneOffPayment';
 import { Bill } from '../models/Bill';
+import {
+  ACCOUNT_NOT_FOUND,
+  BILL_NOT_FOUND,
+  BILLS_NOT_FOUND,
+  BILL_UPDATE_FAILED,
+  BILL_DELETE_FAILED,
+  withTransaction,
+  incrementVersion,
+  validateUniqueName
+} from '../utils';
 
-const findBills = async (_, _1, req) => {
-  checkAuth(req);
-  const bills = Bill.find().sort({ amount: 1 });
-  if (!bills) {
-    throw new Error(`No bills currently exist`);
+const findBills = async (_, { accountId }, req) => {
+  await checkAuth(req);
+  await checkAccountAccess(accountId, req);
+
+  // Fetch the account associated with the authenticated user
+  const userAccount = await Account.findOne({ _id: accountId });
+
+  if (!userAccount) {
+    throw ACCOUNT_NOT_FOUND(accountId);
   }
+
+  const bills = await Bill.find({ account: accountId }).sort({ amount: 1 });
+
+  if (!bills || bills.length === 0) {
+    throw BILLS_NOT_FOUND(accountId);
+  }
+
   return bills;
 };
 
 const findBill = async (_, { id }, req) => {
-  checkAuth(req);
+  await checkAuth(req);
   const bill = await Bill.findById(id);
   if (!bill) {
-    throw new Error(`Bill with id '${id}' does not exist`);
+    throw BILL_NOT_FOUND(id);
   }
+  await checkAccountAccess(bill.account, req);
   return bill;
 };
 
 const createBill = async (_, { bill }, req) => {
-  checkAuth(req);
-  try {
-    const existingBill = await Bill.findOne({ name: bill.name, account: bill.account });
-    if (existingBill) {
-      throw new Error(`Bill '${bill.name}' already exists`);
+  await checkAuth(req);
+  await checkAccountAccess(bill.account, req);
+
+  return withTransaction(async session => {
+    // Check account exists first
+    const account = await Account.findOne({ _id: bill.account }).session(session);
+    if (!account) {
+      throw ACCOUNT_NOT_FOUND(bill.account);
     }
 
-    const existingPayment = await OneOffPayment.findOne({ name: bill.name, account: bill.account });
-    if (existingPayment) {
-      throw new Error(`Payment '${bill.name}' already exists`);
-    }
+    await validateUniqueName(bill.name, bill.account, session);
 
     const newBill = new Bill(bill);
-    await newBill.save();
+    await newBill.save({ session });
 
-    // UPDATE ACCOUNT TO BILL ONE-TO-MANY LIST
-    if (newBill.account) {
-      const account = await Account.findOne({ _id: newBill.account });
+    // Update account's bills array
+    account.bills.push(newBill);
+    await account.save({ session });
 
-      if (account) {
-        account.bills.push(newBill);
-        account.save();
-      } else {
-        throw new Error(`Account with ID ${newBill.account} could not be found`);
-      }
-    }
-
-    if (newBill) {
-      return { bill: newBill, success: true };
-    } else {
-      throw new Error(`Bill could not be created`);
-    }
-  } catch (err) {
-    throw err;
-  }
+    return { bill: newBill, success: true };
+  });
 };
 
 const editBill = async (_, { id, bill }, req) => {
-  checkAuth(req);
-  try {
-    const currentBill = await Bill.findById(id);
-    if (!currentBill) {
-      throw new Error(`Bill with id '${id}' does not exist`);
-    }
-
-    const mergedBill = Object.assign(currentBill, bill);
-    mergedBill.__v = mergedBill.__v + 1;
-
-    const editedBill = await Bill.findOneAndUpdate({ _id: id }, mergedBill, {
-      new: true
-    });
-
-    if (editedBill) {
-      return {
-        bill: editedBill,
-        success: true
-      };
-    } else {
-      throw new Error('Bill cannot be updated');
-    }
-  } catch (err) {
-    throw err;
+  await checkAuth(req);
+  const currentBill = await Bill.findById(id);
+  if (!currentBill) {
+    throw BILL_NOT_FOUND(id);
   }
+  await checkAccountAccess(currentBill.account, req);
+
+  const mergedBill = incrementVersion(Object.assign(currentBill, bill));
+
+  const editedBill = await Bill.findOneAndUpdate({ _id: id }, mergedBill, { new: true });
+
+  if (!editedBill) {
+    throw BILL_UPDATE_FAILED();
+  }
+
+  return {
+    bill: editedBill,
+    success: true
+  };
 };
 
 const deleteBill = async (_, { id }, req) => {
-  checkAuth(req);
-  try {
-    const bill = await Bill.findById(id);
-    if (!bill) {
-      throw new Error(`Bill with id '${id}' does not exist`);
+  await checkAuth(req);
+  const bill = await Bill.findById(id);
+  if (!bill) {
+    throw BILL_NOT_FOUND(id);
+  }
+  await checkAccountAccess(bill.account, req);
+
+  return withTransaction(async session => {
+    // Remove bill reference from account
+    const account = await Account.findOne({ bills: bill._id }).session(session);
+    if (account) {
+      account.bills.pull(bill._id);
+      await account.save({ session });
     }
 
-    const response = await Bill.deleteOne({ _id: id });
-    if (bill && response.deletedCount == 1) {
+    const response = await Bill.deleteOne({ _id: id }).session(session);
+    if (bill && response.deletedCount === 1) {
       return {
         bill,
         success: true
       };
     } else {
-      throw new Error('Bill cannot be deleted');
+      throw BILL_DELETE_FAILED();
     }
-  } catch (err) {
-    throw err;
-  }
+  });
+};
+
+const batchUpdateBills = async (_, { input }, req) => {
+  await checkAuth(req);
+  const { ids, paid } = input;
+
+  return withTransaction(async session => {
+    // Verify all bills exist and belong to the user's account
+    const bills = await Bill.find({ _id: { $in: ids } }).session(session);
+    if (bills.length !== ids.length) {
+      throw BILLS_NOT_FOUND();
+    }
+
+    // Check access for each bill
+    await Promise.all(bills.map(bill => checkAccountAccess(bill.account, req)));
+
+    // Update all bills
+    const result = await Bill.updateMany(
+      { _id: { $in: ids } },
+      { $set: { paid }, $inc: { __v: 1 } }
+    ).session(session);
+
+    // Fetch updated bills
+    const updatedBills = await Bill.find({ _id: { $in: ids } }).session(session);
+
+    return {
+      bills: updatedBills,
+      success: true,
+      updatedCount: result.modifiedCount
+    };
+  });
+};
+
+const batchDeleteBills = async (_, { ids }, req) => {
+  await checkAuth(req);
+
+  return withTransaction(async session => {
+    // Verify all bills exist and belong to the user's account
+    const bills = await Bill.find({ _id: { $in: ids } }).session(session);
+    if (bills.length !== ids.length) {
+      throw BILLS_NOT_FOUND();
+    }
+
+    // Check access for each bill
+    await Promise.all(bills.map(bill => checkAccountAccess(bill.account, req)));
+
+    // Delete all bills
+    const result = await Bill.deleteMany({ _id: { $in: ids } }).session(session);
+
+    // Update account's bills array
+    const accountIds = [...new Set(bills.map(bill => bill.account))];
+    await Account.updateMany(
+      { _id: { $in: accountIds } },
+      { $pull: { bills: { $in: ids } } }
+    ).session(session);
+
+    return {
+      success: true,
+      deletedCount: result.deletedCount
+    };
+  });
 };
 
 exports.resolvers = {
@@ -117,6 +185,8 @@ exports.resolvers = {
   Mutation: {
     createBill,
     editBill,
-    deleteBill
+    deleteBill,
+    batchUpdateBills,
+    batchDeleteBills
   }
 };

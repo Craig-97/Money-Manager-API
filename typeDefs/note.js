@@ -1,6 +1,6 @@
 exports.typeDefs = `
   type Query {
-    notes: [Note!]!
+    notes(accountId: ID!): [Note!]!
     note(id: ID): Note
   }
 

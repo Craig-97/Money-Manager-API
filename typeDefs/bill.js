@@ -1,6 +1,6 @@
 exports.typeDefs = `
   type Query {
-    bills: [Bill!]!
+    bills(accountId: ID!): [Bill!]!
     bill(id: ID): Bill
   }
 
@@ -19,14 +19,32 @@ exports.typeDefs = `
     paid: Boolean
   }
 
+  input BatchBillUpdateInput {
+    ids: [ID!]!
+    paid: Boolean!
+  }
+
   type BillResponse {
     bill: Bill
     success: Boolean
+  }
+
+  type BatchBillResponse {
+    bills: [Bill]!
+    success: Boolean!
+    updatedCount: Int!
+  }
+
+  type BatchDeleteResponse {
+    success: Boolean!
+    deletedCount: Int!
   }
 
   type Mutation {
     createBill(bill: BillInput!): BillResponse!
     editBill(id: ID!, bill: BillInput!): BillResponse!
     deleteBill(id: ID!): BillResponse!
+    batchUpdateBills(input: BatchBillUpdateInput!): BatchBillResponse!
+    batchDeleteBills(ids: [ID!]!): BatchDeleteResponse!
   }
 `;
