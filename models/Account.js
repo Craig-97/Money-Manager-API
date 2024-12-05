@@ -8,6 +8,7 @@ const AccountSchema = new Schema({
   user: { type: Schema.Types.ObjectId, ref: 'User' },
   bills: [{ type: Schema.Types.ObjectId, ref: 'Bill' }],
   oneOffPayments: [{ type: Schema.Types.ObjectId, ref: 'OneOffPayment' }],
+  recurringPayments: [{ type: Schema.Types.ObjectId, ref: 'RecurringPayment' }],
   notes: [{ type: Schema.Types.ObjectId, ref: 'Note' }],
   payday: { type: Schema.Types.ObjectId, ref: 'Payday' }
 });
@@ -23,6 +24,9 @@ AccountSchema.index({ oneOffPayments: 1 });
 
 // Used for quick access to account's notes during population
 AccountSchema.index({ notes: 1 });
+
+// Add index for recurring payments
+AccountSchema.index({ recurringPayments: 1 });
 
 // Create and export the model using the schema
 export const Account = mongoose.model('Account', AccountSchema);

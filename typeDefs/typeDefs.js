@@ -5,12 +5,14 @@ const bill = require('./bill');
 const oneOffPayment = require('./oneOffPayment');
 const note = require('./note');
 const payday = require('./payday');
+const recurringPayment = require('./recurringPayment');
 
 const types = [
   user.typeDefs,
   account.typeDefs,
   bill.typeDefs,
   oneOffPayment.typeDefs,
+  recurringPayment.typeDefs,
   note.typeDefs,
   payday.typeDefs
 ];

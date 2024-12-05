@@ -7,6 +7,7 @@ import {
   PAYMENTS_NOT_FOUND,
   PAYMENT_UPDATE_FAILED,
   PAYMENT_DELETE_FAILED,
+  INVALID_PAYMENT_TYPE,
   withTransaction,
   incrementVersion,
   validateUniqueName
@@ -48,6 +49,11 @@ const createOneOffPayment = async (_, { oneOffPayment }, req) => {
     const account = await Account.findOne({ _id: oneOffPayment.account }).session(session);
     if (!account) {
       throw ACCOUNT_NOT_FOUND(oneOffPayment.account);
+    }
+
+    // Validate type is either INCOME or EXPENSE
+    if (!['INCOME', 'EXPENSE'].includes(oneOffPayment.type)) {
+      throw INVALID_PAYMENT_TYPE();
     }
 
     await validateUniqueName(oneOffPayment.name, oneOffPayment.account, session);
@@ -134,6 +140,10 @@ const batchDeleteOneOffPayments = async (_, { ids }, req) => {
 
     // Delete all payments
     const result = await OneOffPayment.deleteMany({ _id: { $in: ids } }).session(session);
+
+    if (result.deletedCount !== ids.length) {
+      throw PAYMENT_DELETE_FAILED(ids);
+    }
 
     // Update account's oneOffPayments array
     const accountIds = [...new Set(payments.map(payment => payment.account))];
