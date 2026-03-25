@@ -1,7 +1,30 @@
 exports.typeDefs = `
-  type Query {
-    oneOffPayments(accountId: ID!): [OneOffPayment!]!
-    oneOffPayment(id: ID): OneOffPayment
+  enum PaymentType {
+    INCOME
+    EXPENSE
+  }
+
+  enum PaymentCategory {
+    TRANSFER
+    INVESTMENT
+    FEES
+    TAXES
+    HOME
+    UTILITIES
+    VEHICLE
+    TRAVEL
+    TRANSPORT
+    FOOD
+    SHOPPING
+    ENTERTAINMENT
+    HEALTHCARE
+    EDUCATION
+    GIFT
+    PETS
+    SALARY
+    BUSINESS
+    CHARITY
+    OTHER
   }
 
   type OneOffPayment {
@@ -9,12 +32,18 @@ exports.typeDefs = `
     account: ID!
     name: String!
     amount: Float!
+    dueDate: String!
+    type: PaymentType!
+    category: PaymentCategory!
   }
 
   input OneOffPaymentInput {
     account: ID
     name: String
     amount: Float
+    dueDate: String
+    type: PaymentType
+    category: PaymentCategory
   }
 
   type OneOffPaymentResponse {
@@ -27,6 +56,12 @@ exports.typeDefs = `
     success: Boolean!
     deletedCount: Int!
   }
+
+  type Query {
+    oneOffPayments(accountId: ID!): [OneOffPayment!]!
+    oneOffPayment(id: ID): OneOffPayment
+  }
+
 
   type Mutation {
     createOneOffPayment(oneOffPayment: OneOffPaymentInput!): OneOffPaymentResponse!

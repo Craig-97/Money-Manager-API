@@ -23,3 +23,8 @@ export const PAYMENT_DELETE_FAILED = () =>
   new GraphQLError('OneOffPayment cannot be deleted', {
     extensions: { code: 'PAYMENT_DELETE_FAILED' }
   });
+
+export const INVALID_PAYMENT_TYPE = () =>
+  new GraphQLError('Invalid payment type. Must be either INCOME or EXPENSE', {
+    extensions: { code: 'INVALID_PAYMENT_TYPE' }
+  });

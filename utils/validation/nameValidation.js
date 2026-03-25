@@ -1,5 +1,6 @@
 import { Bill } from '../../models/Bill';
 import { OneOffPayment } from '../../models/OneOffPayment';
+import { RecurringPayment } from '../../models/RecurringPayment';
 import { BILL_EXISTS, PAYMENT_EXISTS } from '../errors';
 
 export const validateUniqueName = async (name, accountId, session, excludeId = null) => {
@@ -23,5 +24,16 @@ export const validateUniqueName = async (name, accountId, session, excludeId = n
 
   if (existingBill) {
     throw BILL_EXISTS(name);
+  }
+
+  // Check for existing recurring payment with same name
+  const existingRecurringPayment = await RecurringPayment.findOne({
+    name,
+    account: accountId,
+    _id: { $ne: excludeId }
+  }).session(session);
+
+  if (existingRecurringPayment) {
+    throw PAYMENT_EXISTS(name);
   }
 };
