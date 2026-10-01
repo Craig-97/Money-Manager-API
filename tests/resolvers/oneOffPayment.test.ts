@@ -5,7 +5,9 @@ import {
   clearDatabase,
   gql,
   errorCode,
-  createUserWithAccount
+  createUserWithAccount,
+  GqlBody,
+  Variables
 } from '../helpers';
 
 beforeAll(setupTestApp);
@@ -18,7 +20,7 @@ const CREATE = `mutation ($p: OneOffPaymentInput!) {
 }`;
 const UNKNOWN = '507f1f77bcf86cd799439011';
 
-const makePayment = (token, accountId, name, extra = {}) =>
+const makePayment = (token: string | undefined, accountId: string, name: string, extra: Variables = {}) =>
   gql(
     CREATE,
     {
@@ -35,7 +37,7 @@ const makePayment = (token, accountId, name, extra = {}) =>
     token
   );
 
-const idOf = body => body.data.createOneOffPayment.oneOffPayment.id;
+const idOf = (body: GqlBody) => body.data.createOneOffPayment.oneOffPayment.id;
 
 describe('createOneOffPayment', () => {
   it('creates a payment and adds it to the account', async () => {
@@ -96,7 +98,7 @@ describe('one-off payment queries', () => {
       token
     );
     expect(body.errors).toBeUndefined();
-    expect(body.data.oneOffPayments.map(p => p.name)).toEqual(['Small', 'Big']);
+    expect(body.data.oneOffPayments.map((p: { name: string }) => p.name)).toEqual(['Small', 'Big']);
   });
 
   it('returns PAYMENTS_NOT_FOUND when there are none', async () => {
@@ -230,7 +232,7 @@ describe('batchDeleteOneOffPayments', () => {
     expect(body.errors).toBeUndefined();
     expect(body.data.batchDeleteOneOffPayments.success).toBe(true);
     expect(body.data.batchDeleteOneOffPayments.deletedCount).toBe(2);
-    expect(body.data.batchDeleteOneOffPayments.oneOffPayments.map(p => p.name).sort()).toEqual([
+    expect(body.data.batchDeleteOneOffPayments.oneOffPayments.map((p: { name: string }) => p.name).sort()).toEqual([
       'A',
       'B'
     ]);

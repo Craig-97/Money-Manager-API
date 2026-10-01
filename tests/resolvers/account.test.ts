@@ -76,7 +76,7 @@ describe('createAccount', () => {
 
   it('creates an account with several bills and payments in one transaction', async () => {
     const { token, user } = await createUserWithAccount({ withAccount: false });
-    const payment = name => ({
+    const payment = (name: string) => ({
       name,
       amount: 1,
       dueDate: '2030-01-01',
@@ -98,8 +98,8 @@ describe('createAccount', () => {
     );
     expect(body.errors).toBeUndefined();
     const { account } = body.data.createAccount;
-    expect(account.bills.map(b => b.name).sort()).toEqual(['B1', 'B2', 'B3']);
-    expect(account.oneOffPayments.map(p => p.name).sort()).toEqual(['P1', 'P2', 'P3']);
+    expect(account.bills.map((b: { name: string }) => b.name).sort()).toEqual(['B1', 'B2', 'B3']);
+    expect(account.oneOffPayments.map((p: { name: string }) => p.name).sort()).toEqual(['P1', 'P2', 'P3']);
   });
 
   it('links the account to the user', async () => {
@@ -157,7 +157,7 @@ describe('account queries', () => {
     const account = body.data.account;
     expect(account.id).toBe(accountId);
     expect(account.user).toMatchObject({ id: user.id, email: user.email });
-    expect(account.bills.map(b => b.name)).toEqual(['Small', 'Big']);
+    expect(account.bills.map((b: { name: string }) => b.name)).toEqual(['Small', 'Big']);
     expect(account.notes).toEqual([{ body: 'Remember' }]);
     expect(account.payday).toBeNull();
   });

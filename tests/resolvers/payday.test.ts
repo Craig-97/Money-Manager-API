@@ -5,7 +5,9 @@ import {
   clearDatabase,
   gql,
   errorCode,
-  createUserWithAccount
+  createUserWithAccount,
+  GqlBody,
+  Variables
 } from '../helpers';
 
 beforeAll(setupTestApp);
@@ -18,14 +20,14 @@ const CREATE = `mutation ($payday: PaydayInput!) {
 }`;
 const UNKNOWN = '507f1f77bcf86cd799439011';
 
-const makePayday = (token, accountId, extra = {}) =>
+const makePayday = (token: string | undefined, accountId: string, extra: Variables = {}) =>
   gql(
     CREATE,
     { payday: { account: accountId, frequency: 'MONTHLY', type: 'SET_DAY', dayOfMonth: 25, ...extra } },
     token
   );
 
-const idOf = body => body.data.createPayday.payday.id;
+const idOf = (body: GqlBody) => body.data.createPayday.payday.id;
 
 describe('createPayday', () => {
   it('creates a payday and links it to the account', async () => {
@@ -61,7 +63,7 @@ describe('createPayday', () => {
     const { token, accountId } = await createUserWithAccount();
     const body = await makePayday(token, accountId, { firstPayDate: '25/01/2030' });
     expect(body.errors).toBeDefined();
-    expect(body.errors[0].message).toMatch(/valid date format/);
+    expect(body.errors?.[0].message).toMatch(/valid date format/);
   });
 
   it('rejects a dayOfMonth out of range', async () => {

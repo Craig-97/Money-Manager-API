@@ -72,21 +72,21 @@ describe('authentication', () => {
   it('returns an invalid token error with no token', async () => {
     const body = await gql(ME);
     expect(errorCode(body)).toBe('UNAUTHENTICATED');
-    expect(body.errors[0].message).toBe('Unauthenticated! - Invalid token');
-    expect(body.errors[0].extensions.invalid).toBe(true);
+    expect(body.errors?.[0].message).toBe('Unauthenticated! - Invalid token');
+    expect(body.errors?.[0].extensions?.invalid).toBe(true);
   });
 
   it('returns an invalid token error for a malformed token', async () => {
     const body = await gql(ME, undefined, 'not-a-jwt');
     expect(errorCode(body)).toBe('UNAUTHENTICATED');
-    expect(body.errors[0].extensions.invalid).toBe(true);
+    expect(body.errors?.[0].extensions?.invalid).toBe(true);
   });
 
   it('returns an expired token error for an expired token', async () => {
     const { user } = await createUserWithAccount({ withAccount: false });
     const body = await gql(ME, undefined, expiredToken(user.id));
     expect(errorCode(body)).toBe('UNAUTHENTICATED');
-    expect(body.errors[0].message).toBe('Unauthenticated! - Expired token');
-    expect(body.errors[0].extensions.expired).toBe(true);
+    expect(body.errors?.[0].message).toBe('Unauthenticated! - Expired token');
+    expect(body.errors?.[0].extensions?.expired).toBe(true);
   });
 });

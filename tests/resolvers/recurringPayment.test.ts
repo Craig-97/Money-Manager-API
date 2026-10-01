@@ -5,7 +5,9 @@ import {
   clearDatabase,
   gql,
   errorCode,
-  createUserWithAccount
+  createUserWithAccount,
+  GqlBody,
+  Variables
 } from '../helpers';
 
 beforeAll(setupTestApp);
@@ -19,7 +21,7 @@ const CREATE = `mutation ($input: CreateRecurringPaymentInput!) {
 }`;
 const UNKNOWN = '507f1f77bcf86cd799439011';
 
-const makePayment = (token, accountId, name, extra = {}) =>
+const makePayment = (token: string | undefined, accountId: string, name: string, extra: Variables = {}) =>
   gql(
     CREATE,
     {
@@ -37,7 +39,7 @@ const makePayment = (token, accountId, name, extra = {}) =>
     token
   );
 
-const idOf = body => body.data.createRecurringPayment.recurringPayment.id;
+const idOf = (body: GqlBody) => body.data.createRecurringPayment.recurringPayment.id;
 
 describe('createRecurringPayment', () => {
   it('creates a payment, returns the populated account and adds it to the account', async () => {
@@ -104,7 +106,7 @@ describe('recurring payment queries', () => {
       token
     );
     expect(body.errors).toBeUndefined();
-    expect(body.data.recurringPayments.map(p => p.name)).toEqual(['Small', 'Big']);
+    expect(body.data.recurringPayments.map((p: { name: string }) => p.name)).toEqual(['Small', 'Big']);
   });
 
   it('returns RECURRING_PAYMENTS_NOT_FOUND when there are none', async () => {
@@ -263,7 +265,7 @@ describe('batch recurring payment operations', () => {
     expect(body.errors).toBeUndefined();
     expect(body.data.batchUpdateRecurringPayments.success).toBe(true);
     const byName = Object.fromEntries(
-      body.data.batchUpdateRecurringPayments.recurringPayments.map(p => [p.name, p.amount])
+      body.data.batchUpdateRecurringPayments.recurringPayments.map((p: { name: string; amount: number }) => [p.name, p.amount])
     );
     expect(byName).toEqual({ A: 111, B: 222 });
   });

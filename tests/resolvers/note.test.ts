@@ -16,7 +16,7 @@ const FIELDS = 'id account body createdAt updatedAt';
 const CREATE = `mutation ($note: NoteInput!) { createNote(note: $note) { success note { ${FIELDS} } } }`;
 const UNKNOWN = '507f1f77bcf86cd799439011';
 
-const makeNote = (token, accountId, body) =>
+const makeNote = (token: string | undefined, accountId: string, body: string) =>
   gql(CREATE, { note: { account: accountId, body } }, token);
 
 describe('createNote', () => {
@@ -74,7 +74,7 @@ describe('note queries', () => {
       token
     );
     expect(body.errors).toBeUndefined();
-    expect(body.data.notes.map(n => n.body).sort()).toEqual(['one', 'two']);
+    expect(body.data.notes.map((n: { body: string }) => n.body).sort()).toEqual(['one', 'two']);
   });
 
   it('returns NOTES_NOT_FOUND when there are none', async () => {

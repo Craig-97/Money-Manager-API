@@ -16,7 +16,7 @@ const FIELDS = 'id account name amount paid';
 const CREATE = `mutation ($bill: BillInput!) { createBill(bill: $bill) { success bill { ${FIELDS} } } }`;
 const UNKNOWN = '507f1f77bcf86cd799439011';
 
-const makeBill = (token, accountId, name, amount = 10, paid = false) =>
+const makeBill = (token: string | undefined, accountId: string, name: string, amount = 10, paid = false) =>
   gql(CREATE, { bill: { account: accountId, name, amount, paid } }, token);
 
 describe('createBill', () => {
@@ -87,7 +87,7 @@ describe('bill queries', () => {
       token
     );
     expect(body.errors).toBeUndefined();
-    expect(body.data.bills.map(b => b.name)).toEqual(['Small', 'Big']);
+    expect(body.data.bills.map((b: { name: string }) => b.name)).toEqual(['Small', 'Big']);
   });
 
   it('returns BILLS_NOT_FOUND when the account has no bills', async () => {
@@ -231,7 +231,7 @@ describe('batch bill operations', () => {
     expect(body.errors).toBeUndefined();
     expect(body.data.batchUpdateBills.success).toBe(true);
     expect(body.data.batchUpdateBills.updatedCount).toBe(2);
-    expect(body.data.batchUpdateBills.bills.every(b => b.paid)).toBe(true);
+    expect(body.data.batchUpdateBills.bills.every((b: { paid: boolean }) => b.paid)).toBe(true);
     expect(await mongoose.model('Bill').countDocuments({ paid: true })).toBe(2);
   });
 
