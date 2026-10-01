@@ -7,7 +7,7 @@
     "types": ["node", "jest"],
     "allowJs": true,
     "checkJs": false,
-    "strict": false,
+    "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
