@@ -11,7 +11,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@apollo/server": "^4.13.0",
+    "@apollo/server": "^5.5.1",
+    "@as-integrations/express5": "^1.1.2",
     "@babel/cli": "^7.29.7",
     "@babel/core": "^7.29.7",
     "@babel/node": "^7.29.7",
