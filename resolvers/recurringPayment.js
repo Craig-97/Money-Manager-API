@@ -36,7 +36,8 @@ const findRecurringPayment = async (_, { id }, req) => {
   if (!payment) {
     throw RECURRING_PAYMENT_NOT_FOUND(id);
   }
-  await checkAccountAccess(payment.account, req);
+  // account is populated here, so check against its id rather than the whole document
+  await checkAccountAccess(payment.account._id, req);
   return payment;
 };
 
@@ -110,7 +111,7 @@ const updateRecurringPayment = async (_, { id, input }, req) => {
   const mergedPayment = incrementVersion(Object.assign(payment, input));
   const updatedPayment = await RecurringPayment.findOneAndUpdate({ _id: id }, mergedPayment, {
     new: true
-  });
+  }).populate('account');
 
   if (!updatedPayment) {
     throw RECURRING_PAYMENT_UPDATE_FAILED();

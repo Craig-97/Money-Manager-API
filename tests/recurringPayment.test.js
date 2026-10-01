@@ -117,9 +117,7 @@ describe('recurring payment queries', () => {
     expect(errorCode(body)).toBe('RECURRING_PAYMENTS_NOT_FOUND');
   });
 
-  // Known bug: the populated account document is passed to checkAccountAccess, so even the
-  // owner gets FORBIDDEN. it.failing flags this test once the resolver is fixed.
-  it.failing('finds a payment by id with its account', async () => {
+  it('finds a payment by id with its account', async () => {
     const { token, accountId } = await createUserWithAccount();
     const created = await makePayment(token, accountId, 'One');
     const body = await gql(
@@ -155,23 +153,9 @@ describe('recurring payment queries', () => {
 });
 
 describe('updateRecurringPayment', () => {
-  const FIELDS_NO_ACCOUNT = FIELDS.replace(' account { id }', '');
   const UPDATE = `mutation ($id: ID!, $input: UpdateRecurringPaymentInput!) {
-    updateRecurringPayment(id: $id, input: $input) {
-      success recurringPayment { ${FIELDS_NO_ACCOUNT} }
-    }
+    updateRecurringPayment(id: $id, input: $input) { success recurringPayment { ${FIELDS} } }
   }`;
-  const UPDATE_WITH_ACCOUNT = `mutation ($id: ID!, $input: UpdateRecurringPaymentInput!) {
-    updateRecurringPayment(id: $id, input: $input) { success recurringPayment { account { id } } }
-  }`;
-
-  // Known bug: the returned account is an unpopulated ObjectId so selecting its fields errors.
-  it.failing('can select the account on the updated payment', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const created = await makePayment(token, accountId, 'Edit me');
-    const body = await gql(UPDATE_WITH_ACCOUNT, { id: idOf(created), input: { amount: 1 } }, token);
-    expect(body.errors).toBeUndefined();
-  });
 
   it('updates provided fields only', async () => {
     const { token, accountId } = await createUserWithAccount();
@@ -186,7 +170,8 @@ describe('updateRecurringPayment', () => {
       name: 'Edit me',
       amount: 55,
       frequency: 'ANNUALLY',
-      type: 'EXPENSE'
+      type: 'EXPENSE',
+      account: { id: accountId }
     });
   });
 
