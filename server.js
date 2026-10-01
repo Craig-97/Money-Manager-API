@@ -1,7 +1,7 @@
 import { connectToDatabase } from './db/mongodb';
 import { createApp } from './app';
 
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 
 const startServer = async () => {
   const { httpServer } = await createApp();
