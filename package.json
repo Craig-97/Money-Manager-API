@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "server.js",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "start": "nodemon --exec babel-node server.js",
     "test": "jest"
