@@ -6,7 +6,7 @@ import {
   gql,
   errorCode,
   createUserWithAccount
-} from './helpers';
+} from '../helpers';
 
 beforeAll(setupTestApp);
 afterAll(teardownTestApp);

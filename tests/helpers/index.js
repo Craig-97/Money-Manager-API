@@ -3,14 +3,14 @@ import os from 'os';
 import mongoose from 'mongoose';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
-import { createApp } from '../app';
-import '../models/User';
-import '../models/Account';
-import '../models/Bill';
-import '../models/Note';
-import '../models/OneOffPayment';
-import '../models/Payday';
-import '../models/RecurringPayment';
+import { createApp } from '../../app';
+import '../../models/User';
+import '../../models/Account';
+import '../../models/Bill';
+import '../../models/Note';
+import '../../models/OneOffPayment';
+import '../../models/Payday';
+import '../../models/RecurringPayment';
 
 let ctx;
 
