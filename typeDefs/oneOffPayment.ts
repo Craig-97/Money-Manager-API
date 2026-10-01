@@ -5,7 +5,7 @@ import { gqlEnum } from '../utils/helpers/enumHelpers';
 export const typeDefs = `
   ${gqlEnum('PaymentType', PaymentType)}
 
-  ${gqlEnum('PaymentCategory', OneOffPaymentCategory)}
+  ${gqlEnum('OneOffPaymentCategory', OneOffPaymentCategory)}
 
   type OneOffPayment {
     id: ID!
@@ -14,7 +14,7 @@ export const typeDefs = `
     amount: Float!
     dueDate: String!
     type: PaymentType!
-    category: PaymentCategory!
+    category: OneOffPaymentCategory!
   }
 
   input OneOffPaymentInput {
@@ -23,7 +23,7 @@ export const typeDefs = `
     amount: Float
     dueDate: String
     type: PaymentType
-    category: PaymentCategory
+    category: OneOffPaymentCategory
   }
 
   type OneOffPaymentResponse {
