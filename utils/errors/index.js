@@ -4,3 +4,4 @@ export * from './billErrors';
 export * from './oneOffPaymentErrors';
 export * from './paydayErrors';
 export * from './noteErrors';
+export * from './recurringPaymentErrors';

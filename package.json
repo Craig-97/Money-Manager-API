@@ -3,27 +3,37 @@
   "version": "1.0.0",
   "description": "",
   "main": "server.js",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
-    "start": "nodemon --exec babel-node server.js"
+    "start": "nodemon --exec babel-node server.js",
+    "test": "jest"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@apollo/server": "^4.11.0",
-    "@babel/cli": "^7.25.9",
-    "@babel/core": "^7.25.9",
-    "@babel/node": "^7.25.9",
-    "@babel/preset-env": "^7.25.9",
-    "bcryptjs": "^2.4.3",
-    "body-parser": "^1.20.3",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.21.1",
-    "graphql": "^16.9.0",
-    "graphql-tools": "^9.0.2",
-    "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.7.2",
-    "nodemon": "^3.1.7"
+    "@apollo/server": "^5.5.1",
+    "@as-integrations/express5": "^1.1.2",
+    "@babel/cli": "^8.0.6",
+    "@babel/core": "^8.0.6",
+    "@babel/node": "^8.0.6",
+    "@babel/preset-env": "^8.0.6",
+    "bcryptjs": "^3.0.3",
+    "body-parser": "^2.3.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
+    "graphql": "^16.14.2",
+    "graphql-tools": "^9.0.37",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.10.3",
+    "nodemon": "^3.1.14"
+  },
+  "devDependencies": {
+    "jest": "^30.5.2",
+    "mongodb-memory-server": "^11.3.0",
+    "supertest": "^7.3.0"
   }
 }
