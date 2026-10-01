@@ -1,15 +1,8 @@
 import mongoose, { Schema, Types } from 'mongoose';
+import { PaymentType } from '../constants/paymentType';
+import { enumValues } from '../utils/helpers/enumHelpers';
 
-export interface IOneOffPayment {
-  name: string;
-  amount: number;
-  account: Types.ObjectId;
-  dueDate?: Date;
-  type: 'INCOME' | 'EXPENSE';
-  category: string;
-}
-
-const PaymentCategory = {
+export const OneOffPaymentCategory = {
   TRANSFER: 'TRANSFER',
   INVESTMENT: 'INVESTMENT',
   FEES: 'FEES',
@@ -30,9 +23,22 @@ const PaymentCategory = {
   BUSINESS: 'BUSINESS',
   CHARITY: 'CHARITY',
   OTHER: 'OTHER'
-};
+} as const;
 
-const OneOffPaymentSchema = new Schema<IOneOffPayment>({
+export type OneOffPaymentCategory =
+  (typeof OneOffPaymentCategory)[keyof typeof OneOffPaymentCategory];
+
+
+export interface OneOffPayment {
+  name: string;
+  amount: number;
+  account: Types.ObjectId;
+  dueDate?: Date;
+  type: PaymentType;
+  category: OneOffPaymentCategory;
+}
+
+const OneOffPaymentSchema = new Schema<OneOffPayment>({
   name: {
     type: String,
     required: true
@@ -49,12 +55,12 @@ const OneOffPaymentSchema = new Schema<IOneOffPayment>({
   dueDate: Date,
   type: {
     type: String,
-    enum: ['INCOME', 'EXPENSE'],
+    enum: enumValues(PaymentType),
     required: true
   },
   category: {
     type: String,
-    enum: Object.values(PaymentCategory),
+    enum: enumValues(OneOffPaymentCategory),
     required: true
   }
 });
@@ -69,4 +75,4 @@ OneOffPaymentSchema.index({ name: 1, account: 1 }, { unique: true });
 OneOffPaymentSchema.index({ account: 1 });
 
 // Create and export the model using the schema
-export const OneOffPayment = mongoose.model<IOneOffPayment>('OneOffPayment', OneOffPaymentSchema);
+export const OneOffPayment = mongoose.model<OneOffPayment>('OneOffPayment', OneOffPaymentSchema);

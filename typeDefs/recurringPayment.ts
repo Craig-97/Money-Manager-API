@@ -1,40 +1,14 @@
+import { PaymentType } from '../constants/paymentType';
+import { PaymentFrequency, RecurringPaymentCategory } from '../models/RecurringPayment';
+import { gqlEnum } from '../utils/helpers/enumHelpers';
+
 export const typeDefs = `
 
-  enum PaymentCategory {
-    MORTGAGE
-    RENT
-    UTILITIES
-    HOME_MAINTENANCE
-    VEHICLE
-    TRANSPORT
-    LOAN
-    CREDIT_CARD
-    SAVINGS
-    INVESTMENT
-    INSURANCE
-    HEALTHCARE
-    CHILDCARE
-    EDUCATION
-    SUBSCRIPTION
-    MEMBERSHIP
-    FOOD
-    CHARITY
-    BUSINESS
-    OTHER
-  }
+  ${gqlEnum('PaymentCategory', RecurringPaymentCategory)}
 
-  enum PaymentFrequency {
-    WEEKLY
-    BIWEEKLY
-    MONTHLY
-    QUARTERLY
-    ANNUALLY
-  }
+  ${gqlEnum('PaymentFrequency', PaymentFrequency)}
 
-  enum PaymentType {
-    INCOME
-    EXPENSE
-  }
+  ${gqlEnum('PaymentType', PaymentType)}
 
   type RecurringPayment {
     id: ID!

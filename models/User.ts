@@ -1,6 +1,6 @@
 import mongoose, { Schema, Types } from 'mongoose';
 
-export interface IUser {
+export interface User {
   firstName?: string;
   surname?: string;
   email: string;
@@ -8,7 +8,7 @@ export interface IUser {
   account?: Types.ObjectId;
 }
 
-const UserSchema = new Schema<IUser>({
+const UserSchema = new Schema<User>({
   firstName: String,
   surname: String,
   email: {
@@ -29,4 +29,4 @@ const UserSchema = new Schema<IUser>({
 UserSchema.index({ email: 1 }, { unique: true }); // For login authentication
 
 // Create and export the model using the schema
-export const User = mongoose.model<IUser>('User', UserSchema);
+export const User = mongoose.model<User>('User', UserSchema);

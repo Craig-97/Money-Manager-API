@@ -1,5 +1,7 @@
 import type { Request } from 'express';
 import type { BatchUpdateRecurringPaymentInput, CreateRecurringPaymentInput, UpdateRecurringPaymentInput } from '../types/recurringPayment';
+import { PaymentType } from '../constants/paymentType';
+import { enumValues } from '../utils/helpers/enumHelpers';
 import { checkAuth, checkAccountAccess } from '../middleware/isAuth';
 import { RecurringPayment } from '../models/RecurringPayment';
 import { Account } from '../models/Account';
@@ -56,7 +58,7 @@ const createRecurringPayment = async (_: unknown, { input }: { input: CreateRecu
     }
 
     // Validate payment type
-    if (!['INCOME', 'EXPENSE'].includes(type)) {
+    if (!enumValues(PaymentType).includes(type)) {
       throw INVALID_RECURRING_PAYMENT_TYPE();
     }
 
@@ -95,7 +97,7 @@ const updateRecurringPayment = async (_: unknown, { id, input }: { id: string; i
     throw RECURRING_PAYMENT_UPDATE_FAILED();
   }
 
-  if (input.type && !['INCOME', 'EXPENSE'].includes(input.type)) {
+  if (input.type && !enumValues(PaymentType).includes(input.type)) {
     throw INVALID_RECURRING_PAYMENT_TYPE();
   }
 
@@ -159,7 +161,7 @@ const batchUpdateRecurringPayments = async (_: unknown, { input }: { input: Batc
       }
       await checkAccountAccess(payment.account, req);
 
-      if (updateData.type && !['INCOME', 'EXPENSE'].includes(updateData.type)) {
+      if (updateData.type && !enumValues(PaymentType).includes(updateData.type)) {
         throw INVALID_RECURRING_PAYMENT_TYPE();
       }
 

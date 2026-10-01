@@ -1,17 +1,8 @@
 import mongoose, { Schema, Types } from 'mongoose';
+import { PaymentType } from '../constants/paymentType';
+import { enumValues } from '../utils/helpers/enumHelpers';
 
-export interface IRecurringPayment {
-  name: string;
-  amount: number;
-  account: Types.ObjectId;
-  category: string;
-  frequency: string;
-  type: 'INCOME' | 'EXPENSE';
-  firstPaymentDate: Date;
-  lastPaymentDate?: Date;
-}
-
-const PaymentCategory = {
+export const RecurringPaymentCategory = {
   MORTGAGE: 'MORTGAGE',
   RENT: 'RENT',
   UTILITIES: 'UTILITIES',
@@ -32,17 +23,34 @@ const PaymentCategory = {
   CHARITY: 'CHARITY',
   BUSINESS: 'BUSINESS',
   OTHER: 'OTHER'
-};
+} as const;
 
-const PaymentFrequency = {
+export type RecurringPaymentCategory =
+  (typeof RecurringPaymentCategory)[keyof typeof RecurringPaymentCategory];
+
+export const PaymentFrequency = {
   WEEKLY: 'WEEKLY',
   BIWEEKLY: 'BIWEEKLY',
   MONTHLY: 'MONTHLY',
   QUARTERLY: 'QUARTERLY',
   ANNUALLY: 'ANNUALLY'
-};
+} as const;
 
-const recurringPaymentSchema = new Schema<IRecurringPayment>({
+export type PaymentFrequency = (typeof PaymentFrequency)[keyof typeof PaymentFrequency];
+
+
+export interface RecurringPayment {
+  name: string;
+  amount: number;
+  account: Types.ObjectId;
+  category: RecurringPaymentCategory;
+  frequency: PaymentFrequency;
+  type: PaymentType;
+  firstPaymentDate: Date;
+  lastPaymentDate?: Date;
+}
+
+const recurringPaymentSchema = new Schema<RecurringPayment>({
   name: {
     type: String,
     required: true,
@@ -61,16 +69,16 @@ const recurringPaymentSchema = new Schema<IRecurringPayment>({
   category: {
     type: String,
     required: true,
-    enum: Object.values(PaymentCategory)
+    enum: enumValues(RecurringPaymentCategory)
   },
   frequency: {
     type: String,
     required: true,
-    enum: Object.values(PaymentFrequency)
+    enum: enumValues(PaymentFrequency)
   },
   type: {
     type: String,
-    enum: ['INCOME', 'EXPENSE'],
+    enum: enumValues(PaymentType),
     required: true
   },
   firstPaymentDate: {
@@ -82,4 +90,4 @@ const recurringPaymentSchema = new Schema<IRecurringPayment>({
   }
 });
 
-export const RecurringPayment = mongoose.model<IRecurringPayment>('RecurringPayment', recurringPaymentSchema);
+export const RecurringPayment = mongoose.model<RecurringPayment>('RecurringPayment', recurringPaymentSchema);

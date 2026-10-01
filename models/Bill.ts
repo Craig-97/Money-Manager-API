@@ -1,13 +1,13 @@
 import mongoose, { Schema, Types } from 'mongoose';
 
-export interface IBill {
+export interface Bill {
   name?: string;
   amount?: number;
   paid?: boolean;
   account: Types.ObjectId;
 }
 
-const BillSchema = new Schema<IBill>({
+const BillSchema = new Schema<Bill>({
   name: String,
   amount: Number,
   paid: Boolean,
@@ -27,4 +27,4 @@ BillSchema.index({ name: 1, account: 1 }, { unique: true });
 BillSchema.index({ account: 1 });
 
 // Create and export the model using the schema
-export const Bill = mongoose.model<IBill>('Bill', BillSchema);
+export const Bill = mongoose.model<Bill>('Bill', BillSchema);

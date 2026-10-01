@@ -1,6 +1,6 @@
 import mongoose, { Schema, Types } from 'mongoose';
 
-export interface IAccount {
+export interface Account {
   bankBalance?: number;
   monthlyIncome?: number;
   user?: Types.ObjectId;
@@ -12,7 +12,7 @@ export interface IAccount {
 }
 
 // First define the schema
-const AccountSchema = new Schema<IAccount>({
+const AccountSchema = new Schema<Account>({
   bankBalance: Number,
   monthlyIncome: Number,
   user: { type: Schema.Types.ObjectId, ref: 'User' },
@@ -39,4 +39,4 @@ AccountSchema.index({ notes: 1 });
 AccountSchema.index({ recurringPayments: 1 });
 
 // Create and export the model using the schema
-export const Account = mongoose.model<IAccount>('Account', AccountSchema);
+export const Account = mongoose.model<Account>('Account', AccountSchema);

@@ -1,5 +1,7 @@
 import type { Request } from 'express';
 import type { CreateOneOffPaymentInput, OneOffPaymentInput } from '../types/oneOffPayment';
+import { PaymentType } from '../constants/paymentType';
+import { enumValues } from '../utils/helpers/enumHelpers';
 import { checkAuth, checkAccountAccess } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { OneOffPayment } from '../models/OneOffPayment';
@@ -54,7 +56,7 @@ const createOneOffPayment = async (_: unknown, { oneOffPayment }: { oneOffPaymen
     }
 
     // Validate type is either INCOME or EXPENSE
-    if (!['INCOME', 'EXPENSE'].includes(oneOffPayment.type)) {
+    if (!enumValues(PaymentType).includes(oneOffPayment.type)) {
       throw INVALID_PAYMENT_TYPE();
     }
 

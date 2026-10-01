@@ -1,16 +1,7 @@
 import mongoose, { Schema, Types } from 'mongoose';
+import { enumValues } from '../utils/helpers/enumHelpers';
 
-export interface IPayday {
-  frequency: string;
-  type: string;
-  dayOfMonth?: number;
-  weekday?: string;
-  firstPayDate?: string;
-  bankHolidayRegion?: string;
-  account: Types.ObjectId;
-}
-
-const PayFrequency = {
+export const PayFrequency = {
   WEEKLY: 'WEEKLY',
   FORTNIGHTLY: 'FORTNIGHTLY',
   FOUR_WEEKLY: 'FOUR_WEEKLY',
@@ -18,38 +9,57 @@ const PayFrequency = {
   QUARTERLY: 'QUARTERLY',
   BIANNUAL: 'BIANNUAL',
   ANNUAL: 'ANNUAL'
-};
+} as const;
 
-const PaydayType = {
+export type PayFrequency = (typeof PayFrequency)[keyof typeof PayFrequency];
+
+export const PaydayType = {
   LAST_DAY: 'LAST_DAY',
   LAST_FRIDAY: 'LAST_FRIDAY',
   SET_DAY: 'SET_DAY',
   SET_WEEKDAY: 'SET_WEEKDAY'
-};
+} as const;
 
-const Weekday = {
+export type PaydayType = (typeof PaydayType)[keyof typeof PaydayType];
+
+export const Weekday = {
   MONDAY: 'MONDAY',
   TUESDAY: 'TUESDAY',
   WEDNESDAY: 'WEDNESDAY',
   THURSDAY: 'THURSDAY',
   FRIDAY: 'FRIDAY'
-};
+} as const;
 
-const BankHolidayRegion = {
+export type Weekday = (typeof Weekday)[keyof typeof Weekday];
+
+export const BankHolidayRegion = {
   ENGLAND_AND_WALES: 'ENGLAND_AND_WALES',
   SCOTLAND: 'SCOTLAND',
   NORTHERN_IRELAND: 'NORTHERN_IRELAND'
-};
+} as const;
 
-const PaydaySchema = new Schema<IPayday>({
+export type BankHolidayRegion = (typeof BankHolidayRegion)[keyof typeof BankHolidayRegion];
+
+
+export interface Payday {
+  frequency: PayFrequency;
+  type: PaydayType;
+  dayOfMonth?: number;
+  weekday?: Weekday;
+  firstPayDate?: string;
+  bankHolidayRegion?: BankHolidayRegion;
+  account: Types.ObjectId;
+}
+
+const PaydaySchema = new Schema<Payday>({
   frequency: {
     type: String,
-    enum: Object.values(PayFrequency),
+    enum: enumValues(PayFrequency),
     required: true
   },
   type: {
     type: String,
-    enum: Object.values(PaydayType),
+    enum: enumValues(PaydayType),
     required: true
   },
   dayOfMonth: {
@@ -59,7 +69,7 @@ const PaydaySchema = new Schema<IPayday>({
   },
   weekday: {
     type: String,
-    enum: Object.values(Weekday)
+    enum: enumValues(Weekday)
   },
   firstPayDate: {
     type: String,
@@ -72,7 +82,7 @@ const PaydaySchema = new Schema<IPayday>({
   },
   bankHolidayRegion: {
     type: String,
-    enum: Object.values(BankHolidayRegion)
+    enum: enumValues(BankHolidayRegion)
   },
   account: {
     type: Schema.Types.ObjectId,
@@ -84,4 +94,4 @@ const PaydaySchema = new Schema<IPayday>({
 // Each account can only have one payday setup
 PaydaySchema.index({ account: 1 }, { unique: true });
 
-export const Payday = mongoose.model<IPayday>('Payday', PaydaySchema);
+export const Payday = mongoose.model<Payday>('Payday', PaydaySchema);

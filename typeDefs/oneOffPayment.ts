@@ -1,31 +1,11 @@
-export const typeDefs = `
-  enum PaymentType {
-    INCOME
-    EXPENSE
-  }
+import { PaymentType } from '../constants/paymentType';
+import { OneOffPaymentCategory } from '../models/OneOffPayment';
+import { gqlEnum } from '../utils/helpers/enumHelpers';
 
-  enum PaymentCategory {
-    TRANSFER
-    INVESTMENT
-    FEES
-    TAXES
-    HOME
-    UTILITIES
-    VEHICLE
-    TRAVEL
-    TRANSPORT
-    FOOD
-    SHOPPING
-    ENTERTAINMENT
-    HEALTHCARE
-    EDUCATION
-    GIFT
-    PETS
-    SALARY
-    BUSINESS
-    CHARITY
-    OTHER
-  }
+export const typeDefs = `
+  ${gqlEnum('PaymentType', PaymentType)}
+
+  ${gqlEnum('PaymentCategory', OneOffPaymentCategory)}
 
   type OneOffPayment {
     id: ID!

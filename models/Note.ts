@@ -1,13 +1,13 @@
 import mongoose, { Schema, Types } from 'mongoose';
 
-export interface INote {
+export interface Note {
   body?: string;
   account: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const noteSchema = new Schema<INote>(
+const noteSchema = new Schema<Note>(
   {
     body: String,
     account: {
@@ -31,4 +31,4 @@ noteSchema.index({ _id: 1, account: 1 });
 // Helps with account population
 noteSchema.index({ account: 1 });
 
-export const Note = mongoose.model<INote>('Note', noteSchema);
+export const Note = mongoose.model<Note>('Note', noteSchema);

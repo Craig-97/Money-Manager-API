@@ -1,34 +1,14 @@
+import { BankHolidayRegion, PayFrequency, PaydayType, Weekday } from '../models/Payday';
+import { gqlEnum } from '../utils/helpers/enumHelpers';
+
 export const typeDefs = `
-  enum PayFrequency {
-    WEEKLY
-    FORTNIGHTLY
-    FOUR_WEEKLY
-    MONTHLY
-    QUARTERLY
-    BIANNUAL
-    ANNUAL
-  }
+  ${gqlEnum('PayFrequency', PayFrequency)}
 
-  enum PaydayType {
-    LAST_DAY
-    LAST_FRIDAY
-    SET_DAY
-    SET_WEEKDAY
-  }
+  ${gqlEnum('PaydayType', PaydayType)}
 
-  enum Weekday {
-    MONDAY
-    TUESDAY
-    WEDNESDAY
-    THURSDAY
-    FRIDAY
-  }
+  ${gqlEnum('Weekday', Weekday)}
 
-  enum BankHolidayRegion {
-    ENGLAND_AND_WALES
-    SCOTLAND
-    NORTHERN_IRELAND
-  }
+  ${gqlEnum('BankHolidayRegion', BankHolidayRegion)}
 
   type Query {
     paydays: [Payday!]!
