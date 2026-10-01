@@ -2,6 +2,7 @@ import { checkAuth } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { User } from '../models/User';
 import { Bill } from '../models/Bill';
+import { Note } from '../models/Note';
 import { OneOffPayment } from '../models/OneOffPayment';
 import { Payday } from '../models/Payday';
 import { RecurringPayment } from '../models/RecurringPayment';

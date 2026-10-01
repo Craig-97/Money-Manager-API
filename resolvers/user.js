@@ -16,7 +16,8 @@ import {
   USER_DELETE_FAILED,
   INVALID_CREDENTIALS,
   ACCOUNT_NOT_FOUND,
-  withTransaction
+  withTransaction,
+  incrementVersion
 } from '../utils';
 
 const findUsers = async () => {
