@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import os from 'os';
 import mongoose from 'mongoose';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
@@ -16,7 +17,9 @@ let ctx;
 // Starts the real express + apollo stack against an isolated database for this test file
 export const setupTestApp = async () => {
   const dbName = `test_${crypto.randomBytes(6).toString('hex')}`;
-  await mongoose.connect(process.env.MONGO_TEST_URI, { dbName });
+  // The mongodb driver loads os via dynamic import(), which fails inside jest's CommonJS sandbox,
+  // so provide it explicitly or the connection handshake is sent without client metadata.
+  await mongoose.connect(process.env.MONGO_TEST_URI, { dbName, runtimeAdapters: { os } });
   // Unique indexes are relied on for duplicate detection, so make sure they exist
   await Promise.all(Object.values(mongoose.models).map(model => model.syncIndexes()));
   ctx = await createApp();

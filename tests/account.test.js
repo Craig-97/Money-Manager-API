@@ -74,6 +74,34 @@ describe('createAccount', () => {
     });
   });
 
+  it('creates an account with several bills and payments in one transaction', async () => {
+    const { token, user } = await createUserWithAccount({ withAccount: false });
+    const payment = name => ({
+      name,
+      amount: 1,
+      dueDate: '2030-01-01',
+      type: 'EXPENSE',
+      category: 'FOOD'
+    });
+    const body = await gql(
+      CREATE,
+      {
+        account: {
+          userId: user.id,
+          bankBalance: 1,
+          monthlyIncome: 1,
+          bills: ['B1', 'B2', 'B3'].map(name => ({ name, amount: 1, paid: false })),
+          oneOffPayments: [payment('P1'), payment('P2'), payment('P3')]
+        }
+      },
+      token
+    );
+    expect(body.errors).toBeUndefined();
+    const { account } = body.data.createAccount;
+    expect(account.bills.map(b => b.name).sort()).toEqual(['B1', 'B2', 'B3']);
+    expect(account.oneOffPayments.map(p => p.name).sort()).toEqual(['P1', 'P2', 'P3']);
+  });
+
   it('links the account to the user', async () => {
     const { token, user, accountId } = await createUserWithAccount();
     const body = await gql(`query { tokenFindUser { account } }`, undefined, token);
@@ -202,7 +230,10 @@ describe('deleteAccount', () => {
   it('deletes the account, its user and all children including notes', async () => {
     const { token, accountId } = await createUserWithAccount({
       account: {
-        bills: [{ name: 'Rent', amount: 1, paid: false }],
+        bills: [
+          { name: 'Rent', amount: 1, paid: false },
+          { name: 'Gas', amount: 1, paid: false }
+        ],
         payday: { frequency: 'MONTHLY', type: 'LAST_DAY' }
       }
     });

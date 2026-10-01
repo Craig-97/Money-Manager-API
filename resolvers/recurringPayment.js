@@ -147,36 +147,36 @@ const batchUpdateRecurringPayments = async (_, { input }, req) => {
   await checkAuth(req);
 
   return withTransaction(async session => {
-    const updates = await Promise.all(
-      input.map(async ({ id, ...updateData }) => {
-        const payment = await RecurringPayment.findById(id).session(session);
-        if (!payment) {
-          throw RECURRING_PAYMENT_NOT_FOUND(id);
+    // Operations within a transaction session must run sequentially, not in parallel
+    const updates = [];
+    for (const { id, ...updateData } of input) {
+      const payment = await RecurringPayment.findById(id).session(session);
+      if (!payment) {
+        throw RECURRING_PAYMENT_NOT_FOUND(id);
+      }
+      await checkAccountAccess(payment.account, req);
+
+      if (updateData.type && !['INCOME', 'EXPENSE'].includes(updateData.type)) {
+        throw INVALID_RECURRING_PAYMENT_TYPE();
+      }
+
+      if (updateData.name) {
+        const existingPayment = await RecurringPayment.findOne({
+          account: payment.account,
+          name: updateData.name,
+          _id: { $ne: id }
+        }).session(session);
+        if (existingPayment) {
+          throw RECURRING_PAYMENT_EXISTS(updateData.name);
         }
-        await checkAccountAccess(payment.account, req);
+      }
 
-        if (updateData.type && !['INCOME', 'EXPENSE'].includes(updateData.type)) {
-          throw INVALID_RECURRING_PAYMENT_TYPE();
-        }
+      Object.assign(payment, updateData);
+      incrementVersion(payment);
+      await payment.save({ session });
 
-        if (updateData.name) {
-          const existingPayment = await RecurringPayment.findOne({
-            account: payment.account,
-            name: updateData.name,
-            _id: { $ne: id }
-          }).session(session);
-          if (existingPayment) {
-            throw RECURRING_PAYMENT_EXISTS(updateData.name);
-          }
-        }
-
-        Object.assign(payment, updateData);
-        incrementVersion(payment);
-        await payment.save({ session });
-
-        return payment;
-      })
-    );
+      updates.push(payment);
+    }
 
     const updatedPayments = await RecurringPayment.find({
       _id: { $in: updates.map(p => p._id) }
