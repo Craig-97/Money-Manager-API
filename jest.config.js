@@ -1,8 +1,9 @@
+/** @type {import('jest').Config} */
 module.exports = {
   testEnvironment: 'node',
-  testMatch: ['<rootDir>/tests/**/*.test.js'],
-  globalSetup: '<rootDir>/tests/setup/globalSetup.js',
-  globalTeardown: '<rootDir>/tests/setup/globalTeardown.js',
-  setupFiles: ['<rootDir>/tests/setup/env.js'],
+  testMatch: ['<rootDir>/tests/**/*.test.ts'],
+  globalSetup: '<rootDir>/tests/setup/globalSetup.ts',
+  globalTeardown: '<rootDir>/tests/setup/globalTeardown.ts',
+  setupFiles: ['<rootDir>/tests/setup/env.ts'],
   testTimeout: 60000
 };
