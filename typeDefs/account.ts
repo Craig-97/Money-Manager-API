@@ -11,6 +11,7 @@ export const typeDefs = `
     monthlyIncome: Float!
     bills: [Bill]
     oneOffPayments: [OneOffPayment]
+    recurringPayments: [RecurringPayment]
     notes: [Note]
     payday: Payday
   }
@@ -20,6 +21,7 @@ export const typeDefs = `
     monthlyIncome: Float!
     bills: [BillInput]  
     oneOffPayments: [OneOffPaymentInput]
+    recurringPayments: [RecurringPaymentInput]
     payday: PaydayInput
     userId: ID!
   }

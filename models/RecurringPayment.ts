@@ -7,6 +7,7 @@ export const RecurringPaymentCategory = {
   RENT: 'RENT',
   UTILITIES: 'UTILITIES',
   HOME_MAINTENANCE: 'HOME_MAINTENANCE',
+  TAX: 'TAX',
   VEHICLE: 'VEHICLE',
   TRANSPORT: 'TRANSPORT',
   LOAN: 'LOAN',

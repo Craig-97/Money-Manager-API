@@ -102,6 +102,48 @@ describe('createAccount', () => {
     expect(account.oneOffPayments.map((p: { name: string }) => p.name).sort()).toEqual(['P1', 'P2', 'P3']);
   });
 
+  it('creates an account with nested recurring payments', async () => {
+    const { token, user } = await createUserWithAccount({ withAccount: false });
+    const recurring = (name: string, category: string, amount: number) => ({
+      name,
+      amount,
+      category,
+      frequency: 'MONTHLY',
+      type: 'EXPENSE',
+      firstPaymentDate: '2030-01-01'
+    });
+    const body = await gql(
+      `mutation ($account: CreateAccountInput!) {
+        createAccount(account: $account) {
+          account { recurringPayments { name amount category frequency type } }
+        }
+      }`,
+      {
+        account: {
+          userId: user.id,
+          bankBalance: 1,
+          monthlyIncome: 1,
+          recurringPayments: [recurring('Mortgage', 'MORTGAGE', 750), recurring('Council tax', 'TAX', 160)]
+        }
+      },
+      token
+    );
+    expect(body.errors).toBeUndefined();
+    const { recurringPayments } = body.data.createAccount.account;
+    expect(recurringPayments.map((p: { name: string }) => p.name).sort()).toEqual([
+      'Council tax',
+      'Mortgage'
+    ]);
+    expect(recurringPayments).toContainEqual({
+      name: 'Council tax',
+      amount: 160,
+      category: 'TAX',
+      frequency: 'MONTHLY',
+      type: 'EXPENSE'
+    });
+    expect(await mongoose.model('RecurringPayment').countDocuments()).toBe(2);
+  });
+
   it('links the account to the user', async () => {
     const { token, user, accountId } = await createUserWithAccount();
     const body = await gql(`query { tokenFindUser { account } }`, undefined, token);

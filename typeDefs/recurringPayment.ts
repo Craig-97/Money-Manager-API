@@ -33,6 +33,17 @@ export const typeDefs = `
     lastPaymentDate: String
   }
 
+  # A recurring payment created alongside its account, so it has no accountId yet
+  input RecurringPaymentInput {
+    name: String!
+    amount: Float!
+    category: RecurringPaymentCategory!
+    frequency: PaymentFrequency!
+    type: PaymentType!
+    firstPaymentDate: String!
+    lastPaymentDate: String
+  }
+
   input UpdateRecurringPaymentInput {
     name: String
     amount: Float
