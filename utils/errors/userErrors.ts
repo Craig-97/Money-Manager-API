@@ -32,3 +32,13 @@ export const USER_UPDATE_FAILED = () =>
   new GraphQLError('User cannot be updated', {
     extensions: { code: 'USER_UPDATE_FAILED' }
   });
+
+export const INVALID_PASSWORD = () =>
+  new GraphQLError('Password must be at least 8 characters and contain a number', {
+    extensions: { code: 'INVALID_PASSWORD' }
+  });
+
+export const PASSWORD_RESET_TOKEN_INVALID = () =>
+  new GraphQLError('This password reset link is invalid or has expired', {
+    extensions: { code: 'PASSWORD_RESET_TOKEN_INVALID' }
+  });

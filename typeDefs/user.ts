@@ -4,6 +4,7 @@ export const typeDefs = `
     user(id: ID): User
     login(email: String!, password: String!): AuthData!
     tokenFindUser: User
+    passwordResetTokenValid(token: String!): Boolean!
   }
 
   type User {
@@ -34,8 +35,14 @@ export const typeDefs = `
     tokenExpiration: Int!
   }
 
+  type PasswordResetResponse {
+    success: Boolean!
+  }
+
   type Mutation {
     registerAndLogin(user: UserInput): AuthData!
+    requestPasswordReset(email: String!): PasswordResetResponse!
+    resetPassword(token: String!, password: String!): AuthData!
     createUser(user: UserInput!): UserResponse!
     editUser(id: ID!, user: UserInput!): UserResponse!
     deleteUser(id: ID!): UserResponse!

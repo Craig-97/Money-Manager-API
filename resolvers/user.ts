@@ -1,10 +1,11 @@
 import type { Request } from 'express';
 import type { UserInput } from '../types/user';
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { checkAuth } from '../middleware/isAuth';
 import { Account } from '../models/Account';
-import { User } from '../models/User';
+import { User, type UserDocument } from '../models/User';
 import { Bill } from '../models/Bill';
 import { Note } from '../models/Note';
 import { OneOffPayment } from '../models/OneOffPayment';
@@ -18,9 +19,25 @@ import {
   USER_DELETE_FAILED,
   INVALID_CREDENTIALS,
   ACCOUNT_NOT_FOUND,
+  PASSWORD_RESET_TOKEN_INVALID,
   withTransaction,
-  incrementVersion
+  incrementVersion,
+  validatePassword,
+  sendPasswordResetEmail
 } from '../utils';
+
+const PASSWORD_RESET_EXPIRY_MINUTES = 60;
+
+// Reset tokens are stored hashed, so lookups hash the token from the link the same way
+const hashResetToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
+
+const createAuthData = (user: UserDocument) => {
+  const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_KEY as string, {
+    expiresIn: '1h'
+  });
+
+  return { user, token: token, tokenExpiration: 1 };
+};
 
 const findUsers = async () => {
   const users = User.find();
@@ -47,11 +64,7 @@ const login = async (_: unknown, { email, password }: { email: string; password:
   if (!isEqual) {
     throw INVALID_CREDENTIALS();
   }
-  const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_KEY as string, {
-    expiresIn: '1h'
-  });
-
-  return { user, token: token, tokenExpiration: 1 };
+  return createAuthData(user);
 };
 
 const tokenFindUser = async (_: unknown, _1: unknown, req: Request) => {
@@ -96,6 +109,56 @@ const createUser = async (_: unknown, { user }: { user: UserInput }) => {
   } catch (err) {
     throw err;
   }
+};
+
+// Always succeeds so the response doesn't reveal whether an account exists for the email
+const requestPasswordReset = async (_: unknown, { email }: { email: string }) => {
+  const user = await User.findOne({ email: email });
+  if (!user) {
+    return { success: true };
+  }
+
+  // Requesting again replaces the previous token, so only the latest emailed link works
+  const token = crypto.randomBytes(32).toString('hex');
+  user.passwordResetTokenHash = hashResetToken(token);
+  user.passwordResetExpires = new Date(Date.now() + PASSWORD_RESET_EXPIRY_MINUTES * 60 * 1000);
+  await user.save();
+
+  await sendPasswordResetEmail({
+    to: user.email,
+    firstName: user.firstName,
+    token,
+    expiresInMinutes: PASSWORD_RESET_EXPIRY_MINUTES
+  });
+
+  return { success: true };
+};
+
+const findUserByResetToken = (token: string) =>
+  User.findOne({
+    passwordResetTokenHash: hashResetToken(token),
+    passwordResetExpires: { $gt: new Date() }
+  });
+
+// Lets the reset page show an expired link before the user types a new password
+const passwordResetTokenValid = async (_: unknown, { token }: { token: string }) =>
+  Boolean(await findUserByResetToken(token));
+
+// Sets the new password, uses up the token and signs the user in
+const resetPassword = async (_: unknown, { token, password }: { token: string; password: string }) => {
+  const user = await findUserByResetToken(token);
+  if (!user) {
+    throw PASSWORD_RESET_TOKEN_INVALID();
+  }
+
+  validatePassword(password);
+
+  user.password = await bcrypt.hash(password, 12);
+  user.passwordResetTokenHash = undefined;
+  user.passwordResetExpires = undefined;
+  await user.save();
+
+  return createAuthData(user);
 };
 
 const editUser = async (_: unknown, { id, user }: { id: string; user: UserInput }, req: Request) => {
@@ -187,10 +250,13 @@ export const resolvers = {
     users: findUsers,
     user: findUser,
     login,
-    tokenFindUser
+    tokenFindUser,
+    passwordResetTokenValid
   },
   Mutation: {
     registerAndLogin,
+    requestPasswordReset,
+    resetPassword,
     createUser,
     editUser,
     deleteUser

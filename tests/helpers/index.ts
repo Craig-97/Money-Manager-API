@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { createApp } from '../../app';
+import { resetRateLimits } from '../../middleware/rateLimit';
 import '../../models/User';
 import '../../models/Account';
 import '../../models/Bill';
@@ -49,6 +50,8 @@ export const teardownTestApp = async () => {
 };
 
 export const clearDatabase = async () => {
+  // Every test starts from a client that hasn't made any login or reset attempts
+  resetRateLimits();
   await Promise.all(Object.values(mongoose.models).map(model => model.deleteMany({})));
 };
 

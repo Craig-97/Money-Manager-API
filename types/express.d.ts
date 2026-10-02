@@ -8,6 +8,8 @@ declare global {
       isExpired: boolean;
       userId?: string;
       accountId?: Types.ObjectId;
+      // Operations in the request, read once by the rate limiter
+      rootFields?: { name: string; email?: string }[];
     }
   }
 }

@@ -6,11 +6,19 @@ import http from 'http';
 import cors from 'cors';
 import { json } from 'body-parser';
 import { isAuth } from './middleware/isAuth';
+import { createAuthRateLimit } from './middleware/rateLimit';
 import { schema } from './schema';
 
 // Builds the express app and Apollo server without listening or connecting to the database
 export const createApp = async () => {
   const app = express();
+
+  // Behind a proxy or load balancer the client IP comes from X-Forwarded-For, which rate limiting
+  // relies on. TRUST_PROXY is the number of proxies in front of the API (or an Express trust proxy value)
+  if (process.env.TRUST_PROXY) {
+    const hops = Number(process.env.TRUST_PROXY);
+    app.set('trust proxy', Number.isInteger(hops) ? hops : process.env.TRUST_PROXY);
+  }
 
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -36,6 +44,7 @@ export const createApp = async () => {
     '/graphql',
     cors(),
     json(),
+    createAuthRateLimit(),
     expressMiddleware(server, {
       context: async ({ req }) => {
         return req;
