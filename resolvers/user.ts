@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import type { UserInput } from '../types/user';
+import type { UserDetailsInput, UserInput } from '../types/user';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -190,6 +190,47 @@ const editUser = async (_: unknown, { id, user }: { id: string; user: UserInput 
   };
 };
 
+// Acts on the user the token belongs to, so nobody can change someone else's details
+const updateCurrentUser = async (_: unknown, { input }: { input: UserDetailsInput }, req: Request) => {
+  checkAuth(req);
+  const user = await findUser(_, { id: req.userId as string });
+
+  const email = input.email.trim();
+  const taken = await User.findOne({ email, _id: { $ne: user._id } });
+  if (taken) {
+    throw USER_EXISTS();
+  }
+
+  user.firstName = input.firstName.trim();
+  user.surname = input.surname.trim();
+  user.email = email;
+  incrementVersion(user);
+  await user.save();
+
+  return { user, success: true };
+};
+
+const changePassword = async (
+  _: unknown,
+  { currentPassword, newPassword }: { currentPassword: string; newPassword: string },
+  req: Request
+) => {
+  checkAuth(req);
+  const user = await findUser(_, { id: req.userId as string });
+
+  const isEqual = await bcrypt.compare(currentPassword, user.password);
+  if (!isEqual) {
+    throw INVALID_CREDENTIALS();
+  }
+  validatePassword(newPassword);
+
+  user.password = await bcrypt.hash(newPassword, 12);
+  incrementVersion(user);
+  await user.save();
+
+  return { user, success: true };
+};
+
 const deleteUser = async (_: unknown, { id }: { id: string }, req: Request) => {
   checkAuth(req);
 
@@ -245,6 +286,13 @@ const deleteUser = async (_: unknown, { id }: { id: string }, req: Request) => {
   });
 };
 
+// Deletes the signed-in user and everything on their account. Unlike deleteUser it takes no id,
+// so it can only ever remove the caller.
+const deleteCurrentUser = async (_: unknown, _1: unknown, req: Request) => {
+  checkAuth(req);
+  return deleteUser(_, { id: req.userId as string }, req);
+};
+
 export const resolvers = {
   Query: {
     users: findUsers,
@@ -259,6 +307,9 @@ export const resolvers = {
     resetPassword,
     createUser,
     editUser,
-    deleteUser
+    deleteUser,
+    updateCurrentUser,
+    changePassword,
+    deleteCurrentUser
   }
 };

@@ -9,6 +9,8 @@ export interface Account {
   recurringPayments: Types.Array<Types.ObjectId>;
   notes: Types.Array<Types.ObjectId>;
   payday?: Types.ObjectId;
+  // The payday the current cycle was started on, so the payday prompt only shows once per payday
+  cycleStartedOn?: Date;
 }
 
 // First define the schema
@@ -20,7 +22,8 @@ const AccountSchema = new Schema<Account>({
   oneOffPayments: [{ type: Schema.Types.ObjectId, ref: 'OneOffPayment' }],
   recurringPayments: [{ type: Schema.Types.ObjectId, ref: 'RecurringPayment' }],
   notes: [{ type: Schema.Types.ObjectId, ref: 'Note' }],
-  payday: { type: Schema.Types.ObjectId, ref: 'Payday' }
+  payday: { type: Schema.Types.ObjectId, ref: 'Payday' },
+  cycleStartedOn: Date
 });
 
 // Used for ensuring one account per user and quick user->account lookups

@@ -1,3 +1,4 @@
+import type { PaymentStatus } from '../constants/paymentStatus';
 import type { PaymentType } from '../constants/paymentType';
 import type { PaymentFrequency, RecurringPaymentCategory } from '../models/RecurringPayment';
 
@@ -15,6 +16,8 @@ export interface CreateRecurringPaymentInput extends RecurringPaymentFields {
   accountId: string;
 }
 
-export type UpdateRecurringPaymentInput = Partial<RecurringPaymentFields>;
+export type UpdateRecurringPaymentInput = Partial<RecurringPaymentFields> & {
+  status?: PaymentStatus;
+};
 
 export type BatchUpdateRecurringPaymentInput = UpdateRecurringPaymentInput & { id: string };

@@ -8,6 +8,7 @@ export interface OneOffPaymentInput {
   dueDate?: string;
   type?: PaymentType;
   category?: OneOffPaymentCategory;
+  paid?: boolean;
 }
 
 // Create mutations rely on these fields being present even though the schema marks them optional

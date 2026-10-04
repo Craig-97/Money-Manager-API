@@ -1,4 +1,9 @@
+import { NoteColor } from '../constants/noteColor';
+import { gqlEnum } from '../utils/helpers/enumHelpers';
+
 export const typeDefs = `
+  ${gqlEnum('NoteColor', NoteColor)}
+
   type Query {
     notes(accountId: ID!): [Note!]!
     note(id: ID): Note
@@ -8,6 +13,7 @@ export const typeDefs = `
     id: ID!
     account: ID!
     body: String!
+    color: NoteColor!
     createdAt: String!
     updatedAt: String!
   }
@@ -15,6 +21,7 @@ export const typeDefs = `
   input NoteInput {
     account: ID
     body: String
+    color: NoteColor
   }
 
   type NoteResponse {

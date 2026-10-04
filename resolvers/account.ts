@@ -1,6 +1,7 @@
 import type { Request } from 'express';
-import type { CreateAccountInput, EditAccountInput } from '../types/account';
-import { checkAuth } from '../middleware/isAuth';
+import type { CreateAccountInput, EditAccountInput, StartPaydayCycleInput } from '../types/account';
+import { PaymentStatus } from '../constants/paymentStatus';
+import { checkAccountAccess, checkAuth } from '../middleware/isAuth';
 import { Account } from '../models/Account';
 import { User } from '../models/User';
 import { Bill } from '../models/Bill';
@@ -15,10 +16,12 @@ import {
   NO_ACCOUNTS,
   ACCOUNT_EXISTS,
   ACCOUNT_UPDATE_FAILED,
+  RECURRING_PAYMENT_NOT_FOUND,
   incrementVersion,
   withTransaction,
   validateUniqueName
 } from '../utils';
+import { addDays, nextOccurrence, ukDay } from '../utils/dates';
 
 // Helper function to validate user
 const findUserById = async (userId: string) => {
@@ -188,6 +191,49 @@ const editAccount = async (_: unknown, { id, account }: { id: string; account: E
   return { account: currentAccount, success: true };
 };
 
+// Payday: sets the confirmed balance and moves the chosen recurring payments on to their next
+// date as unpaid. Recording the payday stops the prompt showing again for it.
+const startPaydayCycle = async (_: unknown, { input }: { input: StartPaydayCycleInput }, req: Request) => {
+  checkAuth(req);
+  const { accountId, payday, bankBalance, recurringPaymentIds } = input;
+  await checkAccountAccess(accountId, req);
+
+  return withTransaction(async session => {
+    const account = await Account.findById(accountId).session(session);
+    if (!account) {
+      throw ACCOUNT_NOT_FOUND(accountId);
+    }
+
+    const today = ukDay();
+    // Sequential: operations within a transaction session can't run in parallel
+    for (const id of recurringPaymentIds) {
+      const payment = await RecurringPayment.findOne({ _id: id, account: accountId }).session(session);
+      if (!payment) {
+        throw RECURRING_PAYMENT_NOT_FOUND(id);
+      }
+      // The next date after the one just dealt with, and never one already in the past
+      const after = payment.nextDueDate ? addDays(payment.nextDueDate, 1) : today;
+      payment.nextDueDate = nextOccurrence(payment, after > today ? after : today);
+      payment.status = PaymentStatus.UNPAID;
+      incrementVersion(payment);
+      await payment.save({ session });
+    }
+
+    account.bankBalance = bankBalance;
+    account.cycleStartedOn = new Date(payday);
+    incrementVersion(account);
+    await account.save({ session });
+
+    const populatedAccount = await Account.findById(accountId)
+      .populate({ path: 'oneOffPayments', options: { sort: { amount: 1 } } })
+      .populate({ path: 'recurringPayments', options: { sort: { amount: 1 } } })
+      .populate('payday')
+      .session(session);
+
+    return { account: populatedAccount, success: true };
+  });
+};
+
 // Delete an account
 const deleteAccount = async (_: unknown, { id }: { id: string }, req: Request) => {
   checkAuth(req);
@@ -244,6 +290,7 @@ export const resolvers = {
   Mutation: {
     createAccount,
     editAccount,
-    deleteAccount
+    deleteAccount,
+    startPaydayCycle
   }
 };

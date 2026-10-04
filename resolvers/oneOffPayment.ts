@@ -164,6 +164,31 @@ const batchDeleteOneOffPayments = async (_: unknown, { ids }: { ids: string[] },
   });
 };
 
+// Marks several payments paid or unpaid at once, e.g. from the dashboard's bulk actions
+const batchUpdateOneOffPayments = async (
+  _: unknown,
+  { ids, paid }: { ids: string[]; paid: boolean },
+  req: Request
+) => {
+  await checkAuth(req);
+
+  return withTransaction(async session => {
+    const payments = await OneOffPayment.find({ _id: { $in: ids } }).session(session);
+    if (payments.length !== ids.length) {
+      throw PAYMENTS_NOT_FOUND(ids);
+    }
+    await Promise.all(payments.map(payment => checkAccountAccess(payment.account, req)));
+
+    const result = await OneOffPayment.updateMany(
+      { _id: { $in: ids } },
+      { $set: { paid }, $inc: { __v: 1 } }
+    ).session(session);
+    const updated = await OneOffPayment.find({ _id: { $in: ids } }).session(session);
+
+    return { oneOffPayments: updated, success: true, updatedCount: result.modifiedCount };
+  });
+};
+
 export const resolvers = {
   Query: {
     oneOffPayments: findOneOffPayments,
@@ -173,6 +198,7 @@ export const resolvers = {
     createOneOffPayment,
     editOneOffPayment,
     deleteOneOffPayment,
-    batchDeleteOneOffPayments
+    batchDeleteOneOffPayments,
+    batchUpdateOneOffPayments
   }
 };

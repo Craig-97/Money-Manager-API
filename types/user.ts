@@ -5,3 +5,9 @@ export interface UserInput {
   firstName: string;
   surname: string;
 }
+
+export interface UserDetailsInput {
+  firstName: string;
+  surname: string;
+  email: string;
+}

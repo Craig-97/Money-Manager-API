@@ -1,5 +1,7 @@
 import mongoose, { Schema, Types } from 'mongoose';
+import { PaymentStatus } from '../constants/paymentStatus';
 import { PaymentType } from '../constants/paymentType';
+import { nextOccurrence, ukDay } from '../utils/dates';
 import { enumValues } from '../utils/helpers/enumHelpers';
 
 export const RecurringPaymentCategory = {
@@ -49,6 +51,9 @@ export interface RecurringPayment {
   type: PaymentType;
   firstPaymentDate: Date;
   lastPaymentDate?: Date;
+  // The date the payment is due this cycle; null once its last payment has passed
+  nextDueDate?: Date | null;
+  status: PaymentStatus;
 }
 
 const recurringPaymentSchema = new Schema<RecurringPayment>({
@@ -88,7 +93,30 @@ const recurringPaymentSchema = new Schema<RecurringPayment>({
   },
   lastPaymentDate: {
     type: Date
+  },
+  nextDueDate: {
+    type: Date,
+    default: null
+  },
+  status: {
+    type: String,
+    enum: enumValues(PaymentStatus),
+    default: PaymentStatus.UNPAID
   }
+});
+
+// A new payment, or one whose schedule changed, is due on its next date from today and starts
+// unpaid. Updates go through save() so this runs for them too.
+recurringPaymentSchema.pre('validate', function () {
+  const scheduleChanged =
+    this.isNew ||
+    this.isModified('firstPaymentDate') ||
+    this.isModified('frequency') ||
+    this.isModified('lastPaymentDate');
+  if (!scheduleChanged) return;
+
+  this.nextDueDate = nextOccurrence(this, ukDay());
+  if (!this.isModified('status')) this.status = PaymentStatus.UNPAID;
 });
 
 export const RecurringPayment = mongoose.model<RecurringPayment>('RecurringPayment', recurringPaymentSchema);

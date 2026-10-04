@@ -1,7 +1,10 @@
 import mongoose, { Schema, Types } from 'mongoose';
+import { NoteColor } from '../constants/noteColor';
+import { enumValues } from '../utils/helpers/enumHelpers';
 
 export interface Note {
   body?: string;
+  color: NoteColor;
   account: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -10,6 +13,11 @@ export interface Note {
 const noteSchema = new Schema<Note>(
   {
     body: String,
+    color: {
+      type: String,
+      enum: enumValues(NoteColor),
+      default: NoteColor.BLUE
+    },
     account: {
       type: Schema.Types.ObjectId,
       ref: 'Account',

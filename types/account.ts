@@ -17,3 +17,10 @@ export interface EditAccountInput {
   bankBalance?: number;
   monthlyIncome?: number;
 }
+
+export interface StartPaydayCycleInput {
+  accountId: string;
+  payday: string;
+  bankBalance: number;
+  recurringPaymentIds: string[];
+}

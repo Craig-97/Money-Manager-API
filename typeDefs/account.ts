@@ -14,6 +14,8 @@ export const typeDefs = `
     recurringPayments: [RecurringPayment]
     notes: [Note]
     payday: Payday
+    # The payday the current cycle was started on
+    cycleStartedOn: String
   }
 
  input CreateAccountInput {
@@ -31,6 +33,16 @@ export const typeDefs = `
     monthlyIncome: Float
   }
 
+  input StartPaydayCycleInput {
+    accountId: ID!
+    # The payday being started, as YYYY-MM-DD
+    payday: String!
+    # The balance the user confirmed
+    bankBalance: Float!
+    # Recurring payments to reset to unpaid and move on to their next date
+    recurringPaymentIds: [ID!]!
+  }
+
   type AccountResponse {
     account: Account
     success: Boolean
@@ -40,5 +52,6 @@ export const typeDefs = `
     createAccount(account: CreateAccountInput!): AccountResponse!
     editAccount(id: ID!, account: EditAccountInput!): AccountResponse!
     deleteAccount(id: ID!): AccountResponse!
+    startPaydayCycle(input: StartPaydayCycleInput!): AccountResponse!
   }
 `;

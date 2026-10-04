@@ -23,6 +23,12 @@ export const typeDefs = `
     surname: String!
   }
 
+  input UserDetailsInput {
+    firstName: String!
+    surname: String!
+    email: String!
+  }
+
   type UserResponse {
     user: User
     account: ID
@@ -46,5 +52,11 @@ export const typeDefs = `
     createUser(user: UserInput!): UserResponse!
     editUser(id: ID!, user: UserInput!): UserResponse!
     deleteUser(id: ID!): UserResponse!
+    # Change the signed-in user's name and email
+    updateCurrentUser(input: UserDetailsInput!): UserResponse!
+    # Change the signed-in user's password; the current one has to be right
+    changePassword(currentPassword: String!, newPassword: String!): UserResponse!
+    # Delete the signed-in user and everything on their account
+    deleteCurrentUser: UserResponse!
   }
 `;

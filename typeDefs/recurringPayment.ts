@@ -1,3 +1,4 @@
+import { PaymentStatus } from '../constants/paymentStatus';
 import { PaymentType } from '../constants/paymentType';
 import { PaymentFrequency, RecurringPaymentCategory } from '../models/RecurringPayment';
 import { gqlEnum } from '../utils/helpers/enumHelpers';
@@ -10,6 +11,8 @@ export const typeDefs = `
 
   ${gqlEnum('PaymentType', PaymentType)}
 
+  ${gqlEnum('PaymentStatus', PaymentStatus)}
+
   type RecurringPayment {
     id: ID!
     name: String!
@@ -20,6 +23,9 @@ export const typeDefs = `
     type: PaymentType!
     firstPaymentDate: String!
     lastPaymentDate: String
+    # The date it's due this cycle, worked out from the schedule. Null once it has ended.
+    nextDueDate: String
+    status: PaymentStatus!
   }
 
   input CreateRecurringPaymentInput {
@@ -52,6 +58,7 @@ export const typeDefs = `
     type: PaymentType
     firstPaymentDate: String
     lastPaymentDate: String
+    status: PaymentStatus
   }
 
   input BatchUpdateRecurringPaymentInput {
@@ -63,6 +70,7 @@ export const typeDefs = `
     type: PaymentType
     firstPaymentDate: String
     lastPaymentDate: String
+    status: PaymentStatus
   }
 
   type BatchRecurringPaymentResponse {

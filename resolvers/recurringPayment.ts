@@ -112,14 +112,11 @@ const updateRecurringPayment = async (_: unknown, { id, input }: { id: string; i
     }
   }
 
-  const mergedPayment = incrementVersion(Object.assign(payment, input));
-  const updatedPayment = await RecurringPayment.findOneAndUpdate({ _id: id }, mergedPayment, {
-    new: true
-  }).populate('account');
-
-  if (!updatedPayment) {
-    throw RECURRING_PAYMENT_UPDATE_FAILED();
-  }
+  // save() rather than findOneAndUpdate, as the batch update does, so the model works out the
+  // new due date when the schedule changes
+  incrementVersion(Object.assign(payment, input));
+  await payment.save();
+  const updatedPayment = await payment.populate('account');
 
   return { recurringPayment: updatedPayment, success: true };
 };

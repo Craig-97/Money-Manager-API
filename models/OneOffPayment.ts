@@ -36,6 +36,8 @@ export interface OneOffPayment {
   dueDate?: Date;
   type: PaymentType;
   category: OneOffPaymentCategory;
+  // Ticked off by the user once it has left (or reached) their bank account
+  paid: boolean;
 }
 
 const OneOffPaymentSchema = new Schema<OneOffPayment>({
@@ -62,6 +64,10 @@ const OneOffPaymentSchema = new Schema<OneOffPayment>({
     type: String,
     enum: enumValues(OneOffPaymentCategory),
     required: true
+  },
+  paid: {
+    type: Boolean,
+    default: false
   }
 });
 
