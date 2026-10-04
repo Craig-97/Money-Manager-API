@@ -1,5 +1,13 @@
+import type { ClientSession } from 'mongoose';
 import type { Request } from 'express';
-import type { CreateAccountInput, EditAccountInput, StartPaydayCycleInput } from '../types/account';
+import type {
+  CreateAccountInput,
+  EditAccountInput,
+  MarkPaymentsPaidInput,
+  MarkPaymentsUnpaidInput,
+  StartPaydayCycleInput
+} from '../types/account';
+import { PaymentType } from '../constants/paymentType';
 import { PaymentStatus } from '../constants/paymentStatus';
 import { checkAccountAccess, checkAuth } from '../middleware/isAuth';
 import { Account } from '../models/Account';
@@ -17,6 +25,7 @@ import {
   ACCOUNT_EXISTS,
   ACCOUNT_UPDATE_FAILED,
   RECURRING_PAYMENT_NOT_FOUND,
+  PAYMENT_NOT_FOUND,
   incrementVersion,
   withTransaction,
   validateUniqueName
@@ -236,6 +245,97 @@ const startPaydayCycle = async (_: unknown, { input }: { input: StartPaydayCycle
   });
 };
 
+// What paying a payment does to the bank balance: money out comes off, money in goes on
+const balanceChange = (payment: { amount: number; type: string }) =>
+  payment.type === PaymentType.INCOME ? payment.amount : -payment.amount;
+
+const roundPence = (amount: number) => Math.round(amount * 100) / 100;
+
+const populatedAccount = (accountId: string, session: ClientSession) =>
+  Account.findById(accountId)
+    .populate({ path: 'oneOffPayments', options: { sort: { amount: 1 } } })
+    .populate({ path: 'recurringPayments', options: { sort: { amount: 1 } } })
+    .populate('payday')
+    .session(session);
+
+// Paying payments from the dashboard, as the bank balance sees it. Recurring payments stay listed
+// as paid until the next cycle; one-offs are done with, so they're deleted.
+const markPaymentsPaid = async (_: unknown, { input }: { input: MarkPaymentsPaidInput }, req: Request) => {
+  checkAuth(req);
+  const { accountId, recurringPaymentIds, oneOffPaymentIds } = input;
+  await checkAccountAccess(accountId, req);
+
+  return withTransaction(async session => {
+    const account = await Account.findById(accountId).session(session);
+    if (!account) {
+      throw ACCOUNT_NOT_FOUND(accountId);
+    }
+
+    let change = 0;
+    // Sequential: operations within a transaction session can't run in parallel
+    for (const id of recurringPaymentIds) {
+      const payment = await RecurringPayment.findOne({ _id: id, account: accountId }).session(session);
+      if (!payment) {
+        throw RECURRING_PAYMENT_NOT_FOUND(id);
+      }
+      // Already paid: its amount has already come off the balance
+      if (payment.status === PaymentStatus.PAID) continue;
+      change += balanceChange(payment);
+      payment.status = PaymentStatus.PAID;
+      incrementVersion(payment);
+      await payment.save({ session });
+    }
+
+    for (const id of oneOffPaymentIds) {
+      const payment = await OneOffPayment.findOne({ _id: id, account: accountId }).session(session);
+      if (!payment) {
+        throw PAYMENT_NOT_FOUND(id);
+      }
+      change += balanceChange(payment);
+      await OneOffPayment.deleteOne({ _id: id }).session(session);
+      account.oneOffPayments.pull(payment._id);
+    }
+
+    account.bankBalance = roundPence((account.bankBalance ?? 0) + change);
+    incrementVersion(account);
+    await account.save({ session });
+
+    return { account: await populatedAccount(accountId, session), success: true };
+  });
+};
+
+const markPaymentsUnpaid = async (_: unknown, { input }: { input: MarkPaymentsUnpaidInput }, req: Request) => {
+  checkAuth(req);
+  const { accountId, recurringPaymentIds } = input;
+  await checkAccountAccess(accountId, req);
+
+  return withTransaction(async session => {
+    const account = await Account.findById(accountId).session(session);
+    if (!account) {
+      throw ACCOUNT_NOT_FOUND(accountId);
+    }
+
+    let change = 0;
+    for (const id of recurringPaymentIds) {
+      const payment = await RecurringPayment.findOne({ _id: id, account: accountId }).session(session);
+      if (!payment) {
+        throw RECURRING_PAYMENT_NOT_FOUND(id);
+      }
+      if (payment.status !== PaymentStatus.PAID) continue;
+      change -= balanceChange(payment);
+      payment.status = PaymentStatus.UNPAID;
+      incrementVersion(payment);
+      await payment.save({ session });
+    }
+
+    account.bankBalance = roundPence((account.bankBalance ?? 0) + change);
+    incrementVersion(account);
+    await account.save({ session });
+
+    return { account: await populatedAccount(accountId, session), success: true };
+  });
+};
+
 // Delete an account
 const deleteAccount = async (_: unknown, { id }: { id: string }, req: Request) => {
   checkAuth(req);
@@ -293,6 +393,8 @@ export const resolvers = {
     createAccount,
     editAccount,
     deleteAccount,
-    startPaydayCycle
+    startPaydayCycle,
+    markPaymentsPaid,
+    markPaymentsUnpaid
   }
 };

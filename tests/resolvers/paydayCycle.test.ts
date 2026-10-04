@@ -202,3 +202,99 @@ describe('startPaydayCycle', () => {
     expect(errorCode(body)).toBe('RECURRING_PAYMENT_NOT_FOUND');
   });
 });
+
+describe('marking payments paid', () => {
+  const PAID = `mutation ($input: MarkPaymentsPaidInput!) {
+    markPaymentsPaid(input: $input) {
+      account { bankBalance recurringPayments { id status } oneOffPayments { id } }
+    }
+  }`;
+  const UNPAID = `mutation ($input: MarkPaymentsUnpaidInput!) {
+    markPaymentsUnpaid(input: $input) { account { bankBalance recurringPayments { id status } } }
+  }`;
+  const ONE_OFF = `mutation ($p: OneOffPaymentInput!) { createOneOffPayment(oneOffPayment: $p) { oneOffPayment { id } } }`;
+
+  const oneOff = async (token: string, account: string, name: string, amount: number, type: string) =>
+    (
+      await gql(
+        ONE_OFF,
+        { p: { account, name, amount, dueDate: '2030-01-01', type, category: 'OTHER' } },
+        token
+      )
+    ).data.createOneOffPayment.oneOffPayment.id;
+
+  it('takes recurring payments off the balance and marks them paid', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const netflix = await createPayment(token, accountId, 'Netflix', '2030-01-31');
+
+    const body = await gql(
+      PAID,
+      { input: { accountId, recurringPaymentIds: [netflix.id], oneOffPaymentIds: [] } },
+      token
+    );
+
+    expect(body.errors).toBeUndefined();
+    const { account } = body.data.markPaymentsPaid;
+    // The test account starts with £1,000 and Netflix is £20
+    expect(account.bankBalance).toBe(980);
+    expect(account.recurringPayments).toEqual([{ id: netflix.id, status: 'PAID' }]);
+  });
+
+  it("doesn't take a payment off twice", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const netflix = await createPayment(token, accountId, 'Netflix', '2030-01-31');
+    const input = { accountId, recurringPaymentIds: [netflix.id], oneOffPaymentIds: [] };
+
+    await gql(PAID, { input }, token);
+    const body = await gql(PAID, { input }, token);
+
+    expect(body.data.markPaymentsPaid.account.bankBalance).toBe(980);
+  });
+
+  it('settles one-off payments, adding income, and deletes them', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const gift = await oneOff(token, accountId, 'Gift', 75.5, 'EXPENSE');
+    const refund = await oneOff(token, accountId, 'Refund', 10, 'INCOME');
+    const kept = await oneOff(token, accountId, 'Later', 5, 'EXPENSE');
+
+    const body = await gql(
+      PAID,
+      { input: { accountId, recurringPaymentIds: [], oneOffPaymentIds: [gift, refund] } },
+      token
+    );
+
+    const { account } = body.data.markPaymentsPaid;
+    expect(account.bankBalance).toBe(934.5);
+    expect(account.oneOffPayments).toEqual([{ id: kept }]);
+  });
+
+  it('puts the amount back when a recurring payment is marked unpaid', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const netflix = await createPayment(token, accountId, 'Netflix', '2030-01-31');
+    await gql(
+      PAID,
+      { input: { accountId, recurringPaymentIds: [netflix.id], oneOffPaymentIds: [] } },
+      token
+    );
+
+    const body = await gql(UNPAID, { input: { accountId, recurringPaymentIds: [netflix.id] } }, token);
+
+    expect(body.data.markPaymentsUnpaid.account).toEqual({
+      bankBalance: 1000,
+      recurringPayments: [{ id: netflix.id, status: 'UNPAID' }]
+    });
+  });
+
+  it("refuses another user's account", async () => {
+    const owner = await createUserWithAccount();
+    const other = await createUserWithAccount();
+
+    const body = await gql(
+      PAID,
+      { input: { accountId: owner.accountId, recurringPaymentIds: [], oneOffPaymentIds: [] } },
+      other.token
+    );
+
+    expect(errorCode(body)).toBe('FORBIDDEN');
+  });
+});

@@ -15,7 +15,6 @@ export const typeDefs = `
     dueDate: String!
     type: PaymentType!
     category: OneOffPaymentCategory!
-    paid: Boolean!
   }
 
   input OneOffPaymentInput {
@@ -25,7 +24,6 @@ export const typeDefs = `
     dueDate: String
     type: PaymentType
     category: OneOffPaymentCategory
-    paid: Boolean
   }
 
   type OneOffPaymentResponse {
@@ -39,12 +37,6 @@ export const typeDefs = `
     deletedCount: Int!
   }
 
-  type BatchUpdateOneOffPaymentResponse {
-    oneOffPayments: [OneOffPayment!]!
-    success: Boolean!
-    updatedCount: Int!
-  }
-
   type Query {
     oneOffPayments(accountId: ID!): [OneOffPayment!]!
     oneOffPayment(id: ID): OneOffPayment
@@ -56,6 +48,5 @@ export const typeDefs = `
     editOneOffPayment(id: ID!, oneOffPayment: OneOffPaymentInput!): OneOffPaymentResponse!
     deleteOneOffPayment(id: ID!): OneOffPaymentResponse!
     batchDeleteOneOffPayments(ids: [ID!]!): BatchOneOffPaymentResponse!
-    batchUpdateOneOffPayments(ids: [ID!]!, paid: Boolean!): BatchUpdateOneOffPaymentResponse!
   }
 `;

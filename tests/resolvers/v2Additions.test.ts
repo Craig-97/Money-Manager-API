@@ -6,52 +6,6 @@ beforeEach(clearDatabase);
 
 const LOGIN = `query ($email: String!, $password: String!) { login(email: $email, password: $password) { token } }`;
 
-describe('one-off payments paid', () => {
-  const CREATE = `mutation ($p: OneOffPaymentInput!) {
-    createOneOffPayment(oneOffPayment: $p) { oneOffPayment { id paid } }
-  }`;
-  const BATCH = `mutation ($ids: [ID!]!, $paid: Boolean!) {
-    batchUpdateOneOffPayments(ids: $ids, paid: $paid) { success updatedCount oneOffPayments { id paid } }
-  }`;
-
-  const create = async (token: string, account: string, name: string) =>
-    (
-      await gql(
-        CREATE,
-        { p: { account, name, amount: 5, dueDate: '2030-01-01', type: 'EXPENSE', category: 'OTHER' } },
-        token
-      )
-    ).data.createOneOffPayment.oneOffPayment;
-
-  it('starts unpaid', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    expect((await create(token, accountId, 'Birthday')).paid).toBe(false);
-  });
-
-  it('marks several paid at once', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const a = await create(token, accountId, 'A');
-    const b = await create(token, accountId, 'B');
-
-    const body = await gql(BATCH, { ids: [a.id, b.id], paid: true }, token);
-
-    expect(body.data.batchUpdateOneOffPayments).toMatchObject({ success: true, updatedCount: 2 });
-    expect(body.data.batchUpdateOneOffPayments.oneOffPayments.every((p: { paid: boolean }) => p.paid)).toBe(
-      true
-    );
-  });
-
-  it("refuses another user's payments", async () => {
-    const owner = await createUserWithAccount();
-    const other = await createUserWithAccount();
-    const theirs = await create(owner.token, owner.accountId, 'Theirs');
-
-    const body = await gql(BATCH, { ids: [theirs.id], paid: true }, other.token);
-
-    expect(errorCode(body)).toBe('FORBIDDEN');
-  });
-});
-
 describe('note colours', () => {
   const CREATE = `mutation ($note: NoteInput!) { createNote(note: $note) { note { id color } } }`;
   const EDIT = `mutation ($id: ID!, $note: NoteInput!) { editNote(id: $id, note: $note) { note { color body } } }`;

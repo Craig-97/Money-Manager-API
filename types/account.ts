@@ -18,6 +18,17 @@ export interface EditAccountInput {
   monthlyIncome?: number;
 }
 
+export interface MarkPaymentsPaidInput {
+  accountId: string;
+  recurringPaymentIds: string[];
+  oneOffPaymentIds: string[];
+}
+
+export interface MarkPaymentsUnpaidInput {
+  accountId: string;
+  recurringPaymentIds: string[];
+}
+
 export interface StartPaydayCycleInput {
   accountId: string;
   payday: string;

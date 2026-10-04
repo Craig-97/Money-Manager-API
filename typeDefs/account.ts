@@ -33,6 +33,19 @@ export const typeDefs = `
     monthlyIncome: Float
   }
 
+  input MarkPaymentsPaidInput {
+    accountId: ID!
+    # Marked paid until the next cycle starts
+    recurringPaymentIds: [ID!]!
+    # Deleted once paid
+    oneOffPaymentIds: [ID!]!
+  }
+
+  input MarkPaymentsUnpaidInput {
+    accountId: ID!
+    recurringPaymentIds: [ID!]!
+  }
+
   input StartPaydayCycleInput {
     accountId: ID!
     # The payday being started, as YYYY-MM-DD
@@ -53,5 +66,10 @@ export const typeDefs = `
     editAccount(id: ID!, account: EditAccountInput!): AccountResponse!
     deleteAccount(id: ID!): AccountResponse!
     startPaydayCycle(input: StartPaydayCycleInput!): AccountResponse!
+    # Takes the payments off (or adds income to) the bank balance: recurring ones are marked paid
+    # for this cycle and one-offs are deleted
+    markPaymentsPaid(input: MarkPaymentsPaidInput!): AccountResponse!
+    # Undoes marking recurring payments paid, putting their amounts back on the balance
+    markPaymentsUnpaid(input: MarkPaymentsUnpaidInput!): AccountResponse!
   }
 `;
