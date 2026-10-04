@@ -1,15 +1,16 @@
-import type { Request } from 'express';
-import type { UserDetailsInput, UserInput } from '../types/user';
-import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import { checkAuth } from '../middleware/isAuth';
-import { Account } from '../models/Account';
-import { User, type UserDocument } from '../models/User';
-import { Bill } from '../models/Bill';
-import { Note } from '../models/Note';
-import { OneOffPayment } from '../models/OneOffPayment';
-import { Payday } from '../models/Payday';
+import type { Request } from "express";
+import type { UserDetailsInput, UserInput } from "../types/user";
+import crypto from "crypto";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { checkAuth } from "../middleware/isAuth";
+import { Account } from "../models/Account";
+import { User, type UserDocument } from "../models/User";
+import { Bill } from "../models/Bill";
+import { Note } from "../models/Note";
+import { OneOffPayment } from "../models/OneOffPayment";
+import { Payday } from "../models/Payday";
+import { RecurringPayment } from "../models/RecurringPayment";
 import {
   USER_NOT_FOUND,
   USERS_NOT_FOUND,
@@ -23,18 +24,23 @@ import {
   withTransaction,
   incrementVersion,
   validatePassword,
-  sendPasswordResetEmail
-} from '../utils';
+  sendPasswordResetEmail,
+} from "../utils";
 
 const PASSWORD_RESET_EXPIRY_MINUTES = 60;
 
 // Reset tokens are stored hashed, so lookups hash the token from the link the same way
-const hashResetToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
+const hashResetToken = (token: string) =>
+  crypto.createHash("sha256").update(token).digest("hex");
 
 const createAuthData = (user: UserDocument) => {
-  const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_KEY as string, {
-    expiresIn: '1h'
-  });
+  const token = jwt.sign(
+    { userId: user.id, email: user.email },
+    process.env.JWT_KEY as string,
+    {
+      expiresIn: "1h",
+    },
+  );
 
   return { user, token: token, tokenExpiration: 1 };
 };
@@ -55,7 +61,10 @@ const findUser = async (_: unknown, { id }: { id: string }) => {
   return user;
 };
 
-const login = async (_: unknown, { email, password }: { email: string; password: string }) => {
+const login = async (
+  _: unknown,
+  { email, password }: { email: string; password: string },
+) => {
   const user = await User.findOne({ email: email });
   if (!user) {
     throw USER_EMAIL_NOT_FOUND();
@@ -90,7 +99,7 @@ const createUser = async (_: unknown, { user }: { user: UserInput }) => {
       surname: user.surname,
       email: user.email,
       password: hashedPassword,
-      account: user.account
+      account: user.account,
     });
     await newUser.save();
 
@@ -112,23 +121,28 @@ const createUser = async (_: unknown, { user }: { user: UserInput }) => {
 };
 
 // Always succeeds so the response doesn't reveal whether an account exists for the email
-const requestPasswordReset = async (_: unknown, { email }: { email: string }) => {
+const requestPasswordReset = async (
+  _: unknown,
+  { email }: { email: string },
+) => {
   const user = await User.findOne({ email: email });
   if (!user) {
     return { success: true };
   }
 
   // Requesting again replaces the previous token, so only the latest emailed link works
-  const token = crypto.randomBytes(32).toString('hex');
+  const token = crypto.randomBytes(32).toString("hex");
   user.passwordResetTokenHash = hashResetToken(token);
-  user.passwordResetExpires = new Date(Date.now() + PASSWORD_RESET_EXPIRY_MINUTES * 60 * 1000);
+  user.passwordResetExpires = new Date(
+    Date.now() + PASSWORD_RESET_EXPIRY_MINUTES * 60 * 1000,
+  );
   await user.save();
 
   await sendPasswordResetEmail({
     to: user.email,
     firstName: user.firstName,
     token,
-    expiresInMinutes: PASSWORD_RESET_EXPIRY_MINUTES
+    expiresInMinutes: PASSWORD_RESET_EXPIRY_MINUTES,
   });
 
   return { success: true };
@@ -137,15 +151,20 @@ const requestPasswordReset = async (_: unknown, { email }: { email: string }) =>
 const findUserByResetToken = (token: string) =>
   User.findOne({
     passwordResetTokenHash: hashResetToken(token),
-    passwordResetExpires: { $gt: new Date() }
+    passwordResetExpires: { $gt: new Date() },
   });
 
 // Lets the reset page show an expired link before the user types a new password
-const passwordResetTokenValid = async (_: unknown, { token }: { token: string }) =>
-  Boolean(await findUserByResetToken(token));
+const passwordResetTokenValid = async (
+  _: unknown,
+  { token }: { token: string },
+) => Boolean(await findUserByResetToken(token));
 
 // Sets the new password, uses up the token and signs the user in
-const resetPassword = async (_: unknown, { token, password }: { token: string; password: string }) => {
+const resetPassword = async (
+  _: unknown,
+  { token, password }: { token: string; password: string },
+) => {
   const user = await findUserByResetToken(token);
   if (!user) {
     throw PASSWORD_RESET_TOKEN_INVALID();
@@ -161,7 +180,11 @@ const resetPassword = async (_: unknown, { token, password }: { token: string; p
   return createAuthData(user);
 };
 
-const editUser = async (_: unknown, { id, user }: { id: string; user: UserInput }, req: Request) => {
+const editUser = async (
+  _: unknown,
+  { id, user }: { id: string; user: UserInput },
+  req: Request,
+) => {
   checkAuth(req);
 
   const currentUser = await User.findById(id);
@@ -177,7 +200,7 @@ const editUser = async (_: unknown, { id, user }: { id: string; user: UserInput 
   const mergedUser = incrementVersion(Object.assign(currentUser, user));
 
   const editedUser = await User.findOneAndUpdate({ _id: id }, mergedUser, {
-    new: true
+    new: true,
   });
 
   if (!editedUser) {
@@ -186,12 +209,16 @@ const editUser = async (_: unknown, { id, user }: { id: string; user: UserInput 
 
   return {
     user: editedUser,
-    success: true
+    success: true,
   };
 };
 
 // Acts on the user the token belongs to, so nobody can change someone else's details
-const updateCurrentUser = async (_: unknown, { input }: { input: UserDetailsInput }, req: Request) => {
+const updateCurrentUser = async (
+  _: unknown,
+  { input }: { input: UserDetailsInput },
+  req: Request,
+) => {
   checkAuth(req);
   const user = await findUser(_, { id: req.userId as string });
 
@@ -212,8 +239,11 @@ const updateCurrentUser = async (_: unknown, { input }: { input: UserDetailsInpu
 
 const changePassword = async (
   _: unknown,
-  { currentPassword, newPassword }: { currentPassword: string; newPassword: string },
-  req: Request
+  {
+    currentPassword,
+    newPassword,
+  }: { currentPassword: string; newPassword: string },
+  req: Request,
 ) => {
   checkAuth(req);
   const user = await findUser(_, { id: req.userId as string });
@@ -234,18 +264,18 @@ const changePassword = async (
 const deleteUser = async (_: unknown, { id }: { id: string }, req: Request) => {
   checkAuth(req);
 
-  return withTransaction(async session => {
-    const user = await User.findById(id).populate('account').session(session);
+  return withTransaction(async (session) => {
+    const user = await User.findById(id).populate("account").session(session);
     if (!user) {
       throw USER_NOT_FOUND(id);
     }
 
     if (user.account) {
       const account = await Account.findById(user.account._id)
-        .populate('bills')
-        .populate('notes')
-        .populate('oneOffPayments')
-        .populate('payday')
+        .populate("bills")
+        .populate("notes")
+        .populate("oneOffPayments")
+        .populate("payday")
         .session(session);
 
       if (!account) {
@@ -254,21 +284,26 @@ const deleteUser = async (_: unknown, { id }: { id: string }, req: Request) => {
 
       if (account.bills?.length > 0) {
         await Bill.deleteMany({
-          _id: { $in: account.bills.map(bill => bill._id) }
+          _id: { $in: account.bills.map((bill) => bill._id) },
         }).session(session);
       }
 
       if (account.notes?.length > 0) {
         await Note.deleteMany({
-          _id: { $in: account.notes.map(note => note._id) }
+          _id: { $in: account.notes.map((note) => note._id) },
         }).session(session);
       }
 
       if (account.oneOffPayments?.length > 0) {
         await OneOffPayment.deleteMany({
-          _id: { $in: account.oneOffPayments.map(payment => payment._id) }
+          _id: { $in: account.oneOffPayments.map((payment) => payment._id) },
         }).session(session);
       }
+
+      // v2's recurring payments point at the account rather than being listed on it
+      await RecurringPayment.deleteMany({ account: account._id }).session(
+        session,
+      );
 
       if (account.payday) {
         await Payday.deleteOne({ _id: account.payday._id }).session(session);
@@ -299,7 +334,7 @@ export const resolvers = {
     user: findUser,
     login,
     tokenFindUser,
-    passwordResetTokenValid
+    passwordResetTokenValid,
   },
   Mutation: {
     registerAndLogin,
@@ -310,6 +345,6 @@ export const resolvers = {
     deleteUser,
     updateCurrentUser,
     changePassword,
-    deleteCurrentUser
-  }
+    deleteCurrentUser,
+  },
 };
