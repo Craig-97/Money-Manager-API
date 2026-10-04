@@ -1,22 +1,22 @@
-import type { ClientSession } from 'mongoose';
-import type { Request } from 'express';
+import type { ClientSession } from "mongoose";
+import type { Request } from "express";
 import type {
   CreateAccountInput,
   EditAccountInput,
   MarkPaymentsPaidInput,
   MarkPaymentsUnpaidInput,
-  StartPaydayCycleInput
-} from '../types/account';
-import { PaymentType } from '../constants/paymentType';
-import { PaymentStatus } from '../constants/paymentStatus';
-import { checkAccountAccess, checkAuth } from '../middleware/isAuth';
-import { Account } from '../models/Account';
-import { User } from '../models/User';
-import { Bill } from '../models/Bill';
-import { Note } from '../models/Note';
-import { OneOffPayment } from '../models/OneOffPayment';
-import { Payday } from '../models/Payday';
-import { RecurringPayment } from '../models/RecurringPayment';
+  StartPaydayCycleInput,
+} from "../types/account";
+import { PaymentType } from "../constants/paymentType";
+import { PaymentStatus } from "../constants/paymentStatus";
+import { checkAccountAccess, checkAuth } from "../middleware/isAuth";
+import { Account } from "../models/Account";
+import { User } from "../models/User";
+import { Bill } from "../models/Bill";
+import { Note } from "../models/Note";
+import { OneOffPayment } from "../models/OneOffPayment";
+import { Payday } from "../models/Payday";
+import { RecurringPayment } from "../models/RecurringPayment";
 import {
   USER_NOT_FOUND,
   ACCOUNT_NOT_FOUND,
@@ -28,9 +28,9 @@ import {
   PAYMENT_NOT_FOUND,
   incrementVersion,
   withTransaction,
-  validateUniqueName
-} from '../utils';
-import { addDays, nextOccurrence, ukDay } from '../utils/dates';
+  validateUniqueName,
+} from "../utils";
+import { addDays, nextOccurrence, ukDay } from "../utils/dates";
 
 // Helper function to validate user
 const findUserById = async (userId: string) => {
@@ -52,7 +52,11 @@ const findAccounts = async (_: unknown, _1: unknown, req: Request) => {
 };
 
 // Fetch an account by user id
-const findAccount = async (_: unknown, { id }: { id: string }, req: Request) => {
+const findAccount = async (
+  _: unknown,
+  { id }: { id: string },
+  req: Request,
+) => {
   checkAuth(req);
   const user = await findUserById(id);
 
@@ -62,12 +66,12 @@ const findAccount = async (_: unknown, { id }: { id: string }, req: Request) => 
   }
 
   const account = await Account.findById(user.account)
-    .populate({ path: 'user' })
-    .populate({ path: 'bills', options: { sort: { amount: 1 } } })
-    .populate({ path: 'oneOffPayments', options: { sort: { amount: 1 } } })
-    .populate({ path: 'recurringPayments', options: { sort: { amount: 1 } } })
-    .populate({ path: 'notes' })
-    .populate({ path: 'payday' });
+    .populate({ path: "user" })
+    .populate({ path: "bills", options: { sort: { amount: 1 } } })
+    .populate({ path: "oneOffPayments", options: { sort: { amount: 1 } } })
+    .populate({ path: "recurringPayments", options: { sort: { amount: 1 } } })
+    .populate({ path: "notes" })
+    .populate({ path: "payday" });
 
   if (!account) {
     throw ACCOUNT_NOT_FOUND(user.account);
@@ -76,10 +80,14 @@ const findAccount = async (_: unknown, { id }: { id: string }, req: Request) => 
 };
 
 // Create a new account
-const createAccount = async (_: unknown, { account }: { account: CreateAccountInput }, req: Request) => {
+const createAccount = async (
+  _: unknown,
+  { account }: { account: CreateAccountInput },
+  req: Request,
+) => {
   checkAuth(req);
 
-  return withTransaction(async session => {
+  return withTransaction(async (session) => {
     const {
       userId,
       bankBalance,
@@ -87,12 +95,14 @@ const createAccount = async (_: unknown, { account }: { account: CreateAccountIn
       bills = [],
       oneOffPayments = [],
       recurringPayments = [],
-      payday
+      payday,
     } = account;
     const existingUser = await findUserById(userId);
 
     // Check if account already exists
-    const existingAccount = await Account.findOne({ user: userId }).session(session);
+    const existingAccount = await Account.findOne({ user: userId }).session(
+      session,
+    );
     if (existingAccount) {
       throw ACCOUNT_EXISTS(existingAccount.id);
     }
@@ -103,7 +113,7 @@ const createAccount = async (_: unknown, { account }: { account: CreateAccountIn
       monthlyIncome,
       user: existingUser._id,
       // Setup starts the first cycle, so the payday prompt waits for the next payday
-      cycleStartedOn: ukDay()
+      cycleStartedOn: ukDay(),
     });
     await newAccount.save({ session });
 
@@ -112,20 +122,30 @@ const createAccount = async (_: unknown, { account }: { account: CreateAccountIn
     await existingUser.save({ session });
 
     // Check for name conflicts for all bills and payments
-    if (bills.length > 0 || oneOffPayments.length > 0 || recurringPayments.length > 0) {
+    if (
+      bills.length > 0 ||
+      oneOffPayments.length > 0 ||
+      recurringPayments.length > 0
+    ) {
       await Promise.all([
-        ...bills.map(bill => validateUniqueName(bill.name, newAccount._id, session)),
-        ...oneOffPayments.map(payment => validateUniqueName(payment.name, newAccount._id, session)),
-        ...recurringPayments.map(payment =>
-          validateUniqueName(payment.name, newAccount._id, session)
-        )
+        ...bills.map((bill) =>
+          validateUniqueName(bill.name, newAccount._id, session),
+        ),
+        ...oneOffPayments.map((payment) =>
+          validateUniqueName(payment.name, newAccount._id, session),
+        ),
+        ...recurringPayments.map((payment) =>
+          validateUniqueName(payment.name, newAccount._id, session),
+        ),
       ]);
     }
 
     // Handle bills creation if provided
     if (bills.length > 0) {
       const createdBills = await Promise.all(
-        bills.map(bill => new Bill({ ...bill, account: newAccount._id }).save({ session }))
+        bills.map((bill) =>
+          new Bill({ ...bill, account: newAccount._id }).save({ session }),
+        ),
       );
       newAccount.bills.push(...createdBills);
     }
@@ -133,9 +153,11 @@ const createAccount = async (_: unknown, { account }: { account: CreateAccountIn
     // Handle one-off payments creation if provided
     if (oneOffPayments.length > 0) {
       const createdPayments = await Promise.all(
-        oneOffPayments.map(payment =>
-          new OneOffPayment({ ...payment, account: newAccount._id }).save({ session })
-        )
+        oneOffPayments.map((payment) =>
+          new OneOffPayment({ ...payment, account: newAccount._id }).save({
+            session,
+          }),
+        ),
       );
       newAccount.oneOffPayments.push(...createdPayments);
     }
@@ -143,9 +165,11 @@ const createAccount = async (_: unknown, { account }: { account: CreateAccountIn
     // Handle recurring payments creation if provided
     if (recurringPayments.length > 0) {
       const createdRecurringPayments = await Promise.all(
-        recurringPayments.map(payment =>
-          new RecurringPayment({ ...payment, account: newAccount._id }).save({ session })
-        )
+        recurringPayments.map((payment) =>
+          new RecurringPayment({ ...payment, account: newAccount._id }).save({
+            session,
+          }),
+        ),
       );
       newAccount.recurringPayments.push(...createdRecurringPayments);
     }
@@ -154,7 +178,7 @@ const createAccount = async (_: unknown, { account }: { account: CreateAccountIn
     if (payday) {
       const newPayday = new Payday({
         ...payday,
-        account: newAccount._id
+        account: newAccount._id,
       });
       await newPayday.save({ session });
       newAccount.payday = newPayday._id;
@@ -164,12 +188,12 @@ const createAccount = async (_: unknown, { account }: { account: CreateAccountIn
 
     // Fetch the fully populated account
     const populatedAccount = await Account.findById(newAccount._id)
-      .populate('user')
-      .populate('bills')
-      .populate('oneOffPayments')
-      .populate('recurringPayments')
-      .populate('notes')
-      .populate('payday')
+      .populate("user")
+      .populate("bills")
+      .populate("oneOffPayments")
+      .populate("recurringPayments")
+      .populate("notes")
+      .populate("payday")
       .session(session);
 
     return { account: populatedAccount, success: true };
@@ -177,7 +201,11 @@ const createAccount = async (_: unknown, { account }: { account: CreateAccountIn
 };
 
 // Edit an account
-const editAccount = async (_: unknown, { id, account }: { id: string; account: EditAccountInput }, req: Request) => {
+const editAccount = async (
+  _: unknown,
+  { id, account }: { id: string; account: EditAccountInput },
+  req: Request,
+) => {
   checkAuth(req);
 
   const { bankBalance, monthlyIncome } = account;
@@ -204,41 +232,56 @@ const editAccount = async (_: unknown, { id, account }: { id: string; account: E
 
 // Payday: sets the confirmed balance and moves the chosen recurring payments on to their next
 // date as unpaid. Recording the payday stops the prompt showing again for it.
-const startPaydayCycle = async (_: unknown, { input }: { input: StartPaydayCycleInput }, req: Request) => {
+const startPaydayCycle = async (
+  _: unknown,
+  { input }: { input: StartPaydayCycleInput },
+  req: Request,
+) => {
   checkAuth(req);
   const { accountId, payday, bankBalance, recurringPaymentIds } = input;
   await checkAccountAccess(accountId, req);
 
-  return withTransaction(async session => {
+  return withTransaction(async (session) => {
     const account = await Account.findById(accountId).session(session);
     if (!account) {
       throw ACCOUNT_NOT_FOUND(accountId);
     }
 
     const today = ukDay();
+    const cycleStart = new Date(payday);
     // Sequential: operations within a transaction session can't run in parallel
     for (const id of recurringPaymentIds) {
-      const payment = await RecurringPayment.findOne({ _id: id, account: accountId }).session(session);
+      const payment = await RecurringPayment.findOne({
+        _id: id,
+        account: accountId,
+      }).session(session);
       if (!payment) {
         throw RECURRING_PAYMENT_NOT_FOUND(id);
       }
+      // Due on or after payday, so already part of the new cycle: moving it would skip a payment
+      if (payment.nextDueDate && payment.nextDueDate >= cycleStart) continue;
       // The next date after the one just dealt with, and never one already in the past
-      const after = payment.nextDueDate ? addDays(payment.nextDueDate, 1) : today;
-      payment.nextDueDate = nextOccurrence(payment, after > today ? after : today);
+      const after = payment.nextDueDate
+        ? addDays(payment.nextDueDate, 1)
+        : today;
+      payment.nextDueDate = nextOccurrence(
+        payment,
+        after > today ? after : today,
+      );
       payment.status = PaymentStatus.UNPAID;
       incrementVersion(payment);
       await payment.save({ session });
     }
 
     account.bankBalance = bankBalance;
-    account.cycleStartedOn = new Date(payday);
+    account.cycleStartedOn = cycleStart;
     incrementVersion(account);
     await account.save({ session });
 
     const populatedAccount = await Account.findById(accountId)
-      .populate({ path: 'oneOffPayments', options: { sort: { amount: 1 } } })
-      .populate({ path: 'recurringPayments', options: { sort: { amount: 1 } } })
-      .populate('payday')
+      .populate({ path: "oneOffPayments", options: { sort: { amount: 1 } } })
+      .populate({ path: "recurringPayments", options: { sort: { amount: 1 } } })
+      .populate("payday")
       .session(session);
 
     return { account: populatedAccount, success: true };
@@ -253,19 +296,23 @@ const roundPence = (amount: number) => Math.round(amount * 100) / 100;
 
 const populatedAccount = (accountId: string, session: ClientSession) =>
   Account.findById(accountId)
-    .populate({ path: 'oneOffPayments', options: { sort: { amount: 1 } } })
-    .populate({ path: 'recurringPayments', options: { sort: { amount: 1 } } })
-    .populate('payday')
+    .populate({ path: "oneOffPayments", options: { sort: { amount: 1 } } })
+    .populate({ path: "recurringPayments", options: { sort: { amount: 1 } } })
+    .populate("payday")
     .session(session);
 
 // Paying payments from the dashboard, as the bank balance sees it. Recurring payments stay listed
 // as paid until the next cycle; one-offs are done with, so they're deleted.
-const markPaymentsPaid = async (_: unknown, { input }: { input: MarkPaymentsPaidInput }, req: Request) => {
+const markPaymentsPaid = async (
+  _: unknown,
+  { input }: { input: MarkPaymentsPaidInput },
+  req: Request,
+) => {
   checkAuth(req);
   const { accountId, recurringPaymentIds, oneOffPaymentIds } = input;
   await checkAccountAccess(accountId, req);
 
-  return withTransaction(async session => {
+  return withTransaction(async (session) => {
     const account = await Account.findById(accountId).session(session);
     if (!account) {
       throw ACCOUNT_NOT_FOUND(accountId);
@@ -274,7 +321,10 @@ const markPaymentsPaid = async (_: unknown, { input }: { input: MarkPaymentsPaid
     let change = 0;
     // Sequential: operations within a transaction session can't run in parallel
     for (const id of recurringPaymentIds) {
-      const payment = await RecurringPayment.findOne({ _id: id, account: accountId }).session(session);
+      const payment = await RecurringPayment.findOne({
+        _id: id,
+        account: accountId,
+      }).session(session);
       if (!payment) {
         throw RECURRING_PAYMENT_NOT_FOUND(id);
       }
@@ -287,7 +337,10 @@ const markPaymentsPaid = async (_: unknown, { input }: { input: MarkPaymentsPaid
     }
 
     for (const id of oneOffPaymentIds) {
-      const payment = await OneOffPayment.findOne({ _id: id, account: accountId }).session(session);
+      const payment = await OneOffPayment.findOne({
+        _id: id,
+        account: accountId,
+      }).session(session);
       if (!payment) {
         throw PAYMENT_NOT_FOUND(id);
       }
@@ -300,16 +353,23 @@ const markPaymentsPaid = async (_: unknown, { input }: { input: MarkPaymentsPaid
     incrementVersion(account);
     await account.save({ session });
 
-    return { account: await populatedAccount(accountId, session), success: true };
+    return {
+      account: await populatedAccount(accountId, session),
+      success: true,
+    };
   });
 };
 
-const markPaymentsUnpaid = async (_: unknown, { input }: { input: MarkPaymentsUnpaidInput }, req: Request) => {
+const markPaymentsUnpaid = async (
+  _: unknown,
+  { input }: { input: MarkPaymentsUnpaidInput },
+  req: Request,
+) => {
   checkAuth(req);
   const { accountId, recurringPaymentIds } = input;
   await checkAccountAccess(accountId, req);
 
-  return withTransaction(async session => {
+  return withTransaction(async (session) => {
     const account = await Account.findById(accountId).session(session);
     if (!account) {
       throw ACCOUNT_NOT_FOUND(accountId);
@@ -317,7 +377,10 @@ const markPaymentsUnpaid = async (_: unknown, { input }: { input: MarkPaymentsUn
 
     let change = 0;
     for (const id of recurringPaymentIds) {
-      const payment = await RecurringPayment.findOne({ _id: id, account: accountId }).session(session);
+      const payment = await RecurringPayment.findOne({
+        _id: id,
+        account: accountId,
+      }).session(session);
       if (!payment) {
         throw RECURRING_PAYMENT_NOT_FOUND(id);
       }
@@ -332,22 +395,29 @@ const markPaymentsUnpaid = async (_: unknown, { input }: { input: MarkPaymentsUn
     incrementVersion(account);
     await account.save({ session });
 
-    return { account: await populatedAccount(accountId, session), success: true };
+    return {
+      account: await populatedAccount(accountId, session),
+      success: true,
+    };
   });
 };
 
 // Delete an account
-const deleteAccount = async (_: unknown, { id }: { id: string }, req: Request) => {
+const deleteAccount = async (
+  _: unknown,
+  { id }: { id: string },
+  req: Request,
+) => {
   checkAuth(req);
 
-  return withTransaction(async session => {
+  return withTransaction(async (session) => {
     const account = await Account.findById(id)
-      .populate('user')
-      .populate('bills')
-      .populate('notes')
-      .populate('oneOffPayments')
-      .populate('recurringPayments')
-      .populate('payday')
+      .populate("user")
+      .populate("bills")
+      .populate("notes")
+      .populate("oneOffPayments")
+      .populate("recurringPayments")
+      .populate("payday")
       .session(session);
 
     if (!account) {
@@ -357,26 +427,30 @@ const deleteAccount = async (_: unknown, { id }: { id: string }, req: Request) =
     // Batch all delete operations into a single Promise.all
     await Promise.all(
       [
-        account.user && User.deleteOne({ _id: account.user._id }).session(session),
+        account.user &&
+          User.deleteOne({ _id: account.user._id }).session(session),
         account.bills?.length > 0 &&
           Bill.deleteMany({
-            _id: { $in: account.bills.map(bill => bill._id) }
+            _id: { $in: account.bills.map((bill) => bill._id) },
           }).session(session),
         account.notes?.length > 0 &&
           Note.deleteMany({
-            _id: { $in: account.notes.map(note => note._id) }
+            _id: { $in: account.notes.map((note) => note._id) },
           }).session(session),
         account.oneOffPayments?.length > 0 &&
           OneOffPayment.deleteMany({
-            _id: { $in: account.oneOffPayments.map(payment => payment._id) }
+            _id: { $in: account.oneOffPayments.map((payment) => payment._id) },
           }).session(session),
         account.recurringPayments?.length > 0 &&
           RecurringPayment.deleteMany({
-            _id: { $in: account.recurringPayments.map(payment => payment._id) }
+            _id: {
+              $in: account.recurringPayments.map((payment) => payment._id),
+            },
           }).session(session),
-        account.payday && Payday.deleteOne({ _id: account.payday._id }).session(session),
-        Account.deleteOne({ _id: id }).session(session)
-      ].filter(Boolean)
+        account.payday &&
+          Payday.deleteOne({ _id: account.payday._id }).session(session),
+        Account.deleteOne({ _id: id }).session(session),
+      ].filter(Boolean),
     );
 
     return { success: true };
@@ -387,7 +461,7 @@ const deleteAccount = async (_: unknown, { id }: { id: string }, req: Request) =
 export const resolvers = {
   Query: {
     accounts: findAccounts,
-    account: findAccount
+    account: findAccount,
   },
   Mutation: {
     createAccount,
@@ -395,6 +469,6 @@ export const resolvers = {
     deleteAccount,
     startPaydayCycle,
     markPaymentsPaid,
-    markPaymentsUnpaid
-  }
+    markPaymentsUnpaid,
+  },
 };
