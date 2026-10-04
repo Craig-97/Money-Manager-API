@@ -15,7 +15,7 @@ export type PayFrequency = (typeof PayFrequency)[keyof typeof PayFrequency];
 
 export const PaydayType = {
   LAST_DAY: 'LAST_DAY',
-  LAST_FRIDAY: 'LAST_FRIDAY',
+  LAST_WEEKDAY: 'LAST_WEEKDAY',
   SET_DAY: 'SET_DAY',
   SET_WEEKDAY: 'SET_WEEKDAY'
 } as const;
