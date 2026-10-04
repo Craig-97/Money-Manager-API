@@ -119,6 +119,14 @@ describe('recurring payment due dates', () => {
   });
 });
 
+describe('a new account', () => {
+  it('counts setup as the start of its first cycle', async () => {
+    const { token, user } = await createUserWithAccount();
+    const body = await gql(`query ($id: ID) { account(id: $id) { cycleStartedOn } }`, { id: user.id }, token);
+    expect(body.data.account.cycleStartedOn).toBe(String(ukDay().getTime()));
+  });
+});
+
 describe('startPaydayCycle', () => {
   it('sets the balance and moves the chosen payments on to their next date as unpaid', async () => {
     const { token, accountId } = await createUserWithAccount();

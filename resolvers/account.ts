@@ -92,7 +92,9 @@ const createAccount = async (_: unknown, { account }: { account: CreateAccountIn
     const newAccount = new Account({
       bankBalance,
       monthlyIncome,
-      user: existingUser._id
+      user: existingUser._id,
+      // Setup starts the first cycle, so the payday prompt waits for the next payday
+      cycleStartedOn: ukDay()
     });
     await newAccount.save({ session });
 
