@@ -65,6 +65,8 @@ export const typeDefs = `
     refreshSession: AuthData!
     # Ends this device's session and clears its cookie
     logout: PasswordResetResponse!
+    # Ends every device's session, this one included, and clears this device's cookie
+    logoutEverywhere: PasswordResetResponse!
     registerAndLogin(user: UserInput): AuthData!
     requestPasswordReset(email: String!): PasswordResetResponse!
     resetPassword(token: String!, password: String!): AuthData!

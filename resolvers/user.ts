@@ -45,9 +45,11 @@ const hashResetToken = (token: string) =>
 const ACCENT_PATTERN = /^#[0-9a-f]{6}$/i;
 
 const createAccessToken = (user: UserDocument) =>
-  jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_KEY as string, {
-    expiresIn: "1h",
-  });
+  jwt.sign(
+    { userId: user.id, email: user.email, tv: user.tokenVersion ?? 0 },
+    process.env.JWT_KEY as string,
+    { expiresIn: "1h" },
+  );
 
 // Written on its own rather than through user.save(), which would clash with the session pushed
 // by startSession
@@ -208,6 +210,7 @@ const resetPassword = async (
   validatePassword(password);
 
   user.password = await bcrypt.hash(password, 12);
+  user.tokenVersion = (user.tokenVersion ?? 0) + 1;
   user.passwordResetTokenHash = undefined;
   user.passwordResetExpires = undefined;
   await user.save();
@@ -292,6 +295,7 @@ const changePassword = async (
   validatePassword(newPassword);
 
   user.password = await bcrypt.hash(newPassword, 12);
+  user.tokenVersion = (user.tokenVersion ?? 0) + 1;
   incrementVersion(user);
   await user.save();
   // Every other device is signed out; this one carries on with a fresh session
@@ -329,6 +333,17 @@ const logout = async (_: unknown, _1: unknown, req: Request) => {
     const hash = hashRefreshToken(token);
     await User.updateOne({ "refreshTokens.hash": hash }, { $pull: { refreshTokens: { hash } } });
   }
+  clearRefreshCookie(req.res as Response);
+  return { success: true };
+};
+
+// Cancels every access token already handed out, and every refresh token, on every device
+const logoutEverywhere = async (_: unknown, _1: unknown, req: Request) => {
+  checkAuth(req);
+  await User.updateOne(
+    { _id: req.userId },
+    { $set: { refreshTokens: [] }, $inc: { tokenVersion: 1 } },
+  );
   clearRefreshCookie(req.res as Response);
   return { success: true };
 };
@@ -432,6 +447,7 @@ export const resolvers = {
     login,
     refreshSession,
     logout,
+    logoutEverywhere,
     updatePreferences,
     registerAndLogin,
     requestPasswordReset,

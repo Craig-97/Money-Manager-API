@@ -6,6 +6,8 @@ declare global {
     interface Request {
       isAuth: boolean;
       isExpired: boolean;
+      // The token is genuine but was cancelled by signing out everywhere or a password change
+      isRevoked: boolean;
       userId?: string;
       accountId?: Types.ObjectId;
       // Operations in the request, read once by the rate limiter

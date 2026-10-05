@@ -9,6 +9,7 @@ export const isAuth = async (req: Request, _: Response, next: NextFunction) => {
   const token = authHeader?.split(' ')[1];
   req.isAuth = false;
   req.isExpired = false;
+  req.isRevoked = false;
 
   // Check auth header with token has been passed in request
   if (!authHeader || !token || token === '') {
@@ -34,7 +35,18 @@ export const isAuth = async (req: Request, _: Response, next: NextFunction) => {
   // Get user and their account ID
   const userId = (decodedToken as jwt.JwtPayload).userId;
   const user = await User.findById(userId);
-  if (user && !req.accountId) {
+  if (!user) {
+    return next();
+  }
+
+  // Signing out everywhere, or changing the password, raised the version since this token was issued.
+  // Tokens from before versions existed count as version 0.
+  if (((decodedToken as jwt.JwtPayload).tv ?? 0) !== (user.tokenVersion ?? 0)) {
+    req.isRevoked = true;
+    return next();
+  }
+
+  if (!req.accountId) {
     req.accountId = user.account;
   }
 
@@ -51,6 +63,14 @@ export const checkAuth = (req: Request) => {
       extensions: {
         code: 'UNAUTHENTICATED',
         expired: true
+      }
+    });
+  } else if (req.isRevoked) {
+    throw new GraphQLError('Unauthenticated! - Signed out', {
+      extensions: {
+        code: 'UNAUTHENTICATED',
+        invalid: true,
+        revoked: true
       }
     });
   } else if (!req.isAuth) {

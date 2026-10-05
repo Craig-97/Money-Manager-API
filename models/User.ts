@@ -12,6 +12,9 @@ export interface User {
   passwordResetExpires?: Date;
   // One per signed-in device; only a hash of the token held in that device's cookie is stored
   refreshTokens?: { hash: string; expires: Date }[];
+  // Access tokens carry the version they were issued under. Raising it cancels every token already
+  // issued, which is how signing out everywhere takes effect straight away.
+  tokenVersion?: number;
   // Not chosen yet when unset, so a new device keeps whatever it already shows
   theme?: ThemePreference;
   accent?: string;
@@ -38,6 +41,7 @@ const UserSchema = new Schema<User>({
     type: [{ _id: false, hash: { type: String, required: true }, expires: { type: Date, required: true } }],
     default: []
   },
+  tokenVersion: { type: Number, default: 0 },
   theme: { type: String, enum: Object.values(ThemePreference) },
   accent: String
 });

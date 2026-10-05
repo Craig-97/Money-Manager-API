@@ -21,7 +21,7 @@ Backend API built for tracking finances using Node, Express JS, MongoDB and Grap
 
 ## Sessions
 
-`login`, `registerAndLogin` and `resetPassword` return a short-lived access token (1 hour) for the client to keep in memory, and set a 30-day refresh token in an httpOnly `mm_refresh` cookie (`Secure` when `NODE_ENV=production`, `SameSite=Lax`, path `/graphql`). `refreshSession` swaps that cookie for a new access token and a new cookie; each refresh token works once. `logout` ends the current device's session. Changing or resetting a password signs out every other device.
+`login`, `registerAndLogin` and `resetPassword` return a short-lived access token (1 hour) for the client to keep in memory, and set a 30-day refresh token in an httpOnly `mm_refresh` cookie (`Secure` when `NODE_ENV=production`, `SameSite=Lax`, path `/graphql`). `refreshSession` swaps that cookie for a new access token and a new cookie; each refresh token works once. `logout` ends the current device's session, and `logoutEverywhere` ends every device's, cancelling access tokens already issued as well (each carries the user's `tokenVersion`, which signing out everywhere and changing or resetting a password raise). Changing or resetting a password signs out every other device.
 
 `SameSite=Lax` only works when the app and the API share a site, so the front end has to reach `/graphql` through its own origin (a Netlify rewrite to this API in production, Vite's proxy in development) rather than calling this API's domain directly.
 

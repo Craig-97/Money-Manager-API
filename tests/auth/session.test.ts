@@ -18,6 +18,7 @@ const LOGIN = `mutation ($email: String!, $password: String!) {
 }`;
 const REFRESH = `mutation { refreshSession { token user { id email } } }`;
 const LOGOUT = `mutation { logout { success } }`;
+const LOGOUT_EVERYWHERE = `mutation { logoutEverywhere { success } }`;
 const CHANGE_PASSWORD = `mutation ($current: String!, $next: String!) {
   changePassword(currentPassword: $current, newPassword: $next) { success }
 }`;
@@ -102,6 +103,52 @@ describe('logout', () => {
   });
 });
 
+describe('logoutEverywhere', () => {
+  it('ends every device, and clears this one cookie', async () => {
+    const { email, password, res, cookie } = await signIn();
+    const other = refreshCookieFrom(await gqlRaw(LOGIN, { email, password })) as string;
+
+    const out = await gqlRaw(LOGOUT_EVERYWHERE, undefined, res.body.data.login.token, cookie);
+    expect(out.body.data.logoutEverywhere.success).toBe(true);
+    expect((out.headers['set-cookie'] as unknown as string[]).join()).toMatch(/mm_refresh=;/);
+    expect(errorCode((await gqlRaw(REFRESH, undefined, undefined, cookie)).body)).toBe('UNAUTHENTICATED');
+    expect(errorCode((await gqlRaw(REFRESH, undefined, undefined, other)).body)).toBe('UNAUTHENTICATED');
+  });
+
+  it('cancels the access tokens already issued, on every device', async () => {
+    const { email, password, res, cookie } = await signIn();
+    const otherToken = (await gqlRaw(LOGIN, { email, password })).body.data.login.token;
+    const ME = `{ tokenFindUser { email } }`;
+    expect((await gql(ME, undefined, otherToken)).errors).toBeUndefined();
+
+    await gqlRaw(LOGOUT_EVERYWHERE, undefined, res.body.data.login.token, cookie);
+
+    for (const token of [res.body.data.login.token, otherToken]) {
+      const body = await gql(ME, undefined, token);
+      expect(errorCode(body)).toBe('UNAUTHENTICATED');
+      expect(body.errors?.[0].extensions).toMatchObject({ revoked: true });
+    }
+  });
+
+  it('lets the user sign in again afterwards', async () => {
+    const { email, password, res, cookie } = await signIn();
+    await gqlRaw(LOGOUT_EVERYWHERE, undefined, res.body.data.login.token, cookie);
+    const again = await gql(LOGIN, { email, password });
+    expect((await gql(`{ tokenFindUser { email } }`, undefined, again.data.login.token)).errors).toBeUndefined();
+  });
+
+  it("leaves another user's sessions alone", async () => {
+    const first = await signIn();
+    const second = await signIn();
+    await gqlRaw(LOGOUT_EVERYWHERE, undefined, first.res.body.data.login.token, first.cookie);
+    expect((await gqlRaw(REFRESH, undefined, undefined, second.cookie)).body.errors).toBeUndefined();
+  });
+
+  it('needs a signed-in user', async () => {
+    expect(errorCode(await gql(LOGOUT_EVERYWHERE))).toBe('UNAUTHENTICATED');
+  });
+});
+
 describe('changing the password', () => {
   it('signs out other devices but gives this one a fresh session', async () => {
     const { email, password, res, cookie } = await signIn();
@@ -118,6 +165,16 @@ describe('changing the password', () => {
     expect(errorCode((await gqlRaw(REFRESH, undefined, undefined, other)).body)).toBe('UNAUTHENTICATED');
     expect(errorCode((await gqlRaw(REFRESH, undefined, undefined, cookie)).body)).toBe('UNAUTHENTICATED');
     expect((await gqlRaw(REFRESH, undefined, undefined, fresh)).body.errors).toBeUndefined();
+  });
+
+  it('cancels the access tokens issued before it, and the new session gets working ones', async () => {
+    const { password, res, cookie } = await signIn();
+    const oldToken = res.body.data.login.token;
+    const change = await gqlRaw(CHANGE_PASSWORD, { current: password, next: 'NewPassword1' }, oldToken, cookie);
+
+    expect(errorCode(await gql(`{ tokenFindUser { email } }`, undefined, oldToken))).toBe('UNAUTHENTICATED');
+    const fresh = await gqlRaw(REFRESH, undefined, undefined, refreshCookieFrom(change));
+    expect((await gql(`{ tokenFindUser { email } }`, undefined, fresh.body.data.refreshSession.token)).errors).toBeUndefined();
   });
 });
 
