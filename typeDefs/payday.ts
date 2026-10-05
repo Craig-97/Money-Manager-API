@@ -15,6 +15,11 @@ export const typeDefs = `
     payday(id: ID): Payday
   }
 
+  type PaydayOverride {
+    for: String!
+    date: String!
+  }
+
   type Payday {
     id: ID!
     account: ID!
@@ -24,6 +29,7 @@ export const typeDefs = `
     weekday: Weekday
     firstPayDate: String
     bankHolidayRegion: BankHolidayRegion
+    overrides: [PaydayOverride!]!
   }
 
   input PaydayInput {
@@ -44,6 +50,7 @@ export const typeDefs = `
   type Mutation {
     createPayday(payday: PaydayInput!): PaydayResponse!
     editPayday(id: ID!, payday: PaydayInput!): PaydayResponse!
+    setPaydayOverride(id: ID!, for: String!, date: String): PaydayResponse!
     deletePayday(id: ID!): PaydayResponse!
   }
 `;

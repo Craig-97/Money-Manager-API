@@ -18,3 +18,6 @@ export const PAYDAY_UPDATE_FAILED = () =>
 
 export const PAYDAY_DELETE_FAILED = () =>
   new GraphQLError('Payday cannot be deleted', { extensions: { code: 'PAYDAY_DELETE_FAILED' } });
+
+export const PAYDAY_OVERRIDE_INVALID = (reason: string) =>
+  new GraphQLError(reason, { extensions: { code: 'PAYDAY_OVERRIDE_INVALID' } });

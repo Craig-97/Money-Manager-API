@@ -41,6 +41,12 @@ export const BankHolidayRegion = {
 export type BankHolidayRegion = (typeof BankHolidayRegion)[keyof typeof BankHolidayRegion];
 
 
+// One payday moved for a single pay date: `for` is the date the rule gave, `date` is when pay arrives
+export interface PaydayOverride {
+  for: string;
+  date: string;
+}
+
 export interface Payday {
   frequency: PayFrequency;
   type: PaydayType;
@@ -48,8 +54,18 @@ export interface Payday {
   weekday?: Weekday;
   firstPayDate?: string;
   bankHolidayRegion?: BankHolidayRegion;
+  overrides: PaydayOverride[];
   account: Types.ObjectId;
 }
+
+const isoDate = {
+  type: String,
+  required: true,
+  validate: {
+    validator: (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v),
+    message: (props: { value: string }) => `${props.value} is not a valid date format! Use YYYY-MM-DD`
+  }
+};
 
 const PaydaySchema = new Schema<Payday>({
   frequency: {
@@ -83,6 +99,10 @@ const PaydaySchema = new Schema<Payday>({
   bankHolidayRegion: {
     type: String,
     enum: enumValues(BankHolidayRegion)
+  },
+  overrides: {
+    type: [new Schema({ for: isoDate, date: isoDate }, { _id: false })],
+    default: []
   },
   account: {
     type: Schema.Types.ObjectId,

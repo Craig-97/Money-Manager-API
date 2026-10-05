@@ -14,7 +14,8 @@ beforeAll(setupTestApp);
 afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
-const FIELDS = 'id account frequency type dayOfMonth weekday firstPayDate bankHolidayRegion';
+const FIELDS =
+  'id account frequency type dayOfMonth weekday firstPayDate bankHolidayRegion overrides { for date }';
 const CREATE = `mutation ($payday: PaydayInput!) {
   createPayday(payday: $payday) { success payday { ${FIELDS} } }
 }`;
@@ -185,6 +186,109 @@ describe('editPayday', () => {
       other.token
     );
     expect(errorCode(body)).toBe('FORBIDDEN');
+  });
+});
+
+describe('setPaydayOverride', () => {
+  const SET = `mutation ($id: ID!, $for: String!, $date: String) {
+    setPaydayOverride(id: $id, for: $for, date: $date) { success payday { ${FIELDS} } }
+  }`;
+  const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+
+  it('starts with no overrides', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const created = await makePayday(token, accountId);
+    expect(created.data.createPayday.payday.overrides).toEqual([]);
+  });
+
+  it('moves one payday', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const id = idOf(await makePayday(token, accountId));
+    const body = await gql(SET, { id, for: inDays(20), date: inDays(13) }, token);
+    expect(body.errors).toBeUndefined();
+    expect(body.data.setPaydayOverride.payday.overrides).toEqual([
+      { for: inDays(20), date: inDays(13) }
+    ]);
+  });
+
+  it('replaces an earlier move of the same payday', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const id = idOf(await makePayday(token, accountId));
+    await gql(SET, { id, for: inDays(20), date: inDays(13) }, token);
+    const body = await gql(SET, { id, for: inDays(20), date: inDays(15) }, token);
+    expect(body.data.setPaydayOverride.payday.overrides).toEqual([
+      { for: inDays(20), date: inDays(15) }
+    ]);
+  });
+
+  it('puts the payday back when no date is given', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const id = idOf(await makePayday(token, accountId));
+    await gql(SET, { id, for: inDays(20), date: inDays(13) }, token);
+    const body = await gql(SET, { id, for: inDays(20) }, token);
+    expect(body.data.setPaydayOverride.payday.overrides).toEqual([]);
+  });
+
+  it('keeps a move for each of several paydays, soonest first', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const id = idOf(await makePayday(token, accountId));
+    await gql(SET, { id, for: inDays(50), date: inDays(45) }, token);
+    const body = await gql(SET, { id, for: inDays(20), date: inDays(13) }, token);
+    expect(body.data.setPaydayOverride.payday.overrides.map((o: { for: string }) => o.for)).toEqual([
+      inDays(20),
+      inDays(50)
+    ]);
+  });
+
+  it('forgets moves for paydays that have passed', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const id = idOf(await makePayday(token, accountId));
+    await mongoose
+      .model('Payday')
+      .updateOne({ _id: id }, { overrides: [{ for: inDays(-10), date: inDays(-12) }] });
+    const body = await gql(SET, { id, for: inDays(20), date: inDays(13) }, token);
+    expect(body.data.setPaydayOverride.payday.overrides).toEqual([
+      { for: inDays(20), date: inDays(13) }
+    ]);
+  });
+
+  it('rejects dates that are not real', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const id = idOf(await makePayday(token, accountId));
+    expect(errorCode(await gql(SET, { id, for: '2030-02-30', date: '2030-02-10' }, token))).toBe(
+      'PAYDAY_OVERRIDE_INVALID'
+    );
+    expect(errorCode(await gql(SET, { id, for: inDays(20), date: '17/12/2030' }, token))).toBe(
+      'PAYDAY_OVERRIDE_INVALID'
+    );
+  });
+
+  it('returns PAYDAY_NOT_FOUND for an unknown id', async () => {
+    const { token } = await createUserWithAccount();
+    const body = await gql(SET, { id: UNKNOWN, for: inDays(20), date: inDays(13) }, token);
+    expect(errorCode(body)).toBe('PAYDAY_NOT_FOUND');
+  });
+
+  it('returns FORBIDDEN for another users payday', async () => {
+    const owner = await createUserWithAccount();
+    const other = await createUserWithAccount();
+    const id = idOf(await makePayday(owner.token, owner.accountId));
+    const body = await gql(SET, { id, for: inDays(20), date: inDays(13) }, other.token);
+    expect(errorCode(body)).toBe('FORBIDDEN');
+  });
+
+  it('survives editing the payday rule', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const id = idOf(await makePayday(token, accountId));
+    await gql(SET, { id, for: inDays(20), date: inDays(13) }, token);
+    const body = await gql(
+      `mutation ($id: ID!, $payday: PaydayInput!) {
+        editPayday(id: $id, payday: $payday) { payday { overrides { for date } } }
+      }`,
+      { id, payday: { frequency: 'MONTHLY', type: 'LAST_DAY' } },
+      token
+    );
+    expect(body.data.editPayday.payday.overrides).toHaveLength(1);
   });
 });
 
