@@ -17,11 +17,11 @@ const sendEmail = jest.spyOn(mailer, 'sendEmail').mockResolvedValue(undefined);
 beforeEach(() => sendEmail.mockClear());
 
 const REQUEST = `mutation ($email: String!) { requestPasswordReset(email: $email) { success } }`;
-const VALID = `query ($token: String!) { passwordResetTokenValid(token: $token) }`;
+const VALID = `query ($token: String!) { passwordResetTokenValid(token: $token) { valid email } }`;
 const RESET = `mutation ($token: String!, $password: String!) {
   resetPassword(token: $token, password: $password) { token tokenExpiration user { id email } }
 }`;
-const LOGIN = `query ($email: String!, $password: String!) {
+const LOGIN = `mutation ($email: String!, $password: String!) {
   login(email: $email, password: $password) { token }
 }`;
 
@@ -65,8 +65,8 @@ describe('requestPasswordReset', () => {
     const { email } = await createUserWithAccount({ withAccount: false });
     const first = await requestToken(email);
     const second = await requestToken(email);
-    expect((await gql(VALID, { token: first })).data.passwordResetTokenValid).toBe(false);
-    expect((await gql(VALID, { token: second })).data.passwordResetTokenValid).toBe(true);
+    expect((await gql(VALID, { token: first })).data.passwordResetTokenValid.valid).toBe(false);
+    expect((await gql(VALID, { token: second })).data.passwordResetTokenValid.valid).toBe(true);
   });
 });
 
@@ -92,7 +92,7 @@ describe('resetPassword', () => {
     const token = await requestToken(email);
     await gql(RESET, { token, password: 'NewPassword1' });
 
-    expect((await gql(VALID, { token })).data.passwordResetTokenValid).toBe(false);
+    expect((await gql(VALID, { token })).data.passwordResetTokenValid.valid).toBe(false);
     expect(errorCode(await gql(RESET, { token, password: 'Another1pass' }))).toBe(
       'PASSWORD_RESET_TOKEN_INVALID'
     );
@@ -105,7 +105,7 @@ describe('resetPassword', () => {
       .model('User')
       .updateOne({ email }, { passwordResetExpires: new Date(Date.now() - 1000) });
 
-    expect((await gql(VALID, { token })).data.passwordResetTokenValid).toBe(false);
+    expect((await gql(VALID, { token })).data.passwordResetTokenValid.valid).toBe(false);
     expect(errorCode(await gql(RESET, { token, password: 'NewPassword1' }))).toBe(
       'PASSWORD_RESET_TOKEN_INVALID'
     );
@@ -122,6 +122,6 @@ describe('resetPassword', () => {
     const token = await requestToken(email);
 
     expect(errorCode(await gql(RESET, { token, password: weak }))).toBe('INVALID_PASSWORD');
-    expect((await gql(VALID, { token })).data.passwordResetTokenValid).toBe(true);
+    expect((await gql(VALID, { token })).data.passwordResetTokenValid.valid).toBe(true);
   });
 });

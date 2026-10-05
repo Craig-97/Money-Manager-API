@@ -1,8 +1,9 @@
-import type { Request } from "express";
+import type { Request, Response } from "express";
 import type { UserDetailsInput, UserInput } from "../types/user";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { ThemePreference } from "../constants/themePreference";
 import { checkAuth } from "../middleware/isAuth";
 import { Account } from "../models/Account";
 import { User, type UserDocument } from "../models/User";
@@ -21,6 +22,14 @@ import {
   INVALID_CREDENTIALS,
   ACCOUNT_NOT_FOUND,
   PASSWORD_RESET_TOKEN_INVALID,
+  REFRESH_TOKEN_INVALID,
+  INVALID_ACCENT,
+  MAX_REFRESH_TOKENS,
+  createRefreshToken,
+  hashRefreshToken,
+  readRefreshCookie,
+  setRefreshCookie,
+  clearRefreshCookie,
   withTransaction,
   incrementVersion,
   validatePassword,
@@ -33,16 +42,33 @@ const PASSWORD_RESET_EXPIRY_MINUTES = 60;
 const hashResetToken = (token: string) =>
   crypto.createHash("sha256").update(token).digest("hex");
 
-const createAuthData = (user: UserDocument) => {
-  const token = jwt.sign(
-    { userId: user.id, email: user.email },
-    process.env.JWT_KEY as string,
-    {
-      expiresIn: "1h",
-    },
-  );
+const ACCENT_PATTERN = /^#[0-9a-f]{6}$/i;
 
-  return { user, token: token, tokenExpiration: 1 };
+const createAccessToken = (user: UserDocument) =>
+  jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_KEY as string, {
+    expiresIn: "1h",
+  });
+
+// Written on its own rather than through user.save(), which would clash with the session pushed
+// by startSession
+const signOutEverywhere = (user: UserDocument) =>
+  User.updateOne({ _id: user._id }, { $set: { refreshTokens: [] } });
+
+// Starts a session on this device: a short-lived access token for the client to hold in memory, and
+// a long-lived refresh token that only ever lives in an httpOnly cookie
+const startSession = async (user: UserDocument, req: Request) => {
+  const refresh = createRefreshToken();
+  await User.updateOne({ _id: user._id }, {
+    $push: {
+      refreshTokens: {
+        $each: [{ hash: refresh.hash, expires: refresh.expires }],
+        $slice: -MAX_REFRESH_TOKENS,
+      },
+    },
+  });
+  setRefreshCookie(req.res as Response, refresh.token);
+
+  return { user, token: createAccessToken(user), tokenExpiration: 1 };
 };
 
 const findUsers = async () => {
@@ -64,6 +90,7 @@ const findUser = async (_: unknown, { id }: { id: string }) => {
 const login = async (
   _: unknown,
   { email, password }: { email: string; password: string },
+  req: Request,
 ) => {
   const user = await User.findOne({ email: email });
   if (!user) {
@@ -73,7 +100,7 @@ const login = async (
   if (!isEqual) {
     throw INVALID_CREDENTIALS();
   }
-  return createAuthData(user);
+  return startSession(user, req);
 };
 
 const tokenFindUser = async (_: unknown, _1: unknown, req: Request) => {
@@ -81,9 +108,13 @@ const tokenFindUser = async (_: unknown, _1: unknown, req: Request) => {
   return findUser(_, { id: req.userId as string });
 };
 
-const registerAndLogin = async (_: unknown, { user }: { user: UserInput }) => {
+const registerAndLogin = async (
+  _: unknown,
+  { user }: { user: UserInput },
+  req: Request,
+) => {
   await createUser(_, { user });
-  return login(_, { email: user.email, password: user.password });
+  return login(_, { email: user.email, password: user.password }, req);
 };
 
 const createUser = async (_: unknown, { user }: { user: UserInput }) => {
@@ -158,12 +189,16 @@ const findUserByResetToken = (token: string) =>
 const passwordResetTokenValid = async (
   _: unknown,
   { token }: { token: string },
-) => Boolean(await findUserByResetToken(token));
+) => {
+  const user = await findUserByResetToken(token);
+  return { valid: Boolean(user), email: user?.email ?? null };
+};
 
 // Sets the new password, uses up the token and signs the user in
 const resetPassword = async (
   _: unknown,
   { token, password }: { token: string; password: string },
+  req: Request,
 ) => {
   const user = await findUserByResetToken(token);
   if (!user) {
@@ -176,8 +211,10 @@ const resetPassword = async (
   user.passwordResetTokenHash = undefined;
   user.passwordResetExpires = undefined;
   await user.save();
+  // Whoever knew the old password is signed out everywhere
+  await signOutEverywhere(user);
 
-  return createAuthData(user);
+  return startSession(user, req);
 };
 
 const editUser = async (
@@ -257,6 +294,60 @@ const changePassword = async (
   user.password = await bcrypt.hash(newPassword, 12);
   incrementVersion(user);
   await user.save();
+  // Every other device is signed out; this one carries on with a fresh session
+  await signOutEverywhere(user);
+  await startSession(user, req);
+
+  return { user, success: true };
+};
+
+// Swaps the refresh cookie for a new access token and a new cookie. Each refresh token works once,
+// so a copied one stops working as soon as the real device has used it.
+const refreshSession = async (_: unknown, _1: unknown, req: Request) => {
+  const token = readRefreshCookie(req);
+  if (!token) {
+    throw REFRESH_TOKEN_INVALID();
+  }
+
+  const hash = hashRefreshToken(token);
+  // Taking the token off the user is what claims it, so two requests can't both use it
+  const user = await User.findOneAndUpdate(
+    { refreshTokens: { $elemMatch: { hash, expires: { $gt: new Date() } } } },
+    { $pull: { refreshTokens: { hash } } },
+  );
+  if (!user) {
+    clearRefreshCookie(req.res as Response);
+    throw REFRESH_TOKEN_INVALID();
+  }
+
+  return startSession(user, req);
+};
+
+const logout = async (_: unknown, _1: unknown, req: Request) => {
+  const token = readRefreshCookie(req);
+  if (token) {
+    const hash = hashRefreshToken(token);
+    await User.updateOne({ "refreshTokens.hash": hash }, { $pull: { refreshTokens: { hash } } });
+  }
+  clearRefreshCookie(req.res as Response);
+  return { success: true };
+};
+
+const updatePreferences = async (
+  _: unknown,
+  { theme, accent }: { theme?: ThemePreference | null; accent?: string | null },
+  req: Request,
+) => {
+  checkAuth(req);
+  const user = await findUser(_, { id: req.userId as string });
+
+  if (accent && !ACCENT_PATTERN.test(accent)) {
+    throw INVALID_ACCENT();
+  }
+  if (theme) user.theme = theme;
+  if (accent) user.accent = accent.toUpperCase();
+  incrementVersion(user);
+  await user.save();
 
   return { user, success: true };
 };
@@ -325,18 +416,23 @@ const deleteUser = async (_: unknown, { id }: { id: string }, req: Request) => {
 // so it can only ever remove the caller.
 const deleteCurrentUser = async (_: unknown, _1: unknown, req: Request) => {
   checkAuth(req);
-  return deleteUser(_, { id: req.userId as string }, req);
+  const result = await deleteUser(_, { id: req.userId as string }, req);
+  clearRefreshCookie(req.res as Response);
+  return result;
 };
 
 export const resolvers = {
   Query: {
     users: findUsers,
     user: findUser,
-    login,
     tokenFindUser,
     passwordResetTokenValid,
   },
   Mutation: {
+    login,
+    refreshSession,
+    logout,
+    updatePreferences,
     registerAndLogin,
     requestPasswordReset,
     resetPassword,

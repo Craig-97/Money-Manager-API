@@ -1,10 +1,14 @@
+import { ThemePreference } from '../constants/themePreference';
+import { gqlEnum } from '../utils/helpers/enumHelpers';
+
 export const typeDefs = `
+  ${gqlEnum('ThemePreference', ThemePreference)}
+
   type Query {
     users: [User!]!
     user(id: ID): User
-    login(email: String!, password: String!): AuthData!
     tokenFindUser: User
-    passwordResetTokenValid(token: String!): Boolean!
+    passwordResetTokenValid(token: String!): PasswordResetTokenCheck!
   }
 
   type User {
@@ -13,6 +17,9 @@ export const typeDefs = `
     email: String!
     firstName: String!
     surname: String!
+    # Not chosen yet when null, so a device keeps what it already shows
+    theme: ThemePreference
+    accent: String
   }
 
   input UserInput {
@@ -41,11 +48,23 @@ export const typeDefs = `
     tokenExpiration: Int!
   }
 
+  type PasswordResetTokenCheck {
+    valid: Boolean!
+    # The address the link was sent to, for the reset page to show; null when the link is not valid
+    email: String
+  }
+
   type PasswordResetResponse {
     success: Boolean!
   }
 
   type Mutation {
+    # Signs in and sets the httpOnly refresh cookie
+    login(email: String!, password: String!): AuthData!
+    # Swaps the refresh cookie for a new access token and a new cookie; UNAUTHENTICATED when there is none
+    refreshSession: AuthData!
+    # Ends this device's session and clears its cookie
+    logout: PasswordResetResponse!
     registerAndLogin(user: UserInput): AuthData!
     requestPasswordReset(email: String!): PasswordResetResponse!
     resetPassword(token: String!, password: String!): AuthData!
@@ -58,5 +77,7 @@ export const typeDefs = `
     changePassword(currentPassword: String!, newPassword: String!): UserResponse!
     # Delete the signed-in user and everything on their account
     deleteCurrentUser: UserResponse!
+    # Save the signed-in user's theme and accent; whatever is left out stays as it is
+    updatePreferences(theme: ThemePreference, accent: String): UserResponse!
   }
 `;

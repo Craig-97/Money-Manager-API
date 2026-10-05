@@ -9,6 +9,13 @@ import { isAuth } from './middleware/isAuth';
 import { createAuthRateLimit } from './middleware/rateLimit';
 import { schema } from './schema';
 
+// CORS_ORIGINS is a comma-separated list of front-end origins; CLIENT_URL is always allowed too
+const allowedOrigins = () =>
+  [process.env.CORS_ORIGINS, process.env.CLIENT_URL ?? 'http://localhost:5173']
+    .flatMap(value => (value ?? '').split(','))
+    .map(origin => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+
 // Builds the express app and Apollo server without listening or connecting to the database
 export const createApp = async () => {
   const app = express();
@@ -20,15 +27,16 @@ export const createApp = async () => {
     app.set('trust proxy', Number.isInteger(hops) ? hops : process.env.TRUST_PROXY);
   }
 
-  app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST,GET,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(200);
-    }
-    next();
-  });
+  // The browser app reaches the API through its own origin (a Netlify rewrite, or Vite's dev proxy),
+  // so cross-origin requests are only for the origins listed here
+  app.use(
+    cors({
+      origin: allowedOrigins(),
+      credentials: true,
+      methods: ['POST', 'GET', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization']
+    })
+  );
 
   app.use(isAuth);
 
@@ -42,7 +50,6 @@ export const createApp = async () => {
 
   app.use(
     '/graphql',
-    cors(),
     json(),
     createAuthRateLimit(),
     expressMiddleware(server, {

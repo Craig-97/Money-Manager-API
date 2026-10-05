@@ -59,9 +59,10 @@ export const clearDatabase = async () => {
 export const agent = () => request(ctx.app);
 
 // Sends a GraphQL operation through HTTP, returning the full supertest response
-export const gqlRaw = (query: string, variables?: Variables, token?: string) => {
+export const gqlRaw = (query: string, variables?: Variables, token?: string, cookie?: string) => {
   const req = request(ctx.app).post('/graphql').set('Content-Type', 'application/json');
   if (token) req.set('Authorization', `Bearer ${token}`);
+  if (cookie) req.set('Cookie', cookie);
   return req.send({ query, variables });
 };
 
@@ -69,8 +70,15 @@ export const gqlRaw = (query: string, variables?: Variables, token?: string) => 
 export const gql = async (
   query: string,
   variables?: Variables,
-  token?: string
-): Promise<GqlBody> => (await gqlRaw(query, variables, token)).body;
+  token?: string,
+  cookie?: string
+): Promise<GqlBody> => (await gqlRaw(query, variables, token, cookie)).body;
+
+// The name=value part of the refresh cookie a response set, to send back like a browser would
+export const refreshCookieFrom = (res: { headers: Record<string, unknown> }) => {
+  const header = res.headers['set-cookie'] as string[] | undefined;
+  return header?.find(cookie => cookie.startsWith('mm_refresh='))?.split(';')[0];
+};
 
 // Returns the first error's code or undefined
 export const errorCode = (body: GqlBody) => body.errors?.[0]?.extensions?.code;

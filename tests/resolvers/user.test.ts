@@ -89,7 +89,7 @@ describe('user queries and mutations', () => {
     expect(edit.data.editUser.user.firstName).toBe('Changed');
 
     const login = await gql(
-      `query ($email: String!, $password: String!) { login(email: $email, password: $password) { token } }`,
+      `mutation ($email: String!, $password: String!) { login(email: $email, password: $password) { token } }`,
       { email, password: 'NewPassword1' }
     );
     expect(login.errors).toBeUndefined();

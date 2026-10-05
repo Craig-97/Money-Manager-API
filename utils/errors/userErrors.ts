@@ -42,3 +42,13 @@ export const PASSWORD_RESET_TOKEN_INVALID = () =>
   new GraphQLError('This password reset link is invalid or has expired', {
     extensions: { code: 'PASSWORD_RESET_TOKEN_INVALID' }
   });
+
+export const REFRESH_TOKEN_INVALID = () =>
+  new GraphQLError('Your session has ended. Sign in again', {
+    extensions: { code: 'UNAUTHENTICATED', invalid: true }
+  });
+
+export const INVALID_ACCENT = () =>
+  new GraphQLError('Accent must be a hex colour like #7C3AED', {
+    extensions: { code: 'INVALID_ACCENT' }
+  });

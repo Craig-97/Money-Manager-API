@@ -18,7 +18,7 @@ describe('registerAndLogin / login', () => {
   const REGISTER = `mutation ($user: UserInput) {
     registerAndLogin(user: $user) { token tokenExpiration user { ${USER_FIELDS} } }
   }`;
-  const LOGIN = `query ($email: String!, $password: String!) {
+  const LOGIN = `mutation ($email: String!, $password: String!) {
     login(email: $email, password: $password) { token tokenExpiration user { ${USER_FIELDS} } }
   }`;
   const input = { email: 'a@example.com', password: 'secret', firstName: 'Ann', surname: 'Lee' };

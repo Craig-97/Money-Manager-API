@@ -33,6 +33,8 @@ const LIMITS: Limit[] = [
   { fields: ['requestPasswordReset'], windowMs: HOUR, limit: 3, perEmail: true },
   // Reset email spam to many addresses
   { fields: ['requestPasswordReset'], windowMs: HOUR, limit: 10 },
+  // Refresh token guessing
+  { fields: ['refreshSession'], windowMs: 15 * MINUTE, limit: 60 },
   // Reset token guessing
   { fields: ['resetPassword', 'passwordResetTokenValid'], windowMs: 15 * MINUTE, limit: 20 }
 ];

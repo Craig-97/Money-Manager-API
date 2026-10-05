@@ -12,7 +12,7 @@ beforeAll(setupTestApp);
 afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
-const LOGIN = `query ($email: String!, $password: String!) { login(email: $email, password: $password) { token } }`;
+const LOGIN = `mutation ($email: String!, $password: String!) { login(email: $email, password: $password) { token } }`;
 
 describe("note colours", () => {
   const CREATE = `mutation ($note: NoteInput!) { createNote(note: $note) { note { id color } } }`;

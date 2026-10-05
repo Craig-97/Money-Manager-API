@@ -17,7 +17,7 @@ beforeEach(clearDatabase);
 const sendEmail = jest.spyOn(mailer, 'sendEmail').mockResolvedValue(undefined);
 beforeEach(() => sendEmail.mockClear());
 
-const LOGIN = `query ($email: String!, $password: String!) {
+const LOGIN = `mutation ($email: String!, $password: String!) {
   login(email: $email, password: $password) { token }
 }`;
 const REQUEST = `mutation ($email: String!) { requestPasswordReset(email: $email) { success } }`;
@@ -96,7 +96,7 @@ describe('login attempts', () => {
   it('counts a login written with the values inline', async () => {
     const { email } = await createUserWithAccount({ withAccount: false });
     for (let i = 0; i < 10; i++) {
-      await gqlRaw(`query { login(email: "${email}", password: "wrong") { token } }`);
+      await gqlRaw(`mutation { login(email: "${email}", password: "wrong") { token } }`);
     }
 
     expect((await attempt(LOGIN, { email, password: 'wrong' })).status).toBe(429);
