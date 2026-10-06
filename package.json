@@ -11,7 +11,9 @@
     "build": "tsc -p tsconfig.build.json",
     "start:prod": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "migrate:bills": "tsx scripts/migrateBills.ts",
+    "migrate:account-ids": "tsx scripts/removeAccountIdLists.ts"
   },
   "keywords": [],
   "author": "",
@@ -31,7 +33,9 @@
     "mongoose": "^9.10.3",
     "nodemailer": "^10.0.13",
     "nodemon": "^3.1.14",
-    "tsx": "^4.23.15"
+    "pino": "^10.4.0",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@babel/core": "^8.0.6",

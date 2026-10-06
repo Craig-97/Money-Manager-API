@@ -1,8 +1,7 @@
+import './env';
 import { connectToDatabase } from './db/mongodb';
-import dotenv from 'dotenv';
 import { createApp } from './app';
-
-dotenv.config({ quiet: true });
+import { logger } from './utils/logger';
 
 const startServer = async () => {
   const { httpServer } = await createApp();
@@ -11,7 +10,7 @@ const startServer = async () => {
 
   const PORT = process.env.PORT || 4000;
   await new Promise<void>(resolve => httpServer.listen({ port: PORT }, resolve));
-  console.log(`🚀 Server running on ${PORT}`);
+  logger.info({ port: PORT }, 'Server running');
 };
 
 startServer();

@@ -158,8 +158,8 @@ describe('other operations', () => {
   it('does not count registering', async () => {
     for (let i = 0; i < 15; i++) {
       const body = await gql(
-        `mutation ($user: UserInput) { registerAndLogin(user: $user) { token } }`,
-        { user: { email: `new${i}@example.com`, password: 'Password1', firstName: 'A', surname: 'B' } }
+        `mutation ($input: RegisterInput!) { registerAndLogin(input: $input) { token } }`,
+        { input: { email: `new${i}@example.com`, password: 'Password1', firstName: 'A', surname: 'B' } }
       );
       expect(body.errors).toBeUndefined();
     }

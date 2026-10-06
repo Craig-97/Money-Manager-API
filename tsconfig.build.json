@@ -8,5 +8,5 @@
     "sourceMap": true
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "dist", "tests", "jest.config.js"]
+  "exclude": ["node_modules", "dist", "tests", "scripts", "jest.config.js"]
 }

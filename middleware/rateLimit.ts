@@ -8,6 +8,7 @@ import {
   type RateLimitInfo
 } from 'express-rate-limit';
 import { Kind, parse, type ValueNode } from 'graphql';
+import { authLog } from '../utils/logger';
 
 // Root fields a request calls, with the email argument where one is given
 interface RootField {
@@ -108,6 +109,10 @@ const createLimiter = ({ fields, windowMs, limit, perEmail }: Limit): RequestHan
       const { resetTime } = (req as Request & { rateLimit: RateLimitInfo }).rateLimit;
       const retryAfter = Math.max(1, Math.ceil(((resetTime?.getTime() ?? Date.now()) - Date.now()) / 1000));
       const minutes = Math.ceil(retryAfter / 60);
+      authLog.warn(
+        { event: 'rate_limited', field: matchingField(req, fields)?.name, perEmail: !!perEmail, ip: req.ip },
+        'Too many attempts'
+      );
       res
         .status(429)
         .type('application/graphql-response+json')

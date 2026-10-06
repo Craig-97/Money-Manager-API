@@ -15,16 +15,16 @@ beforeEach(clearDatabase);
 const USER_FIELDS = 'id email firstName surname account';
 
 describe('registerAndLogin / login', () => {
-  const REGISTER = `mutation ($user: UserInput) {
-    registerAndLogin(user: $user) { token tokenExpiration user { ${USER_FIELDS} } }
+  const REGISTER = `mutation ($input: RegisterInput!) {
+    registerAndLogin(input: $input) { token tokenExpiration user { ${USER_FIELDS} } }
   }`;
   const LOGIN = `mutation ($email: String!, $password: String!) {
     login(email: $email, password: $password) { token tokenExpiration user { ${USER_FIELDS} } }
   }`;
-  const input = { email: 'a@example.com', password: 'secret', firstName: 'Ann', surname: 'Lee' };
+  const input = { email: 'a@example.com', password: 'Secret123', firstName: 'Ann', surname: 'Lee' };
 
   it('registers a user and returns a token', async () => {
-    const body = await gql(REGISTER, { user: input });
+    const body = await gql(REGISTER, { input });
     expect(body.errors).toBeUndefined();
     const { token, tokenExpiration, user } = body.data.registerAndLogin;
     expect(token).toEqual(expect.any(String));
@@ -34,13 +34,13 @@ describe('registerAndLogin / login', () => {
   });
 
   it('rejects a duplicate email', async () => {
-    await gql(REGISTER, { user: input });
-    const body = await gql(REGISTER, { user: input });
+    await gql(REGISTER, { input });
+    const body = await gql(REGISTER, { input });
     expect(errorCode(body)).toBe('USER_EXISTS');
   });
 
   it('logs in with correct credentials', async () => {
-    await gql(REGISTER, { user: input });
+    await gql(REGISTER, { input });
     const body = await gql(LOGIN, { email: input.email, password: input.password });
     expect(body.errors).toBeUndefined();
     expect(body.data.login.user.email).toBe(input.email);
@@ -48,7 +48,7 @@ describe('registerAndLogin / login', () => {
   });
 
   it('rejects an incorrect password', async () => {
-    await gql(REGISTER, { user: input });
+    await gql(REGISTER, { input });
     const body = await gql(LOGIN, { email: input.email, password: 'wrong' });
     expect(errorCode(body)).toBe('INVALID_CREDENTIALS');
   });

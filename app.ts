@@ -8,6 +8,7 @@ import { json } from 'body-parser';
 import { isAuth } from './middleware/isAuth';
 import { createAuthRateLimit } from './middleware/rateLimit';
 import { schema } from './schema';
+import { formatError } from './utils/errors';
 
 // CORS_ORIGINS is a comma-separated list of front-end origins; CLIENT_URL is always allowed too
 const allowedOrigins = () =>
@@ -43,6 +44,7 @@ export const createApp = async () => {
   const httpServer = http.createServer(app);
   const server = new ApolloServer({
     schema,
+    formatError,
     plugins: [ApolloServerPluginDrainHttpServer({ httpServer })]
   });
 

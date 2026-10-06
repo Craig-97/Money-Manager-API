@@ -1,4 +1,4 @@
-import type { PaymentFrequency } from '../../models/RecurringPayment';
+import type { PaymentFrequency } from '../../constants/payment';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

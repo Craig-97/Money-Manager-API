@@ -1,8 +1,15 @@
 import type { NextFunction, Request, Response } from 'express';
-import { GraphQLError } from 'graphql';
 import jwt from 'jsonwebtoken';
-import type { Types } from 'mongoose';
-import { User } from '../models/User';
+import { isValidObjectId, type Types } from 'mongoose';
+import { Account } from '../models/account/Account';
+import { User } from '../models/user/User';
+import { authLog } from '../utils/logger';
+import {
+  FORBIDDEN,
+  TOKEN_EXPIRED,
+  TOKEN_INVALID,
+  TOKEN_REVOKED
+} from '../utils/errors';
 
 export const isAuth = async (req: Request, _: Response, next: NextFunction) => {
   const authHeader = req.get('Authorization');
@@ -23,6 +30,9 @@ export const isAuth = async (req: Request, _: Response, next: NextFunction) => {
   } catch (err) {
     if (err instanceof Error && err.message === 'jwt expired') {
       req.isExpired = true;
+    } else {
+      // Not signed by this API, or tampered with
+      authLog.warn({ event: 'token_invalid', ip: req.ip }, 'Invalid access token');
     }
     return next();
   }
@@ -32,9 +42,9 @@ export const isAuth = async (req: Request, _: Response, next: NextFunction) => {
     return next();
   }
 
-  // Get user and their account ID
   const userId = (decodedToken as jwt.JwtPayload).userId;
-  const user = await User.findById(userId);
+  // Runs on every request, so only the field it needs, as a plain object
+  const user = await User.findById(userId).select('tokenVersion').lean();
   if (!user) {
     return next();
   }
@@ -46,10 +56,6 @@ export const isAuth = async (req: Request, _: Response, next: NextFunction) => {
     return next();
   }
 
-  if (!req.accountId) {
-    req.accountId = user.account;
-  }
-
   // Request is now authorised and user id attached so user can be found via a token
   req.isAuth = true;
   req.userId = userId;
@@ -59,41 +65,24 @@ export const isAuth = async (req: Request, _: Response, next: NextFunction) => {
 // Throws GraphQL errors based on authentication status
 export const checkAuth = (req: Request) => {
   if (req.isExpired) {
-    throw new GraphQLError('Unauthenticated! - Expired token', {
-      extensions: {
-        code: 'UNAUTHENTICATED',
-        expired: true
-      }
-    });
+    throw TOKEN_EXPIRED();
   } else if (req.isRevoked) {
-    throw new GraphQLError('Unauthenticated! - Signed out', {
-      extensions: {
-        code: 'UNAUTHENTICATED',
-        invalid: true,
-        revoked: true
-      }
-    });
+    throw TOKEN_REVOKED();
   } else if (!req.isAuth) {
-    throw new GraphQLError('Unauthenticated! - Invalid token', {
-      extensions: {
-        code: 'UNAUTHENTICATED',
-        invalid: true
-      }
-    });
+    throw TOKEN_INVALID();
   }
 };
 
-// Check if user has permission to modify the resource
+// The account has to belong to the signed-in user. Someone else's account is refused the same as one
+// that doesn't exist, so the answer doesn't reveal which ids are real.
 export const checkAccountAccess = async (
-  resourceAccountId: Types.ObjectId | string,
+  accountId: Types.ObjectId | string | null | undefined,
   req: Request
 ) => {
-  if (!req.accountId || resourceAccountId.toString() !== req.accountId.toString()) {
-    throw new GraphQLError('Unauthorized! You can only modify your own data', {
-      extensions: {
-        code: 'FORBIDDEN',
-        unauthorized: true
-      }
-    });
+  if (!req.userId || !accountId || !isValidObjectId(accountId)) {
+    throw FORBIDDEN();
+  }
+  if (!(await Account.exists({ _id: accountId, user: req.userId }))) {
+    throw FORBIDDEN();
   }
 };

@@ -1,8 +1,8 @@
 import { parse, buildASTSchema, GraphQLEnumType } from 'graphql';
-import { PaymentType } from '../../constants/paymentType';
-import { OneOffPaymentCategory } from '../../models/OneOffPayment';
-import { BankHolidayRegion, Weekday } from '../../models/Payday';
-import { RecurringPaymentCategory } from '../../models/RecurringPayment';
+import { PaymentType } from '../../constants/payment/paymentType';
+import { OneOffPaymentCategory } from '../../constants/payment';
+import { BankHolidayRegion, Weekday } from '../../constants/payday';
+import { RecurringPaymentCategory } from '../../constants/payment';
 import { enumValues, gqlEnum } from '../../utils/helpers/enumHelpers';
 import { typeDefs } from '../../typeDefs';
 

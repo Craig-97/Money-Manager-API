@@ -5,13 +5,12 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { createApp } from '../../app';
 import { resetRateLimits } from '../../middleware/rateLimit';
-import '../../models/User';
-import '../../models/Account';
-import '../../models/Bill';
-import '../../models/Note';
-import '../../models/OneOffPayment';
-import '../../models/Payday';
-import '../../models/RecurringPayment';
+import '../../models/user/User';
+import '../../models/account/Account';
+import '../../models/note/Note';
+import '../../models/payment/OneOffPayment';
+import '../../models/payday/Payday';
+import '../../models/payment/RecurringPayment';
 
 export interface GqlError {
   message: string;
@@ -87,14 +86,14 @@ export const expiredToken = (userId: string) =>
   jwt.sign({ userId, email: 'x@x.com' }, process.env.JWT_KEY as string, { expiresIn: -10 });
 
 const REGISTER = `
-  mutation ($user: UserInput) {
-    registerAndLogin(user: $user) { token tokenExpiration user { id email firstName surname account } }
+  mutation ($input: RegisterInput!) {
+    registerAndLogin(input: $input) { token tokenExpiration user { id email firstName surname account } }
   }
 `;
 
 const CREATE_ACCOUNT = `
-  mutation ($account: CreateAccountInput!) {
-    createAccount(account: $account) { success account { id bankBalance monthlyIncome } }
+  mutation ($input: CreateAccountInput!) {
+    createAccount(input: $input) { success account { id bankBalance monthlyIncome } }
   }
 `;
 
@@ -117,7 +116,7 @@ export interface Credentials {
 
 interface CreateUserOptions {
   withAccount?: boolean;
-  // Extra fields merged into the createAccount input (bills, payday, ...)
+  // Extra fields merged into the createAccount input (payday, recurringPayments, ...)
   account?: Variables;
 }
 
@@ -136,14 +135,14 @@ export async function createUserWithAccount({
   const email = `user${counter}-${crypto.randomBytes(3).toString('hex')}@example.com`;
   const password = 'Password123!';
   const registered = await gql(REGISTER, {
-    user: { email, password, firstName: 'Test', surname: `User${counter}` }
+    input: { email, password, firstName: 'Test', surname: `User${counter}` }
   });
   const { token, user } = registered.data.registerAndLogin;
   if (!withAccount) return { token, user, email, password };
 
   const created = await gql(
     CREATE_ACCOUNT,
-    { account: { bankBalance: 1000, monthlyIncome: 2000, userId: user.id, ...account } },
+    { input: { bankBalance: 1000, monthlyIncome: 2000, ...account } },
     token
   );
   const accountId = created.data.createAccount.account.id;

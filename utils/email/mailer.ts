@@ -1,4 +1,5 @@
 import nodemailer, { type Transporter } from 'nodemailer';
+import { logger } from '../logger';
 
 export interface Email {
   to: string;
@@ -29,9 +30,9 @@ const getTransporter = () => {
 export const sendEmail = async (email: Email) => {
   if (!process.env.SMTP_HOST) {
     if (process.env.NODE_ENV === 'production') {
-      console.error(`SMTP_HOST is not set, so the email "${email.subject}" was not sent`);
+      logger.error({ subject: email.subject }, 'SMTP_HOST is not set, so an email was not sent');
     } else {
-      console.info(`[email] To: ${email.to}\nSubject: ${email.subject}\n\n${email.text}`);
+      logger.info({ to: email.to, subject: email.subject, text: email.text }, 'Email not sent (no SMTP_HOST)');
     }
     return;
   }
