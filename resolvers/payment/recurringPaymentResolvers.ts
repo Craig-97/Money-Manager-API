@@ -13,7 +13,6 @@ import {
   INVALID_RECURRING_PAYMENT_TYPE,
   withTransaction,
   validateUniqueName,
-  incrementVersion,
   parseInput,
   newRecurring,
   recurringInput
@@ -73,7 +72,8 @@ const updateRecurringPayment = async (
 
   // save() rather than findOneAndUpdate, so the model works out the new due date when the
   // schedule changes
-  incrementVersion(Object.assign(payment, input));
+  // A schedule change clears handled, which Mongoose versions itself; increment() joins in
+  Object.assign(payment, input).increment();
   await payment.save();
 
   return { recurringPayment: payment, success: true };

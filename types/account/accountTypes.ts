@@ -29,6 +29,7 @@ export interface MarkPaymentsUnpaidInput {
 export interface SkipRecurringPaymentsInput {
   accountId: string;
   recurringPaymentIds: string[];
+  until?: string | null;
 }
 
 export interface StartPaydayCycleInput {

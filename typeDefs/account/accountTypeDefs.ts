@@ -33,7 +33,7 @@ export const accountTypeDefs = `
 
   input MarkPaymentsPaidInput {
     accountId: ID!
-    # Marked paid until the next cycle starts
+    # Each has its next date paid, and moves on to the date after
     recurringPaymentIds: [ID!]!
     # Deleted once paid
     oneOffPaymentIds: [ID!]!
@@ -47,6 +47,9 @@ export const accountTypeDefs = `
   input SkipRecurringPaymentsInput {
     accountId: ID!
     recurringPaymentIds: [ID!]!
+    # Skips every date before this day (YYYY-MM-DD), usually the next payday. Without it, only the
+    # next date is skipped.
+    until: String
   }
 
   input StartPaydayCycleInput {
@@ -55,7 +58,7 @@ export const accountTypeDefs = `
     payday: String!
     # The balance the user confirmed
     bankBalance: Float!
-    # Recurring payments to reset to unpaid and move on to their next date
+    # Recurring payments with dates left over from the last cycle, to move on to their next date
     recurringPaymentIds: [ID!]!
   }
 
@@ -68,13 +71,14 @@ export const accountTypeDefs = `
     createAccount(input: CreateAccountInput!): AccountResponse!
     updateAccount(id: ID!, input: UpdateAccountInput!): AccountResponse!
     startPaydayCycle(input: StartPaydayCycleInput!): AccountResponse!
-    # Takes the payments off (or adds income to) the bank balance: recurring ones are marked paid
-    # for this cycle and one-offs are deleted
+    # Takes the payments off (or adds income to) the bank balance: recurring ones have their next
+    # date paid and one-offs are deleted
     markPaymentsPaid(input: MarkPaymentsPaidInput!): AccountResponse!
-    # Undoes marking recurring payments paid, putting their amounts back on the balance. Skipped
-    # ones go back to unpaid with the balance left alone.
+    # Undoes the latest pay or skip on each recurring payment, bringing its dates back. Paid ones
+    # put their amounts back on the balance.
     markPaymentsUnpaid(input: MarkPaymentsUnpaidInput!): AccountResponse!
-    # Leaves unpaid recurring payments out of this cycle; they come back on their next date
+    # Leaves recurring payments' dates unpaid without touching the balance: the next one, or
+    # every one before until
     skipRecurringPayments(input: SkipRecurringPaymentsInput!): AccountResponse!
   }
 `;

@@ -9,7 +9,7 @@ import type {
   StartPaydayCycleInput,
 } from "../../types/account/accountTypes";
 import { PaymentType } from "../../constants/payment/paymentType";
-import { PaymentStatus } from "../../constants/payment/paymentStatus";
+import { PaymentOutcome } from "../../constants/payment/paymentOutcome";
 import { checkAccountAccess, checkAuth } from "../../middleware/isAuth";
 import { Account } from "../../models/account/Account";
 import { User } from "../../models/user/User";
@@ -32,8 +32,14 @@ import {
   newAccount,
   accountInput,
   paydayCycle,
+  skipRecurring,
 } from "../../utils";
-import { addDays, nextOccurrence, ukDay } from "../../utils/dates";
+import {
+  addDays,
+  nextOccurrence,
+  occurrencesBefore,
+  ukDay,
+} from "../../utils/dates";
 
 type AccountDocument = InstanceType<typeof Account>;
 
@@ -165,8 +171,9 @@ const updateAccount = async (
   return { account, success: true };
 };
 
-// Payday: sets the confirmed balance and moves the chosen recurring payments on to their next
-// date as unpaid. Recording the payday stops the prompt showing again for it.
+// Payday: sets the confirmed balance, moves the chosen recurring payments on from dates left over
+// from the last cycle, and clears what was paid or skipped in it. Recording the payday stops the
+// prompt showing again for it.
 const startPaydayCycle = async (
   _: unknown,
   { input }: { input: StartPaydayCycleInput },
@@ -185,29 +192,36 @@ const startPaydayCycle = async (
       throw ACCOUNT_NOT_FOUND(accountId);
     }
 
-    const today = ukDay();
     const cycleStart = new Date(payday);
-    // Sequential: operations within a transaction session can't run in parallel
-    for (const id of recurringPaymentIds) {
-      const payment = await RecurringPayment.findOne({
-        _id: id,
-        account: accountId,
-      }).session(session);
-      if (!payment) {
+    const payments = await RecurringPayment.find({ account: accountId }).session(
+      session,
+    );
+    const chosen = new Set(recurringPaymentIds);
+    for (const id of chosen) {
+      if (!payments.some((payment) => payment.id === id)) {
         throw RECURRING_PAYMENT_NOT_FOUND(id);
       }
-      // Due on or after payday, so already part of the new cycle: moving it would skip a payment
-      if (payment.nextDueDate && payment.nextDueDate >= cycleStart) continue;
-      // The next date after the one just dealt with, and never one already in the past
-      const after = payment.nextDueDate
-        ? addDays(payment.nextDueDate, 1)
-        : today;
-      payment.nextDueDate = nextOccurrence(
-        payment,
-        after > today ? after : today,
+    }
+
+    // Sequential: operations within a transaction session can't run in parallel
+    for (const payment of payments) {
+      // Done with once the cycle has ended. Anything already dealt with from payday on belongs to
+      // the new cycle, so it stays and can still be undone.
+      const handled = payment.handled.filter((entry) =>
+        entry.dates.some((date) => date >= cycleStart),
       );
-      payment.status = PaymentStatus.UNPAID;
-      incrementVersion(payment);
+      // Its dates before payday weren't paid or skipped: the new cycle starts from its first date
+      // from payday on
+      const moves =
+        chosen.has(payment.id) &&
+        payment.nextDueDate &&
+        payment.nextDueDate < cycleStart;
+      if (handled.length === payment.handled.length && !moves) continue;
+
+      payment.set("handled", handled);
+      if (moves) payment.nextDueDate = nextOccurrence(payment, cycleStart);
+      // Mongoose versions changes to handled itself; increment() joins in rather than clashing
+      payment.increment();
       await payment.save({ session });
     }
 
@@ -226,17 +240,16 @@ const balanceChange = (payment: { amount: number; type: string }) =>
 
 const roundPence = (amount: number) => Math.round(amount * 100) / 100;
 
+type RecurringPaymentDocument = InstanceType<typeof RecurringPayment>;
+
 /*
- * Changes the status of some of an account's recurring payments in one transaction. `change`
- * decides each payment's new status and what it does to the balance, or returns null to leave it.
+ * Pays, skips or undoes some of an account's recurring payments in one transaction. `change`
+ * updates a payment and returns what it does to the balance, or null when it leaves it alone.
  */
-const changeRecurringStatus = (
+const changeRecurringPayments = (
   accountId: string,
   recurringPaymentIds: string[],
-  change: (payment: InstanceType<typeof RecurringPayment>) => {
-    status: PaymentStatus;
-    balance: number;
-  } | null,
+  change: (payment: RecurringPaymentDocument) => number | null,
   // Further work in the same transaction, returning its own effect on the balance
   more?: (session: ClientSession) => Promise<number>,
 ) =>
@@ -256,11 +269,10 @@ const changeRecurringStatus = (
       if (!payment) {
         throw RECURRING_PAYMENT_NOT_FOUND(id);
       }
-      const next = change(payment);
-      if (!next) continue;
-      balance += next.balance;
-      payment.status = next.status;
-      incrementVersion(payment);
+      const effect = change(payment);
+      if (effect === null) continue;
+      balance += effect;
+      payment.increment();
       await payment.save({ session });
     }
 
@@ -273,8 +285,23 @@ const changeRecurringStatus = (
     return { account, success: true };
   });
 
-// Paying payments from the dashboard, as the bank balance sees it. Recurring payments stay listed
-// as paid until the next cycle; one-offs are done with, so they're deleted.
+/*
+ * Records some of a payment's dates as paid or skipped, moving it on to the date after the last.
+ * Returns false when there's nothing to record.
+ */
+const handle = (
+  payment: RecurringPaymentDocument,
+  outcome: PaymentOutcome,
+  dates: Date[],
+) => {
+  if (!dates.length) return false;
+  payment.handled.push({ outcome, dates });
+  payment.nextDueDate = nextOccurrence(payment, addDays(dates[dates.length - 1], 1));
+  return true;
+};
+
+// Paying payments from the dashboard, as the bank balance sees it. A recurring payment has its
+// next date paid and moves on to the one after; one-offs are done with, so they're deleted.
 const markPaymentsPaid = async (
   _: unknown,
   { input }: { input: MarkPaymentsPaidInput },
@@ -284,14 +311,15 @@ const markPaymentsPaid = async (
   const { accountId, recurringPaymentIds, oneOffPaymentIds } = input;
   await checkAccountAccess(accountId, req);
 
-  return changeRecurringStatus(
+  return changeRecurringPayments(
     accountId,
     recurringPaymentIds,
-    // Already paid: its amount has already come off the balance
-    (payment) =>
-      payment.status === PaymentStatus.PAID
-        ? null
-        : { status: PaymentStatus.PAID, balance: balanceChange(payment) },
+    (payment) => {
+      // Nothing to pay once it has ended
+      if (!payment.nextDueDate) return null;
+      handle(payment, PaymentOutcome.PAID, [payment.nextDueDate]);
+      return balanceChange(payment);
+    },
     async (session) => {
       let balance = 0;
       for (const id of oneOffPaymentIds) {
@@ -310,7 +338,8 @@ const markPaymentsPaid = async (
   );
 };
 
-// Paid ones get their amounts back on the balance; skipped ones just go back to unpaid
+// Undoes the latest pay or skip on each payment, bringing its dates back. A payment that was paid
+// gets its amount back on the balance.
 const markPaymentsUnpaid = async (
   _: unknown,
   { input }: { input: MarkPaymentsUnpaidInput },
@@ -320,33 +349,36 @@ const markPaymentsUnpaid = async (
   const { accountId, recurringPaymentIds } = input;
   await checkAccountAccess(accountId, req);
 
-  return changeRecurringStatus(accountId, recurringPaymentIds, (payment) => {
-    if (payment.status === PaymentStatus.PAID) {
-      return { status: PaymentStatus.UNPAID, balance: -balanceChange(payment) };
-    }
-    if (payment.status === PaymentStatus.SKIPPED) {
-      return { status: PaymentStatus.UNPAID, balance: 0 };
-    }
-    return null;
+  return changeRecurringPayments(accountId, recurringPaymentIds, (payment) => {
+    const latest = payment.handled.pop();
+    if (!latest) return null;
+    payment.nextDueDate = latest.dates[0];
+    return latest.outcome === PaymentOutcome.PAID ? -balanceChange(payment) : 0;
   });
 };
 
-// Leaves unpaid payments out of this cycle; the next cycle moves them on to their next date.
-// Paid ones are left alone, as their amounts have already come off the balance.
+// Leaves payments' dates unpaid without touching the balance: the next date, or every date before
+// `until` (usually the next payday) to skip the rest of a cycle at once.
 const skipRecurringPayments = async (
   _: unknown,
   { input }: { input: SkipRecurringPaymentsInput },
   req: Request,
 ) => {
   checkAuth(req);
-  const { accountId, recurringPaymentIds } = input;
+  const { accountId, recurringPaymentIds, until } = parseInput(
+    skipRecurring,
+    input,
+  );
   await checkAccountAccess(accountId, req);
 
-  return changeRecurringStatus(accountId, recurringPaymentIds, (payment) =>
-    payment.status === PaymentStatus.UNPAID
-      ? { status: PaymentStatus.SKIPPED, balance: 0 }
-      : null,
-  );
+  return changeRecurringPayments(accountId, recurringPaymentIds, (payment) => {
+    const next = payment.nextDueDate;
+    if (!next) return null;
+    const dates = until
+      ? occurrencesBefore(payment, next, new Date(until))
+      : [next];
+    return handle(payment, PaymentOutcome.SKIPPED, dates) ? 0 : null;
+  });
 };
 
 const byAmount = { amount: 1 } as const;

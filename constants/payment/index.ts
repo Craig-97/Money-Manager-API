@@ -1,5 +1,5 @@
 export * from './oneOffPaymentCategory';
 export * from './paymentFrequency';
-export * from './paymentStatus';
+export * from './paymentOutcome';
 export * from './paymentType';
 export * from './recurringPaymentCategory';

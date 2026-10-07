@@ -17,3 +17,5 @@ export const newAccount = z.looseObject({
 export const accountInput = z.looseObject({ bankBalance: money.optional(), monthlyIncome: money.optional() });
 
 export const paydayCycle = z.looseObject({ payday: isoDay, bankBalance: money });
+
+export const skipRecurring = z.looseObject({ until: isoDay.nullish() });

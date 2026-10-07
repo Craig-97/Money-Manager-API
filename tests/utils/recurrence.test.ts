@@ -1,4 +1,4 @@
-import { nextOccurrence, occurrence, ukDay } from '../../utils/dates';
+import { nextOccurrence, occurrence, occurrencesBefore, ukDay } from '../../utils/dates';
 
 const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
 const iso = (date: Date | null) => date?.toISOString().slice(0, 10) ?? null;
@@ -34,6 +34,26 @@ describe('nextOccurrence', () => {
     const ending = { ...schedule, lastPaymentDate: day('2030-02-15') };
     expect(iso(nextOccurrence(ending, day('2030-02-15')))).toBe('2030-02-15');
     expect(nextOccurrence(ending, day('2030-02-16'))).toBeNull();
+  });
+});
+
+describe('occurrencesBefore', () => {
+  const weekly = { firstPaymentDate: day('2030-01-07'), frequency: 'WEEKLY' as const };
+
+  it('lists the dates from the first on or after `from` up to, not including, `until`', () => {
+    expect(occurrencesBefore(weekly, day('2030-01-08'), day('2030-02-04')).map(iso)).toEqual([
+      '2030-01-14',
+      '2030-01-21',
+      '2030-01-28'
+    ]);
+  });
+
+  it('stops at the last payment', () => {
+    const ending = { ...weekly, lastPaymentDate: day('2030-01-14') };
+    expect(occurrencesBefore(ending, day('2030-01-01'), day('2030-02-04')).map(iso)).toEqual([
+      '2030-01-07',
+      '2030-01-14'
+    ]);
   });
 });
 

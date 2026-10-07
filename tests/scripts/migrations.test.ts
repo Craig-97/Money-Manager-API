@@ -43,13 +43,13 @@ describe('migrateBills', () => {
     await run(true);
 
     const body = await gql(
-      `query { account { recurringPayments { name amount type category frequency status firstPaymentDate } } }`,
+      `query { account { recurringPayments { name amount type category frequency handled { outcome } firstPaymentDate } } }`,
       undefined,
       token
     );
     expect(body.errors).toBeUndefined();
     const firstPaymentDate = String(new Date('2030-01-15').getTime());
-    const common = { type: 'EXPENSE', category: 'OTHER', frequency: 'MONTHLY', status: 'UNPAID', firstPaymentDate };
+    const common = { type: 'EXPENSE', category: 'OTHER', frequency: 'MONTHLY', handled: [], firstPaymentDate };
     expect(body.data.account.recurringPayments).toEqual([
       { name: 'Phone', amount: 20, ...common },
       { name: 'Rent', amount: 800, ...common }

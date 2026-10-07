@@ -62,3 +62,16 @@ export const nextOccurrence = (
   }
   return null;
 };
+
+/* Every date the payment falls on from `from` up to, but not including, `until` */
+export const occurrencesBefore = (schedule: Schedule, from: Date, until: Date) => {
+  const dates: Date[] = [];
+  for (
+    let date = nextOccurrence(schedule, from);
+    date && date < until;
+    date = nextOccurrence(schedule, addDays(date, 1))
+  ) {
+    dates.push(date);
+  }
+  return dates;
+};

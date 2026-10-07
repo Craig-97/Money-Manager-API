@@ -12,7 +12,7 @@ beforeAll(setupTestApp);
 afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
-const FIELDS = "id name nextDueDate status";
+const FIELDS = "id name nextDueDate handled { outcome dates }";
 const CREATE = `mutation ($input: CreateRecurringPaymentInput!) {
   createRecurringPayment(input: $input) { recurringPayment { ${FIELDS} } }
 }`;
@@ -27,11 +27,13 @@ const START = `mutation ($input: StartPaydayCycleInput!) {
 }`;
 const PAID = `mutation ($input: MarkPaymentsPaidInput!) {
   markPaymentsPaid(input: $input) {
-    account { bankBalance recurringPayments { id status } oneOffPayments { id } }
+    account { bankBalance recurringPayments { ${FIELDS} } oneOffPayments { id } }
   }
 }`;
 const UNPAID = `mutation ($input: MarkPaymentsUnpaidInput!) {
-  markPaymentsUnpaid(input: $input) { account { bankBalance recurringPayments { id status } } }
+  markPaymentsUnpaid(input: $input) {
+    account { bankBalance recurringPayments { ${FIELDS} } }
+  }
 }`;
 const SKIP = `mutation ($input: SkipRecurringPaymentsInput!) {
   skipRecurringPayments(input: $input) {
@@ -43,11 +45,22 @@ const SKIP = `mutation ($input: SkipRecurringPaymentsInput!) {
 // Dates come back through GraphQL String as epoch milliseconds
 const apiDate = (iso: string) => String(new Date(iso).getTime());
 
+const paid = (...dates: string[]) => ({
+  outcome: "PAID",
+  dates: dates.map(apiDate),
+});
+const skipped = (...dates: string[]) => ({
+  outcome: "SKIPPED",
+  dates: dates.map(apiDate),
+});
+
+// A £20 monthly expense unless the fields say otherwise
 const createPayment = async (
   token: string,
   accountId: string,
   name: string,
   firstPaymentDate: string,
+  fields: Record<string, unknown> = {},
 ) => {
   const body = await gql(
     CREATE,
@@ -60,6 +73,7 @@ const createPayment = async (
         frequency: "MONTHLY",
         type: "EXPENSE",
         firstPaymentDate,
+        ...fields,
       },
     },
     token,
@@ -67,7 +81,7 @@ const createPayment = async (
   return body.data.createRecurringPayment.recurringPayment;
 };
 
-// Marks recurring payments paid, as the dashboard does
+// Pays recurring payments' next dates, as the dashboard does
 const markPaid = (token: string, accountId: string, ids: string[]) =>
   gql(
     PAID,
@@ -75,11 +89,34 @@ const markPaid = (token: string, accountId: string, ids: string[]) =>
     token,
   );
 
-const skip = (token: string, accountId: string, ids: string[]) =>
-  gql(SKIP, { input: { accountId, recurringPaymentIds: ids } }, token);
+const markUnpaid = (token: string, accountId: string, ids: string[]) =>
+  gql(UNPAID, { input: { accountId, recurringPaymentIds: ids } }, token);
+
+const skip = (
+  token: string,
+  accountId: string,
+  ids: string[],
+  until?: string,
+) => gql(SKIP, { input: { accountId, recurringPaymentIds: ids, until } }, token);
+
+const startCycle = (
+  token: string,
+  accountId: string,
+  payday: string,
+  recurringPaymentIds: string[],
+) =>
+  gql(
+    START,
+    { input: { accountId, payday, bankBalance: 0, recurringPaymentIds } },
+    token,
+  );
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const byName = (payments: any[]): Record<string, any> =>
+  Object.fromEntries(payments.map((payment) => [payment.name, payment]));
 
 describe("recurring payment due dates", () => {
-  it("is due on its first payment date when that is still to come, unpaid", async () => {
+  it("is due on its first payment date when that is still to come, with nothing handled", async () => {
     const { token, accountId } = await createUserWithAccount();
     const payment = await createPayment(
       token,
@@ -90,7 +127,7 @@ describe("recurring payment due dates", () => {
 
     expect(payment).toMatchObject({
       nextDueDate: apiDate("2030-01-31"),
-      status: "UNPAID",
+      handled: [],
     });
   });
 
@@ -127,11 +164,11 @@ describe("recurring payment due dates", () => {
     );
     expect(account.data.account.recurringPayments[0]).toMatchObject({
       nextDueDate: apiDate("2030-02-01"),
-      status: "UNPAID",
+      handled: [],
     });
   });
 
-  it("can be marked paid or skipped without moving its date", async () => {
+  it("moves on to its next date once paid or skipped, recording the date it dealt with", async () => {
     const { token, accountId } = await createUserWithAccount();
     const netflix = await createPayment(
       token,
@@ -144,22 +181,21 @@ describe("recurring payment due dates", () => {
     await markPaid(token, accountId, [netflix.id]);
     const body = await skip(token, accountId, [gym.id]);
 
-    const byName = Object.fromEntries(
-      body.data.skipRecurringPayments.account.recurringPayments.map(
-        (p: { name: string }) => [p.name, p],
-      ),
+    const payments = byName(
+      body.data.skipRecurringPayments.account.recurringPayments,
     );
-    expect(byName.Netflix).toMatchObject({
-      nextDueDate: apiDate("2030-01-31"),
-      status: "PAID",
+    // 31 Jan moves on to the end of February
+    expect(payments.Netflix).toMatchObject({
+      nextDueDate: apiDate("2030-02-28"),
+      handled: [paid("2030-01-31")],
     });
-    expect(byName.Gym).toMatchObject({
-      nextDueDate: apiDate("2030-01-10"),
-      status: "SKIPPED",
+    expect(payments.Gym).toMatchObject({
+      nextDueDate: apiDate("2030-02-10"),
+      handled: [skipped("2030-01-10")],
     });
   });
 
-  it("starts unpaid on its new date when the schedule changes", async () => {
+  it("starts again on its new date when the schedule changes", async () => {
     const { token, accountId } = await createUserWithAccount();
     const { id } = await createPayment(
       token,
@@ -177,7 +213,7 @@ describe("recurring payment due dates", () => {
 
     expect(body.data.updateRecurringPayment.recurringPayment).toMatchObject({
       nextDueDate: apiDate("2030-03-05"),
-      status: "UNPAID",
+      handled: [],
     });
   });
 });
@@ -195,7 +231,7 @@ describe("a new account", () => {
 });
 
 describe("startPaydayCycle", () => {
-  it("sets the balance and moves the chosen payments on to their next date as unpaid", async () => {
+  it("sets the balance and moves the chosen payments on from dates left over", async () => {
     const { token, accountId } = await createUserWithAccount();
     const netflix = await createPayment(
       token,
@@ -204,7 +240,6 @@ describe("startPaydayCycle", () => {
       "2030-01-31",
     );
     const gym = await createPayment(token, accountId, "Gym", "2030-01-10");
-    await markPaid(token, accountId, [netflix.id, gym.id]);
 
     const body = await gql(
       START,
@@ -223,22 +258,13 @@ describe("startPaydayCycle", () => {
     const { account } = body.data.startPaydayCycle;
     expect(account.bankBalance).toBe(2500.5);
     expect(account.cycleStartedOn).toBe(apiDate("2030-02-01"));
-    const byName = Object.fromEntries(
-      account.recurringPayments.map((p: { name: string }) => [p.name, p]),
-    );
-    // 31 Jan moves to the end of February
-    expect(byName.Netflix).toMatchObject({
-      nextDueDate: apiDate("2030-02-28"),
-      status: "UNPAID",
-    });
-    // Not chosen, so left as it was
-    expect(byName.Gym).toMatchObject({
-      nextDueDate: apiDate("2030-01-10"),
-      status: "PAID",
-    });
+    const payments = byName(account.recurringPayments);
+    expect(payments.Netflix.nextDueDate).toBe(apiDate("2030-02-28"));
+    // Not chosen, so still due on its date in the last cycle
+    expect(payments.Gym.nextDueDate).toBe(apiDate("2030-01-10"));
   });
 
-  it("moves skipped payments on as unpaid too", async () => {
+  it("clears what was paid or skipped in the cycle that ended", async () => {
     const { token, accountId } = await createUserWithAccount();
     const netflix = await createPayment(
       token,
@@ -246,72 +272,77 @@ describe("startPaydayCycle", () => {
       "Netflix",
       "2030-01-31",
     );
-    await skip(token, accountId, [netflix.id]);
+    const gym = await createPayment(token, accountId, "Gym", "2030-01-10");
+    await markPaid(token, accountId, [netflix.id]);
+    await skip(token, accountId, [gym.id]);
 
-    const body = await gql(
-      START,
-      {
-        input: {
-          accountId,
-          payday: "2030-02-01",
-          bankBalance: 0,
-          recurringPaymentIds: [netflix.id],
-        },
-      },
+    const body = await startCycle(token, accountId, "2030-02-01", []);
+
+    const payments = byName(body.data.startPaydayCycle.account.recurringPayments);
+    expect(payments.Netflix).toMatchObject({
+      nextDueDate: apiDate("2030-02-28"),
+      handled: [],
+    });
+    expect(payments.Gym).toMatchObject({
+      nextDueDate: apiDate("2030-02-10"),
+      handled: [],
+    });
+  });
+
+  it("keeps dates dealt with from payday on, so they can still be undone", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const cleaner = await createPayment(
       token,
+      accountId,
+      "Cleaner",
+      "2030-01-28",
+      { frequency: "WEEKLY" },
+    );
+    await markPaid(token, accountId, [cleaner.id]);
+    await markPaid(token, accountId, [cleaner.id]);
+
+    const body = await startCycle(token, accountId, "2030-02-01", [cleaner.id]);
+
+    expect(body.data.startPaydayCycle.account.recurringPayments[0]).toMatchObject({
+      nextDueDate: apiDate("2030-02-11"),
+      handled: [paid("2030-02-04")],
+    });
+  });
+
+  it("moves a payment on to its first date from payday, not from today", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const cleaner = await createPayment(
+      token,
+      accountId,
+      "Cleaner",
+      "2030-01-21",
+      { frequency: "WEEKLY" },
     );
 
+    const body = await startCycle(token, accountId, "2030-02-01", [cleaner.id]);
+
     expect(
-      body.data.startPaydayCycle.account.recurringPayments[0],
-    ).toMatchObject({
-      nextDueDate: apiDate("2030-02-28"),
-      status: "UNPAID",
-    });
+      body.data.startPaydayCycle.account.recurringPayments[0].nextDueDate,
+    ).toBe(apiDate("2030-02-04"));
   });
 
   it("leaves payments due from payday on where they are, as they belong to the new cycle", async () => {
     const { token, accountId } = await createUserWithAccount();
     const gym = await createPayment(token, accountId, "Gym", "2030-02-04");
-    await markPaid(token, accountId, [gym.id]);
 
-    const body = await gql(
-      START,
-      {
-        input: {
-          accountId,
-          payday: "2030-01-31",
-          bankBalance: 0,
-          recurringPaymentIds: [gym.id],
-        },
-      },
-      token,
-    );
+    const body = await startCycle(token, accountId, "2030-01-31", [gym.id]);
 
     expect(body.errors).toBeUndefined();
     expect(
-      body.data.startPaydayCycle.account.recurringPayments[0],
-    ).toMatchObject({
-      nextDueDate: apiDate("2030-02-04"),
-      status: "PAID",
-    });
+      body.data.startPaydayCycle.account.recurringPayments[0].nextDueDate,
+    ).toBe(apiDate("2030-02-04"));
   });
 
   it("refuses another user's account", async () => {
     const owner = await createUserWithAccount();
     const other = await createUserWithAccount();
 
-    const body = await gql(
-      START,
-      {
-        input: {
-          accountId: owner.accountId,
-          payday: "2030-01-31",
-          bankBalance: 0,
-          recurringPaymentIds: [],
-        },
-      },
-      other.token,
-    );
+    const body = await startCycle(other.token, owner.accountId, "2030-01-31", []);
 
     expect(errorCode(body)).toBe("FORBIDDEN");
   });
@@ -326,18 +357,9 @@ describe("startPaydayCycle", () => {
       "2030-01-31",
     );
 
-    const body = await gql(
-      START,
-      {
-        input: {
-          accountId: owner.accountId,
-          payday: "2030-01-31",
-          bankBalance: 0,
-          recurringPaymentIds: [theirs.id],
-        },
-      },
-      owner.token,
-    );
+    const body = await startCycle(owner.token, owner.accountId, "2030-01-31", [
+      theirs.id,
+    ]);
 
     expect(errorCode(body)).toBe("RECURRING_PAYMENT_NOT_FOUND");
   });
@@ -372,7 +394,7 @@ describe("marking payments paid", () => {
       )
     ).data.createOneOffPayment.oneOffPayment.id;
 
-  it("takes recurring payments off the balance and marks them paid", async () => {
+  it("takes a recurring payment off the balance and moves it on to its next date", async () => {
     const { token, accountId } = await createUserWithAccount();
     const netflix = await createPayment(
       token,
@@ -388,23 +410,48 @@ describe("marking payments paid", () => {
     // The test account starts with £1,000 and Netflix is £20
     expect(account.bankBalance).toBe(980);
     expect(account.recurringPayments).toEqual([
-      { id: netflix.id, status: "PAID" },
+      expect.objectContaining({
+        nextDueDate: apiDate("2030-02-28"),
+        handled: [paid("2030-01-31")],
+      }),
     ]);
   });
 
-  it("doesn't take a payment off twice", async () => {
+  it("pays one date at a time, for a payment due more than once a cycle", async () => {
     const { token, accountId } = await createUserWithAccount();
-    const netflix = await createPayment(
+    const cleaner = await createPayment(
       token,
       accountId,
-      "Netflix",
-      "2030-01-31",
+      "Cleaner",
+      "2030-01-07",
+      { frequency: "WEEKLY" },
     );
 
-    await markPaid(token, accountId, [netflix.id]);
-    const body = await markPaid(token, accountId, [netflix.id]);
+    await markPaid(token, accountId, [cleaner.id]);
+    const body = await markPaid(token, accountId, [cleaner.id]);
 
-    expect(body.data.markPaymentsPaid.account.bankBalance).toBe(980);
+    const { account } = body.data.markPaymentsPaid;
+    expect(account.bankBalance).toBe(960);
+    expect(account.recurringPayments[0]).toMatchObject({
+      nextDueDate: apiDate("2030-01-21"),
+      handled: [paid("2030-01-07"), paid("2030-01-14")],
+    });
+  });
+
+  it("has nothing to pay once a payment has ended", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const ended = await createPayment(token, accountId, "Old gym", "2020-01-15", {
+      lastPaymentDate: "2020-03-15",
+    });
+
+    const body = await markPaid(token, accountId, [ended.id]);
+
+    const { account } = body.data.markPaymentsPaid;
+    expect(account.bankBalance).toBe(1000);
+    expect(account.recurringPayments[0]).toMatchObject({
+      nextDueDate: null,
+      handled: [],
+    });
   });
 
   it("settles one-off payments, adding income, and deletes them", async () => {
@@ -453,51 +500,6 @@ describe("marking payments paid", () => {
     });
   });
 
-  it("puts the amount back when a recurring payment is marked unpaid", async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const netflix = await createPayment(
-      token,
-      accountId,
-      "Netflix",
-      "2030-01-31",
-    );
-    await markPaid(token, accountId, [netflix.id]);
-
-    const body = await gql(
-      UNPAID,
-      { input: { accountId, recurringPaymentIds: [netflix.id] } },
-      token,
-    );
-
-    expect(body.data.markPaymentsUnpaid.account).toEqual({
-      bankBalance: 1000,
-      recurringPayments: [{ id: netflix.id, status: "UNPAID" }],
-    });
-  });
-
-  it("turns a skipped payment back to unpaid without touching the balance", async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const netflix = await createPayment(
-      token,
-      accountId,
-      "Netflix",
-      "2030-01-31",
-    );
-    await skip(token, accountId, [netflix.id]);
-
-    const body = await gql(
-      UNPAID,
-      { input: { accountId, recurringPaymentIds: [netflix.id] } },
-      token,
-    );
-
-    expect(body.errors).toBeUndefined();
-    expect(body.data.markPaymentsUnpaid.account).toEqual({
-      bankBalance: 1000,
-      recurringPayments: [{ id: netflix.id, status: "UNPAID" }],
-    });
-  });
-
   it("refuses another user's account", async () => {
     const owner = await createUserWithAccount();
     const other = await createUserWithAccount();
@@ -518,8 +520,89 @@ describe("marking payments paid", () => {
   });
 });
 
+describe("markPaymentsUnpaid", () => {
+  it("puts the amount back and brings the paid date back", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const netflix = await createPayment(
+      token,
+      accountId,
+      "Netflix",
+      "2030-01-31",
+    );
+    await markPaid(token, accountId, [netflix.id]);
+
+    const body = await markUnpaid(token, accountId, [netflix.id]);
+
+    const { account } = body.data.markPaymentsUnpaid;
+    expect(account.bankBalance).toBe(1000);
+    expect(account.recurringPayments[0]).toMatchObject({
+      nextDueDate: apiDate("2030-01-31"),
+      handled: [],
+    });
+  });
+
+  it("undoes only the latest date paid", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const cleaner = await createPayment(
+      token,
+      accountId,
+      "Cleaner",
+      "2030-01-07",
+      { frequency: "WEEKLY" },
+    );
+    await markPaid(token, accountId, [cleaner.id]);
+    await markPaid(token, accountId, [cleaner.id]);
+
+    const body = await markUnpaid(token, accountId, [cleaner.id]);
+
+    const { account } = body.data.markPaymentsUnpaid;
+    expect(account.bankBalance).toBe(980);
+    expect(account.recurringPayments[0]).toMatchObject({
+      nextDueDate: apiDate("2030-01-14"),
+      handled: [paid("2030-01-07")],
+    });
+  });
+
+  it("brings a skipped date back without touching the balance", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const netflix = await createPayment(
+      token,
+      accountId,
+      "Netflix",
+      "2030-01-31",
+    );
+    await skip(token, accountId, [netflix.id]);
+
+    const body = await markUnpaid(token, accountId, [netflix.id]);
+
+    expect(body.errors).toBeUndefined();
+    const { account } = body.data.markPaymentsUnpaid;
+    expect(account.bankBalance).toBe(1000);
+    expect(account.recurringPayments[0]).toMatchObject({
+      nextDueDate: apiDate("2030-01-31"),
+      handled: [],
+    });
+  });
+
+  it("leaves a payment with nothing to undo alone", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const netflix = await createPayment(
+      token,
+      accountId,
+      "Netflix",
+      "2030-01-31",
+    );
+
+    const body = await markUnpaid(token, accountId, [netflix.id]);
+
+    const { account } = body.data.markPaymentsUnpaid;
+    expect(account.bankBalance).toBe(1000);
+    expect(account.recurringPayments[0].nextDueDate).toBe(apiDate("2030-01-31"));
+  });
+});
+
 describe("skipRecurringPayments", () => {
-  it("skips unpaid payments without touching the balance", async () => {
+  it("skips the next date without touching the balance", async () => {
     const { token, accountId } = await createUserWithAccount();
     const netflix = await createPayment(
       token,
@@ -534,12 +617,13 @@ describe("skipRecurringPayments", () => {
     const { success, account } = body.data.skipRecurringPayments;
     expect(success).toBe(true);
     expect(account.bankBalance).toBe(1000);
-    expect(account.recurringPayments).toEqual([
-      expect.objectContaining({ id: netflix.id, status: "SKIPPED" }),
-    ]);
+    expect(account.recurringPayments[0]).toMatchObject({
+      nextDueDate: apiDate("2030-02-28"),
+      handled: [skipped("2030-01-31")],
+    });
   });
 
-  it("leaves paid payments alone, as their amounts have already come off", async () => {
+  it("skips the date after one already paid", async () => {
     const { token, accountId } = await createUserWithAccount();
     const netflix = await createPayment(
       token,
@@ -547,20 +631,72 @@ describe("skipRecurringPayments", () => {
       "Netflix",
       "2030-01-31",
     );
-    const gym = await createPayment(token, accountId, "Gym", "2030-01-10");
     await markPaid(token, accountId, [netflix.id]);
 
-    const body = await skip(token, accountId, [netflix.id, gym.id]);
+    const body = await skip(token, accountId, [netflix.id]);
 
-    expect(body.errors).toBeUndefined();
     const { account } = body.data.skipRecurringPayments;
-    // Only Netflix's £20 has come off
+    // Only the paid date's £20 has come off
     expect(account.bankBalance).toBe(980);
-    const byName = Object.fromEntries(
-      account.recurringPayments.map((p: { name: string }) => [p.name, p]),
+    expect(account.recurringPayments[0]).toMatchObject({
+      nextDueDate: apiDate("2030-03-31"),
+      handled: [paid("2030-01-31"), skipped("2030-02-28")],
+    });
+  });
+
+  it("skips every date before until at once, and brings them back together", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const cleaner = await createPayment(
+      token,
+      accountId,
+      "Cleaner",
+      "2030-01-07",
+      { frequency: "WEEKLY" },
     );
-    expect(byName.Netflix.status).toBe("PAID");
-    expect(byName.Gym.status).toBe("SKIPPED");
+
+    const body = await skip(token, accountId, [cleaner.id], "2030-01-31");
+
+    expect(body.data.skipRecurringPayments.account.recurringPayments[0]).toMatchObject({
+      nextDueDate: apiDate("2030-02-04"),
+      handled: [skipped("2030-01-07", "2030-01-14", "2030-01-21", "2030-01-28")],
+    });
+
+    const undone = await markUnpaid(token, accountId, [cleaner.id]);
+    expect(undone.data.markPaymentsUnpaid.account.recurringPayments[0]).toMatchObject({
+      nextDueDate: apiDate("2030-01-07"),
+      handled: [],
+    });
+  });
+
+  it("skips nothing when the next date is from until on", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const netflix = await createPayment(
+      token,
+      accountId,
+      "Netflix",
+      "2030-01-31",
+    );
+
+    const body = await skip(token, accountId, [netflix.id], "2030-01-31");
+
+    expect(body.data.skipRecurringPayments.account.recurringPayments[0]).toMatchObject({
+      nextDueDate: apiDate("2030-01-31"),
+      handled: [],
+    });
+  });
+
+  it("rejects an until that isn't a date", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const netflix = await createPayment(
+      token,
+      accountId,
+      "Netflix",
+      "2030-01-31",
+    );
+
+    const body = await skip(token, accountId, [netflix.id], "next payday");
+
+    expect(errorCode(body)).toBe("BAD_USER_INPUT");
   });
 
   it("refuses payments that aren't on the account", async () => {
@@ -592,11 +728,11 @@ describe("skipRecurringPayments", () => {
 
     expect(errorCode(body)).toBe("FORBIDDEN");
     const mine = await gql(
-      `query { account { recurringPayments { status } } }`,
+      `query { account { recurringPayments { handled { outcome } } } }`,
       undefined,
       owner.token,
     );
-    expect(mine.data.account.recurringPayments).toEqual([{ status: "UNPAID" }]);
+    expect(mine.data.account.recurringPayments).toEqual([{ handled: [] }]);
   });
 
   it("requires authentication", async () => {
