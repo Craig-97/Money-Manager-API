@@ -216,6 +216,76 @@ describe("recurring payment due dates", () => {
       handled: [],
     });
   });
+
+  it("keeps what's been paid when only its last payment changes", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const { id } = await createPayment(token, accountId, "Phone", "2030-01-10");
+    await markPaid(token, accountId, [id]);
+
+    const body = await gql(
+      UPDATE,
+      { id, input: { lastPaymentDate: "2030-06-10" } },
+      token,
+    );
+
+    expect(body.data.updateRecurringPayment.recurringPayment).toMatchObject({
+      nextDueDate: apiDate("2030-02-10"),
+      handled: [paid("2030-01-10")],
+    });
+  });
+
+  it("has no date left when its new last payment is before the date due", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const { id } = await createPayment(token, accountId, "Phone", "2030-01-10");
+    await markPaid(token, accountId, [id]);
+
+    const body = await gql(
+      UPDATE,
+      { id, input: { lastPaymentDate: "2030-01-10" } },
+      token,
+    );
+
+    expect(body.data.updateRecurringPayment.recurringPayment).toMatchObject({
+      nextDueDate: null,
+      handled: [paid("2030-01-10")],
+    });
+  });
+
+  it("carries on after the latest date paid when an ended payment's last payment is removed", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const { id } = await createPayment(token, accountId, "Phone", "2030-01-10", {
+      lastPaymentDate: "2030-01-10",
+    });
+    await markPaid(token, accountId, [id]);
+
+    const body = await gql(
+      UPDATE,
+      { id, input: { lastPaymentDate: null } },
+      token,
+    );
+
+    expect(body.data.updateRecurringPayment.recurringPayment).toMatchObject({
+      nextDueDate: apiDate("2030-02-10"),
+      handled: [paid("2030-01-10")],
+    });
+  });
+
+  it("keeps its dates when its renewal changes", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const { id } = await createPayment(token, accountId, "Phone", "2030-01-10");
+    await markPaid(token, accountId, [id]);
+
+    const body = await gql(
+      UPDATE,
+      { id, input: { renewalDate: "2031-01-10", renewalReminderDays: 30 } },
+      token,
+    );
+
+    expect(body.data.updateRecurringPayment.recurringPayment).toMatchObject({
+      nextDueDate: apiDate("2030-02-10"),
+      handled: [paid("2030-01-10")],
+    });
+  });
 });
 
 describe("a new account", () => {

@@ -15,7 +15,8 @@ import {
   validateUniqueName,
   parseInput,
   newRecurring,
-  recurringInput
+  recurringInput,
+  updatedRecurring
 } from '../../utils';
 
 const createRecurringPayment = async (_: unknown, { input }: { input: CreateRecurringPaymentInput }, req: Request) => {
@@ -69,6 +70,9 @@ const updateRecurringPayment = async (
       throw RECURRING_PAYMENT_EXISTS(input.name);
     }
   }
+
+  // The renewal rules span fields the update may leave alone, so they're checked on the result
+  parseInput(updatedRecurring, { ...payment.toObject(), ...input });
 
   // save() rather than findOneAndUpdate, so the model works out the new due date when the
   // schedule changes

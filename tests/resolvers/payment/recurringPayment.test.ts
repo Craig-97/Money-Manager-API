@@ -14,7 +14,8 @@ beforeAll(setupTestApp);
 afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
-const FIELDS = 'id name amount category frequency type firstPaymentDate lastPaymentDate account';
+const FIELDS =
+  'id name amount category frequency type firstPaymentDate lastPaymentDate renewalDate renewalReminderDays account';
 const CREATE = `mutation ($input: CreateRecurringPaymentInput!) {
   createRecurringPayment(input: $input) { success recurringPayment { ${FIELDS} } }
 }`;
@@ -60,6 +61,48 @@ describe('createRecurringPayment', () => {
     expect(recurringPayment.firstPaymentDate).toBe(String(new Date('2030-01-01').getTime()));
     const account = await mongoose.model('Account').findById(accountId).populate('recurringPayments');
     expect(account.recurringPayments.map((r: { id: string }) => r.id)).toEqual([recurringPayment.id]);
+  });
+
+  it('keeps going with no renewal unless one is given', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const body = await makePayment(token, accountId, 'Gym');
+    expect(body.data.createRecurringPayment.recurringPayment).toMatchObject({
+      renewalDate: null,
+      renewalReminderDays: 0
+    });
+  });
+
+  it('saves a renewal and its reminder', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const body = await makePayment(token, accountId, 'Home insurance', {
+      renewalDate: '2031-01-01',
+      renewalReminderDays: 30
+    });
+    expect(body.errors).toBeUndefined();
+    expect(body.data.createRecurringPayment.recurringPayment).toMatchObject({
+      renewalDate: String(new Date('2031-01-01').getTime()),
+      renewalReminderDays: 30
+    });
+  });
+
+  it.each([
+    ['a reminder that is not one of the choices', { renewalReminderDays: 10 }],
+    ['a renewal and a last payment together', { renewalDate: '2031-01-01', lastPaymentDate: '2031-06-01' }],
+    ['a renewal date on a yearly payment', { renewalDate: '2031-01-01', frequency: 'ANNUALLY' }],
+    ['a renewal on or before the first payment', { renewalDate: '2030-01-01' }]
+  ])('rejects %s', async (_, extra) => {
+    const { token, accountId } = await createUserWithAccount();
+    const body = await makePayment(token, accountId, 'Bad', extra);
+    expect(errorCode(body)).toBe('BAD_USER_INPUT');
+  });
+
+  it('allows a reminder on a yearly payment, counted back from each payment', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const body = await makePayment(token, accountId, 'Car insurance', {
+      frequency: 'ANNUALLY',
+      renewalReminderDays: 30
+    });
+    expect(body.errors).toBeUndefined();
   });
 
   it('rejects a duplicate name', async () => {
@@ -154,6 +197,49 @@ describe('updateRecurringPayment', () => {
     const second = await makePayment(token, accountId, 'Second');
     const body = await gql(UPDATE, { id: idOf(second), input: { name: 'First' } }, token);
     expect(errorCode(body)).toBe('RECURRING_PAYMENT_EXISTS');
+  });
+
+  it('sets and clears a renewal', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const created = await makePayment(token, accountId, 'Phone');
+    const set = await gql(
+      UPDATE,
+      { id: idOf(created), input: { renewalDate: '2031-01-01', renewalReminderDays: 14 } },
+      token
+    );
+    expect(set.errors).toBeUndefined();
+    expect(set.data.updateRecurringPayment.recurringPayment).toMatchObject({
+      renewalDate: String(new Date('2031-01-01').getTime()),
+      renewalReminderDays: 14
+    });
+
+    const cleared = await gql(UPDATE, { id: idOf(created), input: { renewalDate: null } }, token);
+    expect(cleared.data.updateRecurringPayment.recurringPayment.renewalDate).toBeNull();
+  });
+
+  it('rejects a last payment on a payment that renews', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const created = await makePayment(token, accountId, 'Phone', { renewalDate: '2031-01-01' });
+    const body = await gql(UPDATE, { id: idOf(created), input: { lastPaymentDate: '2031-06-01' } }, token);
+    expect(errorCode(body)).toBe('BAD_USER_INPUT');
+  });
+
+  it('allows swapping a renewal for a last payment in one update', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const created = await makePayment(token, accountId, 'Phone', { renewalDate: '2031-01-01' });
+    const body = await gql(
+      UPDATE,
+      { id: idOf(created), input: { renewalDate: null, lastPaymentDate: '2031-06-01' } },
+      token
+    );
+    expect(body.errors).toBeUndefined();
+  });
+
+  it('rejects making a payment with a renewal date yearly', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const created = await makePayment(token, accountId, 'Phone', { renewalDate: '2031-01-01' });
+    const body = await gql(UPDATE, { id: idOf(created), input: { frequency: 'ANNUALLY' } }, token);
+    expect(errorCode(body)).toBe('BAD_USER_INPUT');
   });
 
   it('returns RECURRING_PAYMENT_NOT_FOUND for an unknown id', async () => {

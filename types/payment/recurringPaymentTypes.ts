@@ -8,7 +8,9 @@ export interface RecurringPaymentFields {
   frequency: PaymentFrequency;
   type: PaymentType;
   firstPaymentDate: string;
-  lastPaymentDate?: string;
+  lastPaymentDate?: string | null;
+  renewalDate?: string | null;
+  renewalReminderDays?: number;
 }
 
 export interface CreateRecurringPaymentInput extends RecurringPaymentFields {

@@ -24,6 +24,12 @@ export const recurringPaymentTypeDefs = `
     # What's been paid or skipped since the cycle started, oldest first. Changed by
     # markPaymentsPaid, skipRecurringPayments and markPaymentsUnpaid, which keep the balance right.
     handled: [HandledDates!]!
+    # When a policy or contract renews; the payments carry on past it. Never set on yearly
+    # payments, which renew with each payment.
+    renewalDate: String
+    # Days before it renews to show it as coming up: 0 (off), 7, 14 or 30. A yearly payment counts
+    # back from each payment.
+    renewalReminderDays: Int!
   }
 
   # One time a recurring payment was paid or skipped: one date, or the rest of a cycle at once
@@ -41,6 +47,8 @@ export const recurringPaymentTypeDefs = `
     type: PaymentType!
     firstPaymentDate: String!
     lastPaymentDate: String
+    renewalDate: String
+    renewalReminderDays: Int
   }
 
   # A recurring payment created alongside its account, so it has no accountId yet
@@ -52,6 +60,8 @@ export const recurringPaymentTypeDefs = `
     type: PaymentType!
     firstPaymentDate: String!
     lastPaymentDate: String
+    renewalDate: String
+    renewalReminderDays: Int
   }
 
   input UpdateRecurringPaymentInput {
@@ -62,6 +72,8 @@ export const recurringPaymentTypeDefs = `
     type: PaymentType
     firstPaymentDate: String
     lastPaymentDate: String
+    renewalDate: String
+    renewalReminderDays: Int
   }
 
   type RecurringPaymentResponse {

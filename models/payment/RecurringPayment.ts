@@ -2,7 +2,7 @@ import mongoose, { Schema, Types } from 'mongoose';
 import { PaymentFrequency, RecurringPaymentCategory } from '../../constants/payment';
 import { PaymentOutcome } from '../../constants/payment/paymentOutcome';
 import { PaymentType } from '../../constants/payment/paymentType';
-import { nextOccurrence, ukDay } from '../../utils/dates';
+import { addDays, nextOccurrence, ukDay } from '../../utils/dates';
 import { enumValues } from '../../utils/helpers/enumHelpers';
 
 // One time the payment was paid or skipped: a single date, or every date up to a payday when the
@@ -25,6 +25,12 @@ export interface RecurringPayment {
   nextDueDate?: Date | null;
   // What's been paid or skipped since the cycle started, oldest first, so the latest can be undone
   handled: HandledDates[];
+  // When a policy or contract renews. The payments carry on past it; it's a prompt to check the
+  // price. Yearly payments renew with each payment, so they never have one.
+  renewalDate?: Date | null;
+  // How many days before it renews to show it as coming up: 0 (off), 7, 14 or 30. For a yearly
+  // payment it counts back from each payment instead.
+  renewalReminderDays: number;
 }
 
 const handledDatesSchema = new Schema<HandledDates>(
@@ -87,6 +93,14 @@ const recurringPaymentSchema = new Schema<RecurringPayment>({
   handled: {
     type: [handledDatesSchema],
     default: []
+  },
+  renewalDate: {
+    type: Date,
+    default: null
+  },
+  renewalReminderDays: {
+    type: Number,
+    default: 0
   }
 });
 
@@ -94,15 +108,18 @@ const recurringPaymentSchema = new Schema<RecurringPayment>({
 // paid or skipped, as the old dates no longer apply. Updates go through save() so this runs for
 // them too.
 recurringPaymentSchema.pre('validate', function () {
-  const scheduleChanged =
-    this.isNew ||
-    this.isModified('firstPaymentDate') ||
-    this.isModified('frequency') ||
-    this.isModified('lastPaymentDate');
-  if (!scheduleChanged) return;
+  if (this.isNew || this.isModified('firstPaymentDate') || this.isModified('frequency')) {
+    this.nextDueDate = nextOccurrence(this, ukDay());
+    this.set('handled', []);
+    return;
+  }
+  if (!this.isModified('lastPaymentDate')) return;
 
-  this.nextDueDate = nextOccurrence(this, ukDay());
-  this.set('handled', []);
+  // Only the end moved, so the dates already paid or skipped still stand. Carry on from the date
+  // still due, or after the latest one dealt with if it had ended, else from today.
+  const latest = this.handled.at(-1)?.dates.at(-1);
+  const from = this.nextDueDate ?? (latest ? addDays(latest, 1) : ukDay());
+  this.nextDueDate = nextOccurrence(this, from);
 });
 
 // Used for finding all recurring payments belonging to an account
