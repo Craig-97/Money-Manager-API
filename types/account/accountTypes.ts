@@ -24,12 +24,24 @@ export interface MarkPaymentsPaidInput {
 export interface MarkPaymentsUnpaidInput {
   accountId: string;
   recurringPaymentIds: string[];
+  oneOffPaymentIds?: string[] | null;
+}
+
+export interface UndoDebtOverpaymentInput {
+  accountId: string;
+  recordId: string;
 }
 
 export interface SkipRecurringPaymentsInput {
   accountId: string;
   recurringPaymentIds: string[];
   until?: string | null;
+}
+
+export interface LogDebtOverpaymentInput {
+  accountId: string;
+  recurringPaymentId: string;
+  amount: number;
 }
 
 export interface StartPaydayCycleInput {

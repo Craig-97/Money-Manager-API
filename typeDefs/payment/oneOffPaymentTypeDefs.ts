@@ -14,6 +14,9 @@ export const oneOffPaymentTypeDefs = `
     dueDate: String!
     type: PaymentType!
     category: OneOffPaymentCategory!
+    # When it was marked paid. A paid one-off stays until the next payday, so it can be undone with
+    # markPaymentsUnpaid; payday clears it away.
+    paidAt: String
   }
 
   input CreateOneOffPaymentInput {

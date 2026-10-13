@@ -4,6 +4,7 @@ import { PaymentType } from '../../constants/payment/paymentType';
 import { enumValues } from '../../utils/helpers/enumHelpers';
 import { checkAuth, checkAccountAccess } from '../../middleware/isAuth';
 import { OneOffPayment } from '../../models/payment/OneOffPayment';
+import { PaymentRecord } from '../../models/payment/PaymentRecord';
 import {
   PAYMENT_NOT_FOUND,
   PAYMENTS_NOT_FOUND,
@@ -80,6 +81,8 @@ const batchDeleteOneOffPayments = async (_: unknown, { ids }: { ids: string[] },
     if (result.deletedCount !== ids.length) {
       throw PAYMENT_DELETE_FAILED();
     }
+    // Deleting a one-off removes it completely, a paid one's record included
+    await PaymentRecord.deleteMany({ oneOffPayment: { $in: ids } }).session(session);
 
     return { success: true, deletedCount: result.deletedCount, ids };
   });

@@ -7,9 +7,11 @@ import type {
   MarkPaymentsUnpaidInput,
   SkipRecurringPaymentsInput,
   StartPaydayCycleInput,
+  LogDebtOverpaymentInput,
+  UndoDebtOverpaymentInput,
 } from "../../types/account/accountTypes";
 import { PaymentType } from "../../constants/payment/paymentType";
-import { PaymentOutcome } from "../../constants/payment/paymentOutcome";
+import { PaymentRecordKind } from "../../constants/payment/paymentRecordKind";
 import { checkAccountAccess, checkAuth } from "../../middleware/isAuth";
 import { Account } from "../../models/account/Account";
 import { User } from "../../models/user/User";
@@ -17,6 +19,13 @@ import { Note } from "../../models/note/Note";
 import { OneOffPayment } from "../../models/payment/OneOffPayment";
 import { Payday } from "../../models/payday/Payday";
 import { RecurringPayment } from "../../models/payment/RecurringPayment";
+import { PaymentRecord, type RecordDebt } from "../../models/payment/PaymentRecord";
+import {
+  latestOpenRecord,
+  recordBalanceSet,
+  snapshotOf,
+  withThisCycle,
+} from "../payment/paymentRecordResolvers";
 import {
   USER_NOT_FOUND,
   ACCOUNT_NOT_FOUND,
@@ -25,7 +34,14 @@ import {
   ACCOUNT_UPDATE_FAILED,
   RECURRING_PAYMENT_NOT_FOUND,
   PAYMENT_NOT_FOUND,
+  DEBT_NOT_TRACKED,
+  OVERPAYMENT_TOO_LARGE,
+  PAYMENT_RECORD_NOT_FOUND,
+  PAYMENT_RECORD_CLOSED,
   incrementVersion,
+  roundPence,
+  payTowardsDebt,
+  withBalanceDate,
   withTransaction,
   validateUniqueName,
   parseInput,
@@ -33,6 +49,7 @@ import {
   accountInput,
   paydayCycle,
   skipRecurring,
+  debtOverpayment,
 } from "../../utils";
 import {
   addDays,
@@ -121,18 +138,28 @@ const createAccount = async (
       ),
     );
 
-    await Promise.all([
-      ...oneOffPayments.map((payment) =>
-        new OneOffPayment({ ...payment, account: account._id }).save({
-          session,
-        }),
+    const [, saved] = await Promise.all([
+      Promise.all(
+        oneOffPayments.map((payment) =>
+          new OneOffPayment({ ...payment, account: account._id }).save({
+            session,
+          }),
+        ),
       ),
-      ...recurringPayments.map((payment) =>
-        new RecurringPayment({ ...payment, account: account._id }).save({
-          session,
-        }),
+      Promise.all(
+        recurringPayments.map((payment) =>
+          new RecurringPayment({
+            ...payment,
+            debt: withBalanceDate(payment.debt),
+            account: account._id,
+          }).save({ session }),
+        ),
       ),
     ]);
+    // Each debt's starting balance goes in its history
+    for (const payment of saved) {
+      if (payment.debt) await recordBalanceSet(payment, null, session);
+    }
 
     if (payday) {
       await new Payday({ ...payday, account: account._id }).save({ session });
@@ -171,9 +198,10 @@ const updateAccount = async (
   return { account, success: true };
 };
 
-// Payday: sets the confirmed balance, moves the chosen recurring payments on from dates left over
-// from the last cycle, and clears what was paid or skipped in it. Recording the payday stops the
-// prompt showing again for it.
+// Payday: sets the confirmed balance and moves the chosen recurring payments on from dates left over
+// from the last cycle. The cycle's records are closed: they stay as history but can't be undone,
+// as the confirmed balance already allows for them. Paid one-offs are cleared away. Recording the
+// payday stops the prompt showing again for it.
 const startPaydayCycle = async (
   _: unknown,
   { input }: { input: StartPaydayCycleInput },
@@ -203,24 +231,35 @@ const startPaydayCycle = async (
       }
     }
 
+    // Done with once the cycle has ended. Anything already dealt with from payday on belongs to
+    // the new cycle, so it stays open and can still be undone.
+    await PaymentRecord.updateMany(
+      {
+        account: accountId,
+        open: true,
+        dates: { $not: { $elemMatch: { $gte: cycleStart } } },
+      },
+      { $set: { open: false } },
+      { session },
+    );
+    await OneOffPayment.deleteMany({
+      account: accountId,
+      paidAt: { $ne: null },
+      dueDate: { $lt: cycleStart },
+    }).session(session);
+
     // Sequential: operations within a transaction session can't run in parallel
     for (const payment of payments) {
-      // Done with once the cycle has ended. Anything already dealt with from payday on belongs to
-      // the new cycle, so it stays and can still be undone.
-      const handled = payment.handled.filter((entry) =>
-        entry.dates.some((date) => date >= cycleStart),
-      );
       // Its dates before payday weren't paid or skipped: the new cycle starts from its first date
       // from payday on
-      const moves =
-        chosen.has(payment.id) &&
-        payment.nextDueDate &&
-        payment.nextDueDate < cycleStart;
-      if (handled.length === payment.handled.length && !moves) continue;
-
-      payment.set("handled", handled);
-      if (moves) payment.nextDueDate = nextOccurrence(payment, cycleStart);
-      // Mongoose versions changes to handled itself; increment() joins in rather than clashing
+      if (
+        !chosen.has(payment.id) ||
+        !payment.nextDueDate ||
+        payment.nextDueDate >= cycleStart
+      ) {
+        continue;
+      }
+      payment.nextDueDate = nextOccurrence(payment, cycleStart);
       payment.increment();
       await payment.save({ session });
     }
@@ -238,18 +277,20 @@ const startPaydayCycle = async (
 const balanceChange = (payment: { amount: number; type: string }) =>
   payment.type === PaymentType.INCOME ? payment.amount : -payment.amount;
 
-const roundPence = (amount: number) => Math.round(amount * 100) / 100;
-
 type RecurringPaymentDocument = InstanceType<typeof RecurringPayment>;
 
 /*
  * Pays, skips or undoes some of an account's recurring payments in one transaction. `change`
- * updates a payment and returns what it does to the balance, or null when it leaves it alone.
+ * updates a payment, writing or removing its records in the same session, and returns what it
+ * does to the balance, or null when it leaves the payment alone.
  */
 const changeRecurringPayments = (
   accountId: string,
   recurringPaymentIds: string[],
-  change: (payment: RecurringPaymentDocument) => number | null,
+  change: (
+    payment: RecurringPaymentDocument,
+    session: ClientSession,
+  ) => Promise<number | null>,
   // Further work in the same transaction, returning its own effect on the balance
   more?: (session: ClientSession) => Promise<number>,
 ) =>
@@ -269,7 +310,7 @@ const changeRecurringPayments = (
       if (!payment) {
         throw RECURRING_PAYMENT_NOT_FOUND(id);
       }
-      const effect = change(payment);
+      const effect = await change(payment, session);
       if (effect === null) continue;
       balance += effect;
       payment.increment();
@@ -289,19 +330,29 @@ const changeRecurringPayments = (
  * Records some of a payment's dates as paid or skipped, moving it on to the date after the last.
  * Returns false when there's nothing to record.
  */
-const handle = (
+const handle = async (
   payment: RecurringPaymentDocument,
-  outcome: PaymentOutcome,
+  kind: typeof PaymentRecordKind.PAID | typeof PaymentRecordKind.SKIPPED,
   dates: Date[],
+  session: ClientSession,
+  paid: { balanceChange: number; debt?: RecordDebt } = { balanceChange: 0 },
 ) => {
   if (!dates.length) return false;
-  payment.handled.push({ outcome, dates });
+  await new PaymentRecord({
+    account: payment.account,
+    recurringPayment: payment._id,
+    payment: snapshotOf(payment),
+    kind,
+    dates,
+    ...paid,
+  }).save({ session });
   payment.nextDueDate = nextOccurrence(payment, addDays(dates[dates.length - 1], 1));
   return true;
 };
 
 // Paying payments from the dashboard, as the bank balance sees it. A recurring payment has its
-// next date paid and moves on to the one after; one-offs are done with, so they're deleted.
+// next date paid and moves on to the one after. A one-off is marked paid and stays until payday,
+// so paying it can be undone.
 const markPaymentsPaid = async (
   _: unknown,
   { input }: { input: MarkPaymentsPaidInput },
@@ -314,11 +365,26 @@ const markPaymentsPaid = async (
   return changeRecurringPayments(
     accountId,
     recurringPaymentIds,
-    (payment) => {
+    async (payment, session) => {
       // Nothing to pay once it has ended
       if (!payment.nextDueDate) return null;
-      handle(payment, PaymentOutcome.PAID, [payment.nextDueDate]);
-      return balanceChange(payment);
+      // A debt has the period's interest added, then the payment taken off
+      let debt: RecordDebt | undefined;
+      if (payment.debt) {
+        const paidOff = payTowardsDebt(payment.debt, payment.amount, payment.frequency);
+        payment.debt.balance = paidOff.balance;
+        debt = {
+          interest: paidOff.interest,
+          reduction: paidOff.reduction,
+          balanceAfter: paidOff.balance,
+        };
+      }
+      const change = balanceChange(payment);
+      await handle(payment, PaymentRecordKind.PAID, [payment.nextDueDate], session, {
+        balanceChange: change,
+        debt,
+      });
+      return change;
     },
     async (session) => {
       let balance = 0;
@@ -330,31 +396,77 @@ const markPaymentsPaid = async (
         if (!payment) {
           throw PAYMENT_NOT_FOUND(id);
         }
-        balance += balanceChange(payment);
-        await OneOffPayment.deleteOne({ _id: id }).session(session);
+        // Already paid: nothing more comes off
+        if (payment.paidAt) continue;
+        const change = balanceChange(payment);
+        await new PaymentRecord({
+          account: payment.account,
+          oneOffPayment: payment._id,
+          payment: snapshotOf(payment),
+          kind: PaymentRecordKind.PAID,
+          dates: [payment.dueDate ?? ukDay()],
+          balanceChange: change,
+        }).save({ session });
+        payment.paidAt = new Date();
+        incrementVersion(payment);
+        await payment.save({ session });
+        balance += change;
       }
       return balance;
     },
   );
 };
 
-// Undoes the latest pay or skip on each payment, bringing its dates back. A payment that was paid
-// gets its amount back on the balance.
+// Undoes the latest pay or skip this cycle on each recurring payment, bringing its dates back, and
+// makes paid one-offs unpaid. The record goes, and whatever paying did to the bank balance and a
+// debt is put back exactly, even if the payment has changed since.
 const markPaymentsUnpaid = async (
   _: unknown,
   { input }: { input: MarkPaymentsUnpaidInput },
   req: Request,
 ) => {
   checkAuth(req);
-  const { accountId, recurringPaymentIds } = input;
+  const { accountId, recurringPaymentIds, oneOffPaymentIds } = input;
   await checkAccountAccess(accountId, req);
 
-  return changeRecurringPayments(accountId, recurringPaymentIds, (payment) => {
-    const latest = payment.handled.pop();
-    if (!latest) return null;
-    payment.nextDueDate = latest.dates[0];
-    return latest.outcome === PaymentOutcome.PAID ? -balanceChange(payment) : 0;
-  });
+  return changeRecurringPayments(
+    accountId,
+    recurringPaymentIds,
+    async (payment, session) => {
+      const latest = await latestOpenRecord(payment._id, session);
+      if (!latest) return null;
+      await PaymentRecord.deleteOne({ _id: latest._id }).session(session);
+      payment.nextDueDate = latest.dates[0];
+      if (payment.debt && latest.debt) {
+        payment.debt.balance = roundPence(payment.debt.balance + latest.debt.reduction);
+      }
+      return -latest.balanceChange;
+    },
+    async (session) => {
+      let balance = 0;
+      for (const id of oneOffPaymentIds ?? []) {
+        const payment = await OneOffPayment.findOne({
+          _id: id,
+          account: accountId,
+        }).session(session);
+        if (!payment) {
+          throw PAYMENT_NOT_FOUND(id);
+        }
+        const record = await PaymentRecord.findOne({
+          oneOffPayment: payment._id,
+          open: true,
+          kind: PaymentRecordKind.PAID,
+        }).session(session);
+        if (!record) continue;
+        await PaymentRecord.deleteOne({ _id: record._id }).session(session);
+        payment.paidAt = null;
+        incrementVersion(payment);
+        await payment.save({ session });
+        balance -= record.balanceChange;
+      }
+      return balance;
+    },
+  );
 };
 
 // Leaves payments' dates unpaid without touching the balance: the next date, or every date before
@@ -371,14 +483,101 @@ const skipRecurringPayments = async (
   );
   await checkAccountAccess(accountId, req);
 
-  return changeRecurringPayments(accountId, recurringPaymentIds, (payment) => {
-    const next = payment.nextDueDate;
-    if (!next) return null;
-    const dates = until
-      ? occurrencesBefore(payment, next, new Date(until))
-      : [next];
-    return handle(payment, PaymentOutcome.SKIPPED, dates) ? 0 : null;
+  return changeRecurringPayments(
+    accountId,
+    recurringPaymentIds,
+    async (payment, session) => {
+      const next = payment.nextDueDate;
+      if (!next) return null;
+      const dates = until
+        ? occurrencesBefore(payment, next, new Date(until))
+        : [next];
+      return (await handle(payment, PaymentRecordKind.SKIPPED, dates, session))
+        ? 0
+        : null;
+    },
+  );
+};
+
+// Pays extra off a debt today, on top of its usual payments. It's money out of the bank like any
+// payment, and comes straight off what's left to pay.
+const logDebtOverpayment = async (
+  _: unknown,
+  { input }: { input: LogDebtOverpaymentInput },
+  req: Request,
+) => {
+  checkAuth(req);
+  const { accountId, recurringPaymentId, amount } = parseInput(
+    debtOverpayment,
+    input,
+  );
+  await checkAccountAccess(accountId, req);
+
+  return changeRecurringPayments(
+    accountId,
+    [recurringPaymentId],
+    async (payment, session) => {
+      if (!payment.debt) {
+        throw DEBT_NOT_TRACKED(recurringPaymentId);
+      }
+      if (amount > payment.debt.balance) {
+        throw OVERPAYMENT_TOO_LARGE();
+      }
+      payment.debt.balance = roundPence(payment.debt.balance - amount);
+      await new PaymentRecord({
+        account: payment.account,
+        recurringPayment: payment._id,
+        payment: snapshotOf(payment),
+        kind: PaymentRecordKind.OVERPAYMENT,
+        dates: [ukDay()],
+        balanceChange: -amount,
+        debt: { interest: 0, reduction: amount, balanceAfter: payment.debt.balance },
+      }).save({ session });
+      return -amount;
+    },
+  );
+};
+
+// Takes back an overpayment from this cycle: the record goes, and the amount goes back on the debt
+// and the bank balance
+const undoDebtOverpayment = async (
+  _: unknown,
+  { input }: { input: UndoDebtOverpaymentInput },
+  req: Request,
+) => {
+  checkAuth(req);
+  const { accountId, recordId } = input;
+  await checkAccountAccess(accountId, req);
+
+  const record = await PaymentRecord.findOne({
+    _id: recordId,
+    account: accountId,
+    kind: PaymentRecordKind.OVERPAYMENT,
   });
+  if (!record || !record.recurringPayment) {
+    throw PAYMENT_RECORD_NOT_FOUND(recordId);
+  }
+  if (!record.open) {
+    throw PAYMENT_RECORD_CLOSED();
+  }
+
+  return changeRecurringPayments(
+    accountId,
+    [String(record.recurringPayment)],
+    async (payment, session) => {
+      const removed = await PaymentRecord.deleteOne({
+        _id: record._id,
+        open: true,
+      }).session(session);
+      if (removed.deletedCount !== 1) {
+        throw PAYMENT_RECORD_NOT_FOUND(recordId);
+      }
+      if (payment.debt && record.debt) {
+        payment.debt.balance = roundPence(payment.debt.balance + record.debt.reduction);
+      }
+      return -record.balanceChange;
+    },
+  );
 };
 
 const byAmount = { amount: 1 } as const;
@@ -389,8 +588,11 @@ const accountFields = {
   user: (account: AccountDocument) => User.findById(account.user).exec(),
   oneOffPayments: (account: AccountDocument) =>
     OneOffPayment.find({ account: account._id }).sort(byAmount).exec(),
-  recurringPayments: (account: AccountDocument) =>
-    RecurringPayment.find({ account: account._id }).sort(byAmount).exec(),
+  // With this cycle's pays and skips loaded in one go, for their thisCycle field
+  recurringPayments: async (account: AccountDocument) =>
+    withThisCycle(
+      await RecurringPayment.find({ account: account._id }).sort(byAmount).exec(),
+    ),
   notes: (account: AccountDocument) => Note.find({ account: account._id }).exec(),
   payday: (account: AccountDocument) => Payday.findOne({ account: account._id }).exec(),
 };
@@ -407,6 +609,8 @@ export const accountResolvers = {
     markPaymentsPaid,
     markPaymentsUnpaid,
     skipRecurringPayments,
+    logDebtOverpayment,
+    undoDebtOverpayment,
   },
   Account: accountFields,
 };

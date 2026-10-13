@@ -10,6 +10,9 @@ export interface OneOffPayment {
   dueDate?: Date;
   type: PaymentType;
   category: OneOffPaymentCategory;
+  // When it was marked paid. A paid one-off stays until the next payday, so it can still be undone,
+  // then payday clears it away; its record stays as history.
+  paidAt?: Date | null;
 }
 
 const OneOffPaymentSchema = new Schema<OneOffPayment>({
@@ -36,6 +39,10 @@ const OneOffPaymentSchema = new Schema<OneOffPayment>({
     type: String,
     enum: enumValues(OneOffPaymentCategory),
     required: true
+  },
+  paidAt: {
+    type: Date,
+    default: null
   }
 });
 

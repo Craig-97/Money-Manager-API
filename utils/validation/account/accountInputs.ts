@@ -19,3 +19,8 @@ export const accountInput = z.looseObject({ bankBalance: money.optional(), month
 export const paydayCycle = z.looseObject({ payday: isoDay, bankBalance: money });
 
 export const skipRecurring = z.looseObject({ until: isoDay.nullish() });
+
+// Paying extra off a debt, on top of its usual payments
+export const debtOverpayment = z.looseObject({
+  amount: money.positive('Overpayments must be more than £0')
+});

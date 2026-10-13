@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "migrate:bills": "tsx scripts/migrateBills.ts",
-    "migrate:account-ids": "tsx scripts/removeAccountIdLists.ts"
+    "migrate:account-ids": "tsx scripts/removeAccountIdLists.ts",
+    "migrate:payment-records": "tsx scripts/moveHandledToRecords.ts"
   },
   "keywords": [],
   "author": "",
