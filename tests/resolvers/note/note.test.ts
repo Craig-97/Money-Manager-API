@@ -158,3 +158,112 @@ describe('note colours', () => {
     expect(updated.data.updateNote.note).toEqual({ color: 'ROSE', body: 'Hi' });
   });
 });
+
+describe('note dates', () => {
+  const DATED = 'id date remind repeat payment';
+  const CREATE_DATED = `mutation ($input: CreateNoteInput!) { createNote(input: $input) { note { ${DATED} } } }`;
+  const UPDATE_DATED = `mutation ($id: ID!, $input: UpdateNoteInput!) { updateNote(id: $id, input: $input) { note { ${DATED} } } }`;
+  const PAYMENT = `mutation ($input: CreateRecurringPaymentInput!) {
+    createRecurringPayment(input: $input) { recurringPayment { id } }
+  }`;
+
+  const makePayment = async (token: string, accountId: string) => {
+    const body = await gql(
+      PAYMENT,
+      {
+        input: {
+          accountId,
+          name: 'Car insurance',
+          amount: 612,
+          category: 'INSURANCE',
+          frequency: 'ANNUALLY',
+          type: 'EXPENSE',
+          firstPaymentDate: '2030-11-07'
+        }
+      },
+      token
+    );
+    return body.data.createRecurringPayment.recurringPayment.id as string;
+  };
+
+  it('has no date, reminders or payment unless given', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const body = await gql(CREATE_DATED, { input: { accountId, body: 'Plain' } }, token);
+    expect(body.data.createNote.note).toMatchObject({ date: null, remind: [], repeat: 'NONE', payment: null });
+  });
+
+  it('saves a date, its reminders, a yearly repeat and a payment', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const payment = await makePayment(token, accountId);
+    const body = await gql(
+      CREATE_DATED,
+      {
+        input: {
+          accountId,
+          body: 'Car insurance quotes',
+          date: '2030-11-07',
+          remind: [30, 7],
+          repeat: 'YEARLY',
+          payment
+        }
+      },
+      token
+    );
+    expect(body.errors).toBeUndefined();
+    expect(body.data.createNote.note).toMatchObject({
+      date: String(Date.parse('2030-11-07T00:00:00Z')),
+      remind: [30, 7],
+      repeat: 'YEARLY',
+      payment
+    });
+  });
+
+  it('takes the date and payment off with null', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const payment = await makePayment(token, accountId);
+    const created = await gql(
+      CREATE_DATED,
+      { input: { accountId, body: 'MOT', date: '2030-10-22', remind: [14], payment } },
+      token
+    );
+    const { id } = created.data.createNote.note;
+
+    const body = await gql(UPDATE_DATED, { id, input: { date: null, payment: null, remind: [] } }, token);
+    expect(body.errors).toBeUndefined();
+    expect(body.data.updateNote.note).toMatchObject({ date: null, payment: null, remind: [] });
+  });
+
+  it.each([
+    ['a date that does not exist', { date: '2030-02-30' }],
+    ['a reminder that is not a choice', { remind: [3] }],
+    ['the same reminder twice', { remind: [7, 7] }]
+  ])('rejects %s', async (_, extra) => {
+    const { token, accountId } = await createUserWithAccount();
+    const body = await gql(CREATE_DATED, { input: { accountId, body: 'Bad', ...extra } }, token);
+    expect(errorCode(body)).toBe('BAD_USER_INPUT');
+  });
+
+  it("won't link a payment on another account", async () => {
+    const owner = await createUserWithAccount();
+    const other = await createUserWithAccount();
+    const payment = await makePayment(other.token, other.accountId);
+    const body = await gql(
+      CREATE_DATED,
+      { input: { accountId: owner.accountId, body: 'Sneaky', payment } },
+      owner.token
+    );
+    expect(errorCode(body)).toBe('BAD_USER_INPUT');
+    expect(body.errors?.[0].extensions?.field).toBe('payment');
+  });
+
+  it('stays when its payment is deleted, no longer linked', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const payment = await makePayment(token, accountId);
+    const created = await gql(CREATE_DATED, { input: { accountId, body: 'Quotes', payment } }, token);
+
+    await gql(`mutation ($ids: [ID!]!) { batchDeleteRecurringPayments(ids: $ids) { success } }`, { ids: [payment] }, token);
+
+    const note = await mongoose.model('Note').findById(created.data.createNote.note.id);
+    expect(note.payment).toBeNull();
+  });
+});

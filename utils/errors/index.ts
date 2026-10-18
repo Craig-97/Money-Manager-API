@@ -9,3 +9,4 @@ export * from './account';
 export * from './payment';
 export * from './note';
 export * from './payday';
+export * from './reminder';

@@ -4,6 +4,7 @@ import { PaymentType } from '../../constants/payment/paymentType';
 import { addDays, nextOccurrence, ukDay } from '../../utils/dates';
 import { enumValues } from '../../utils/helpers/enumHelpers';
 import { PaymentRecord } from './PaymentRecord';
+import { reminderTimingSchema, USUAL_TIMING, type ReminderTiming } from '../reminder/reminderTiming';
 
 // A loan or card being paid off by this payment. The balance is what's left to pay, kept up to
 // date as payments are marked paid and corrected from a statement.
@@ -31,9 +32,10 @@ export interface RecurringPayment {
   // When a policy or contract renews. The payments carry on past it; it's a prompt to check the
   // price. Yearly payments renew with each payment, so they never have one.
   renewalDate?: Date | null;
-  // How many days before it renews to show it as coming up: 0 (off), 7, 14 or 30. For a yearly
-  // payment it counts back from each payment instead.
-  renewalReminderDays: number;
+  // When the reminder before each due date goes off
+  dueReminder: ReminderTiming;
+  // When the reminder before it renews goes off. A yearly payment counts back from each payment.
+  renewalReminder: ReminderTiming;
   // Set when the payment is paying off a debt; only ever on an expense
   debt?: Debt | null;
 }
@@ -94,9 +96,13 @@ const recurringPaymentSchema = new Schema<RecurringPayment>({
     type: Date,
     default: null
   },
-  renewalReminderDays: {
-    type: Number,
-    default: 0
+  dueReminder: {
+    type: reminderTimingSchema,
+    default: () => ({ ...USUAL_TIMING })
+  },
+  renewalReminder: {
+    type: reminderTimingSchema,
+    default: () => ({ ...USUAL_TIMING })
   },
   debt: {
     type: debtSchema,

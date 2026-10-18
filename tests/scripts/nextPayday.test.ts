@@ -1,4 +1,4 @@
-import { DEFAULT_PAYDAY, fromIsoDay, nextPayday } from '../../scripts/migrations/nextPayday';
+import { DEFAULT_PAYDAY, fromIsoDay, nextPayday } from '../../utils/payday/paydays';
 
 const NONE = new Set<string>();
 

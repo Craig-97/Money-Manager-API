@@ -1,9 +1,12 @@
 import type { Request } from 'express';
+import { isValidObjectId, type Types } from 'mongoose';
 import type { CreateNoteInput, UpdateNoteInput } from '../../types/note/noteTypes';
 import { checkAuth, checkAccountAccess } from '../../middleware/isAuth';
 import { Note } from '../../models/note/Note';
+import { RecurringPayment } from '../../models/payment/RecurringPayment';
 import {
   NOTE_NOT_FOUND,
+  NOTE_PAYMENT_NOT_FOUND,
   NOTE_UPDATE_FAILED,
   NOTE_DELETE_FAILED,
   NOTE_EXISTS,
@@ -13,10 +16,20 @@ import {
   noteInput
 } from '../../utils';
 
+// A note can only be about a payment on its own account
+const checkNotePayment = async (payment: string | null | undefined, account: Types.ObjectId | string) => {
+  if (!payment) return;
+  if (!isValidObjectId(payment) || !(await RecurringPayment.exists({ _id: payment, account }))) {
+    throw NOTE_PAYMENT_NOT_FOUND(payment);
+  }
+};
+
 const createNote = async (_: unknown, { input }: { input: CreateNoteInput }, req: Request) => {
   checkAuth(req);
   const { accountId, ...note } = parseInput(newNote, input);
   await checkAccountAccess(accountId, req);
+
+  await checkNotePayment(note.payment, accountId);
 
   const existingNote = await Note.findOne({ body: note.body, account: accountId });
   if (existingNote) {
@@ -36,6 +49,7 @@ const updateNote = async (_: unknown, { id, input }: { id: string; input: Update
   }
   await checkAccountAccess(currentNote.account, req);
   input = parseInput(noteInput, input);
+  await checkNotePayment(input.payment, currentNote.account);
 
   const mergedNote = incrementVersion(Object.assign(currentNote, input));
 

@@ -1,11 +1,20 @@
 import mongoose, { Schema, Types } from 'mongoose';
 import { NoteColor } from '../../constants/note/noteColor';
+import { NoteRepeat } from '../../constants/note/noteRepeat';
 import { enumValues } from '../../utils/helpers/enumHelpers';
 
 export interface Note {
   body?: string;
   color: NoteColor;
   account: Types.ObjectId;
+  // A day the note is about, e.g. an MOT, as midnight UTC like payment dates
+  date?: Date | null;
+  // Days before the date to remind, e.g. [30, 7]; only used with a date
+  remind: number[];
+  // Whether the date comes round every year
+  repeat: NoteRepeat;
+  // The recurring payment it's about, e.g. the car insurance it compares quotes for
+  payment?: Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -22,7 +31,11 @@ const noteSchema = new Schema<Note>(
       type: Schema.Types.ObjectId,
       ref: 'Account',
       required: [true, 'Account ID required']
-    }
+    },
+    date: { type: Date, default: null },
+    remind: { type: [Number], default: [] },
+    repeat: { type: String, enum: enumValues(NoteRepeat), default: NoteRepeat.NONE },
+    payment: { type: Schema.Types.ObjectId, ref: 'RecurringPayment', default: null }
   },
   { timestamps: true }
 );

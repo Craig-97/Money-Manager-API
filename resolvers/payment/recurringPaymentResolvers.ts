@@ -6,6 +6,7 @@ import { enumValues } from '../../utils/helpers/enumHelpers';
 import { checkAuth, checkAccountAccess } from '../../middleware/isAuth';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
 import { PaymentRecord } from '../../models/payment/PaymentRecord';
+import { Note } from '../../models/note/Note';
 import { latestOpenRecord, recordBalanceSet } from './paymentRecordResolvers';
 import {
   RECURRING_PAYMENT_NOT_FOUND,
@@ -140,8 +141,9 @@ const batchDeleteRecurringPayments = async (_: unknown, { ids }: { ids: string[]
     if (result.deletedCount !== ids.length) {
       throw RECURRING_PAYMENT_DELETE_FAILED();
     }
-    // Deleting a payment takes its history with it
+    // Deleting a payment takes its history with it. Notes about it stay, no longer linked.
     await PaymentRecord.deleteMany({ recurringPayment: { $in: ids } }).session(session);
+    await Note.updateMany({ payment: { $in: ids } }, { $set: { payment: null } }).session(session);
 
     return { success: true, deletedCount: result.deletedCount, ids };
   });

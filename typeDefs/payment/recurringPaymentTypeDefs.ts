@@ -30,9 +30,10 @@ export const recurringPaymentTypeDefs = `
     # When a policy or contract renews; the payments carry on past it. Never set on yearly
     # payments, which renew with each payment.
     renewalDate: String
-    # Days before it renews to show it as coming up: 0 (off), 7, 14 or 30. A yearly payment counts
-    # back from each payment.
-    renewalReminderDays: Int!
+    # When the reminder before each due date goes off
+    dueReminder: ReminderTiming!
+    # When the reminder before it renews goes off. A yearly payment counts back from each payment.
+    renewalReminder: ReminderTiming!
     # Set when it's paying off a loan or card; only ever on an expense
     debt: Debt
   }
@@ -94,7 +95,8 @@ export const recurringPaymentTypeDefs = `
     firstPaymentDate: String!
     lastPaymentDate: String
     renewalDate: String
-    renewalReminderDays: Int
+    dueReminder: ReminderTimingInput
+    renewalReminder: ReminderTimingInput
     debt: DebtInput
   }
 
@@ -108,7 +110,8 @@ export const recurringPaymentTypeDefs = `
     firstPaymentDate: String!
     lastPaymentDate: String
     renewalDate: String
-    renewalReminderDays: Int
+    dueReminder: ReminderTimingInput
+    renewalReminder: ReminderTimingInput
     debt: DebtInput
   }
 
@@ -121,7 +124,8 @@ export const recurringPaymentTypeDefs = `
     firstPaymentDate: String
     lastPaymentDate: String
     renewalDate: String
-    renewalReminderDays: Int
+    dueReminder: ReminderTimingInput
+    renewalReminder: ReminderTimingInput
     debt: DebtInput
   }
 

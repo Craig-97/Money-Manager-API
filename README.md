@@ -19,6 +19,7 @@ Backend API built for tracking finances using Node, Express JS, MongoDB and Grap
 | `SMTP_SECURE` | No | `true` to connect over TLS (usually with port `465`) |
 | `SMTP_USER` / `SMTP_PASS` | No | SMTP credentials |
 | `EMAIL_FROM` | No | Sender address (default `Money Manager <no-reply@moneymanager.app>`) |
+| `BANK_HOLIDAYS_URL` | No | Where the calendar feed reads UK bank holidays from, to place paydays (default gov.uk's `bank-holidays.json`). Set it empty to go without |
 
 ## Sessions
 
@@ -29,6 +30,12 @@ Backend API built for tracking finances using Node, Express JS, MongoDB and Grap
 ## Access
 
 Every operation acts only on the signed-in user's own data. Ids that belong to someone else are refused with `FORBIDDEN`, the same as ids that don't exist, so the API never reveals which ids are real. The user operations take no id and always act on the caller. An account belongs to the user who created it (`Account.user`), and every record belongs to an account through its own `account` field, so access is checked by who owns that account. Creates and account-wide operations name the account with `input.accountId`; updates and deletes go by the record's id and use the account it's already in, so a record can never be moved to another account. `account` with no id gives the user's default account, the one set up first.
+
+## Reminders and the calendar feed
+
+The app works reminders out itself from the payments, notes and payday, so the API only keeps what the user did with each one (`ReminderState`: read, cleared, or put away until a day), keyed by what it's about and the date it's for. Each account has its usual reminder timing (`reminderSettings`), and each recurring payment can have its own timing for when it's due and when it renews.
+
+`GET /cal/<token>.ics` is the account's calendar feed: an iCalendar file of payments due, paydays, renewals, dated notes and, if chosen, debt-free dates, a month back and a year ahead, with alarms at 8:00 when each reminder is due. Calendar apps fetch it with nothing but the address, so the token is the only thing protecting it: it's random, turning the feed off or resetting it stops the old address working, and amounts are left out unless the user asks for them. The front end reaches it through its own origin, like `/graphql`. It's limited to 60 requests per 15 minutes per IP.
 
 ## Validation
 
@@ -57,4 +64,5 @@ One-off scripts for data saved by older versions, in `scripts/`. They connect wi
 
 - `npm run migrate:bills [-- --apply]` turns v1 bills into recurring payments: monthly expenses in `OTHER`, first due on the account's next payday, unpaid. Only accounts with bills and no recurring payments are touched, so it can be run again safely. The `bills` collection is left in place to check and then drop by hand.
 - `npm run migrate:payment-records [-- --apply]` moves each recurring payment's `handled` list (what was paid or skipped this cycle) into open payment records, then removes the list. Run it straight after deploying, as the API now reads paid and skipped dates from records; until then, payments show nothing paid this cycle. Safe to run again.
+- `npm run migrate:renewal-reminders [-- --apply]` replaces each recurring payment's `renewalReminderDays` with the `dueReminder` and `renewalReminder` timings: 7, 14 or 30 days are kept, 0 on a payment with a renewal date stays off, and anything else follows the account's usual timing. Run it straight after deploying; until then, renewals turned off by hand would remind again. Safe to run again.
 - `npm run migrate:account-ids [-- --apply]` removes the `bills`, `notes`, `oneOffPayments`, `recurringPayments` and `payday` ids accounts used to store. Records are found through their own `account` field now, so these are ignored until removed.

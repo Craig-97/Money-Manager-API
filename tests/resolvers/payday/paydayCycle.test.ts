@@ -277,7 +277,7 @@ describe("recurring payment due dates", () => {
 
     const body = await gql(
       UPDATE,
-      { id, input: { renewalDate: "2031-01-10", renewalReminderDays: 30 } },
+      { id, input: { renewalDate: "2031-01-10", renewalReminder: { off: false, days: 30 } } },
       token,
     );
 

@@ -1,6 +1,12 @@
 import type { PaymentType } from '../../constants/payment/paymentType';
 import type { PaymentFrequency, RecurringPaymentCategory } from '../../constants/payment';
 
+// Days left out (null) follow the account's usual timing
+export interface ReminderTimingInput {
+  off: boolean;
+  days?: number | null;
+}
+
 export interface DebtFields {
   balance: number;
   startingBalance?: number | null;
@@ -16,7 +22,8 @@ export interface RecurringPaymentFields {
   firstPaymentDate: string;
   lastPaymentDate?: string | null;
   renewalDate?: string | null;
-  renewalReminderDays?: number;
+  dueReminder?: ReminderTimingInput;
+  renewalReminder?: ReminderTimingInput;
   // null stops tracking it as a debt
   debt?: DebtFields | null;
 }

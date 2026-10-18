@@ -3,6 +3,7 @@ import { accountResolvers } from './account';
 import { oneOffPaymentResolvers, paymentRecordResolvers, recurringPaymentResolvers } from './payment';
 import { noteResolvers } from './note';
 import { paydayResolvers } from './payday';
+import { reminderResolvers } from './reminder';
 
 // Every topic's resolvers; makeExecutableSchema merges them
 export const resolvers = [
@@ -12,5 +13,6 @@ export const resolvers = [
   recurringPaymentResolvers,
   paymentRecordResolvers,
   noteResolvers,
-  paydayResolvers
+  paydayResolvers,
+  reminderResolvers
 ];

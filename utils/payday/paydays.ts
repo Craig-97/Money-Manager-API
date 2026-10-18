@@ -2,9 +2,9 @@ import type { Payday, PaydayOverride } from '../../models/payday/Payday';
 import { PayFrequency, PaydayType } from '../../constants/payday';
 
 /*
- * When an account's next payday falls, ported from the front end's src/lib/payday so a migration
- * lines up with the pay cycle the app shows. Dates here are UTC midnights, whatever the server's
- * time zone, and come out as 'YYYY-MM-DD'.
+ * When an account's paydays fall, ported from the front end's src/lib/payday so a migration and
+ * the calendar feed line up with the pay cycle the app shows. Dates here are UTC midnights,
+ * whatever the server's time zone, and come out as 'YYYY-MM-DD'.
  */
 
 export type PaydayRule = Pick<Payday, 'frequency' | 'type' | 'dayOfMonth' | 'weekday' | 'firstPayDate'> & {
@@ -99,18 +99,27 @@ const weeklyPaydays = (rule: PaydayRule, holidays: BankHolidays, from: Date, to:
   return paydays;
 };
 
+// Paydays around `from` to `to` and a little either side, with the ones the user moved moved
+const paydaysAround = (rule: PaydayRule, holidays: BankHolidays, from: Date, to: Date) => {
+  const usual =
+    rule.frequency in DAYS_BETWEEN
+      ? weeklyPaydays(rule, holidays, from, to)
+      : monthlyPaydays(rule, holidays, from, to);
+  const moves = new Map((rule.overrides ?? []).map(item => [item.for, item.date]));
+  return [...new Set(usual.map(date => moves.get(toIsoDay(date)) ?? toIsoDay(date)))].sort();
+};
+
 // The first payday after `today`, with any payday the user moved taken into account
 export const nextPayday = (rule: PaydayRule, holidays: BankHolidays, today: Date) => {
   const span = (MONTHS_BETWEEN[rule.frequency] ?? 1) * 31;
   const to = addDays(today, span);
-  const usual =
-    rule.frequency in DAYS_BETWEEN
-      ? weeklyPaydays(rule, holidays, today, to)
-      : monthlyPaydays(rule, holidays, today, to);
-
-  const moves = new Map((rule.overrides ?? []).map(item => [item.for, item.date]));
-  const paydays = usual
-    .map(date => moves.get(toIsoDay(date)) ?? toIsoDay(date))
-    .sort();
+  const paydays = paydaysAround(rule, holidays, today, to);
   return paydays.find(date => date > toIsoDay(today)) ?? toIsoDay(to);
+};
+
+// Every payday from `from` up to and including `to`, as 'YYYY-MM-DD'
+export const paydaysBetween = (rule: PaydayRule, holidays: BankHolidays, range: { from: Date; to: Date }) => {
+  const first = toIsoDay(range.from);
+  const last = toIsoDay(range.to);
+  return paydaysAround(rule, holidays, range.from, range.to).filter(date => date >= first && date <= last);
 };

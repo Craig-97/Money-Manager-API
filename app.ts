@@ -7,6 +7,7 @@ import cors from 'cors';
 import { json } from 'body-parser';
 import { isAuth } from './middleware/isAuth';
 import { createAuthRateLimit } from './middleware/rateLimit';
+import { calendarFeed, calendarFeedRateLimit } from './routes/calendarFeed';
 import { schema } from './schema';
 import { formatError } from './utils/errors';
 
@@ -38,6 +39,9 @@ export const createApp = async () => {
       allowedHeaders: ['Content-Type', 'Authorization']
     })
   );
+
+  // Calendar apps fetch the feed with nothing but its address, so it comes before sign-in checks
+  app.get('/cal/:file', calendarFeedRateLimit, calendarFeed);
 
   app.use(isAuth);
 

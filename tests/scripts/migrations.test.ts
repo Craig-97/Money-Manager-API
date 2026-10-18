@@ -2,8 +2,9 @@ import mongoose from 'mongoose';
 import { setupTestApp, teardownTestApp, clearDatabase, gql, createUserWithAccount } from '../helpers';
 import { migrateBills } from '../../scripts/migrations/billsToRecurring';
 import { removeAccountIdLists } from '../../scripts/migrations/removeAccountIdLists';
-import { fromIsoDay } from '../../scripts/migrations/nextPayday';
+import { fromIsoDay } from '../../utils/payday/paydays';
 import { moveHandledToRecords } from '../../scripts/migrations/handledToRecords';
+import { migrateRenewalReminders } from '../../scripts/migrations/renewalReminders';
 
 beforeAll(setupTestApp);
 afterAll(teardownTestApp);
@@ -178,5 +179,47 @@ describe('moveHandledToRecords', () => {
 
   it('has nothing to do once moved', async () => {
     expect(await moveHandledToRecords({ apply: true })).toEqual({ payments: 0, records: 0, moved: 0 });
+  });
+});
+
+describe('migrateRenewalReminders', () => {
+  const payments = () => mongoose.connection.collection('recurringpayments');
+
+  const addPayment = async (accountId: string, fields: Record<string, unknown>) =>
+    (
+      await payments().insertOne({
+        account: oid(accountId),
+        amount: 10,
+        category: 'OTHER',
+        type: 'EXPENSE',
+        frequency: 'MONTHLY',
+        firstPaymentDate: new Date('2030-01-01'),
+        ...fields
+      })
+    ).insertedId;
+
+  it('keeps chosen days, keeps off ones off and has the rest follow the usual timing', async () => {
+    const { accountId } = await createUserWithAccount();
+    const days = await addPayment(accountId, { name: 'Phone', renewalDate: new Date('2031-01-01'), renewalReminderDays: 14 });
+    const off = await addPayment(accountId, { name: 'Broadband', renewalDate: new Date('2031-01-01'), renewalReminderDays: 0 });
+    const yearly = await addPayment(accountId, { name: 'Car insurance', frequency: 'ANNUALLY', renewalReminderDays: 0 });
+    const plain = await addPayment(accountId, { name: 'Gym', renewalReminderDays: 0 });
+    await addPayment(accountId, { name: 'Already moved', renewalReminder: { off: false, days: 7 } });
+
+    expect(await migrateRenewalReminders({ apply: false })).toEqual({ found: 4, kept: 1, off: 1, usual: 2, changed: 0 });
+    expect(await payments().findOne({ _id: days })).toHaveProperty('renewalReminderDays', 14);
+
+    expect(await migrateRenewalReminders({ apply: true })).toEqual({ found: 4, kept: 1, off: 1, usual: 2, changed: 4 });
+
+    const usual = { off: false, days: null };
+    const stored = async (id: unknown) => payments().findOne({ _id: id as mongoose.Types.ObjectId });
+    expect(await stored(days)).toMatchObject({ renewalReminder: { off: false, days: 14 }, dueReminder: usual });
+    expect(await stored(off)).toMatchObject({ renewalReminder: { off: true, days: null } });
+    expect(await stored(yearly)).toMatchObject({ renewalReminder: usual });
+    expect(await stored(plain)).toMatchObject({ renewalReminder: usual });
+    expect(await stored(plain)).not.toHaveProperty('renewalReminderDays');
+
+    // Run again, there's nothing left to do
+    expect(await migrateRenewalReminders({ apply: true })).toEqual({ found: 0, kept: 0, off: 0, usual: 0, changed: 0 });
   });
 });

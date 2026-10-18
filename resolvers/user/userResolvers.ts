@@ -12,6 +12,7 @@ import { OneOffPayment } from "../../models/payment/OneOffPayment";
 import { Payday } from "../../models/payday/Payday";
 import { RecurringPayment } from "../../models/payment/RecurringPayment";
 import { PaymentRecord } from "../../models/payment/PaymentRecord";
+import { ReminderState } from "../../models/reminder/ReminderState";
 import {
   USER_NOT_FOUND,
   USER_EMAIL_NOT_FOUND,
@@ -341,6 +342,7 @@ const deleteUserAndAccount = (id: string) =>
       await RecurringPayment.deleteMany({ account }).session(session);
       await PaymentRecord.deleteMany({ account }).session(session);
       await Payday.deleteMany({ account }).session(session);
+      await ReminderState.deleteMany({ account }).session(session);
       await Account.deleteOne({ _id: account }).session(session);
     }
 

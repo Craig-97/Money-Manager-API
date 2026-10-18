@@ -14,7 +14,8 @@
     "test": "jest",
     "migrate:bills": "tsx scripts/migrateBills.ts",
     "migrate:account-ids": "tsx scripts/removeAccountIdLists.ts",
-    "migrate:payment-records": "tsx scripts/moveHandledToRecords.ts"
+    "migrate:payment-records": "tsx scripts/moveHandledToRecords.ts",
+    "migrate:renewal-reminders": "tsx scripts/migrateRenewalReminders.ts"
   },
   "keywords": [],
   "author": "",

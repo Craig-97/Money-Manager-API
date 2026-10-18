@@ -2,26 +2,14 @@
 import type { BankHolidayRegion } from '../constants/payday';
 import { migrateBills } from './migrations/billsToRecurring';
 import { runMigration } from './migrations/runMigration';
+import { fetchBankHolidays } from '../utils/payday/bankHolidays';
+import type { BankHolidays } from '../utils/payday/paydays';
 
-const BANK_HOLIDAYS_API = 'https://www.gov.uk/bank-holidays.json';
-
-const REGION_KEYS: Record<BankHolidayRegion, string> = {
-  ENGLAND_AND_WALES: 'england-and-wales',
-  SCOTLAND: 'scotland',
-  NORTHERN_IRELAND: 'northern-ireland'
-};
-
-type AllRegions = Partial<Record<string, { events: { date: string }[] }>>;
-
-// Fetched once. If gov.uk can't be reached the migration stops rather than guess at paydays.
-let allRegions: Promise<AllRegions> | null = null;
-const loadHolidays = async (region: BankHolidayRegion) => {
-  allRegions ??= fetch(BANK_HOLIDAYS_API).then(response => {
-    if (!response.ok) throw new Error(`Bank holidays request failed: ${response.status}`);
-    return response.json() as Promise<AllRegions>;
-  });
-  const data = await allRegions;
-  return new Set((data[REGION_KEYS[region]]?.events ?? []).map(event => event.date));
+// Fetched once per region. If gov.uk can't be reached the migration stops rather than guess at paydays.
+const loaded = new Map<BankHolidayRegion, Promise<BankHolidays>>();
+const loadHolidays = (region: BankHolidayRegion) => {
+  if (!loaded.has(region)) loaded.set(region, fetchBankHolidays(region));
+  return loaded.get(region)!;
 };
 
 void runMigration('Bills to recurring payments', async apply => {

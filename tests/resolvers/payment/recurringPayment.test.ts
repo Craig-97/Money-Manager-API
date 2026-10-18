@@ -15,7 +15,7 @@ afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
 const FIELDS =
-  'id name amount category frequency type firstPaymentDate lastPaymentDate renewalDate renewalReminderDays account';
+  'id name amount category frequency type firstPaymentDate lastPaymentDate renewalDate dueReminder { off days } renewalReminder { off days } account';
 const CREATE = `mutation ($input: CreateRecurringPaymentInput!) {
   createRecurringPayment(input: $input) { success recurringPayment { ${FIELDS} } }
 }`;
@@ -68,7 +68,9 @@ describe('createRecurringPayment', () => {
     const body = await makePayment(token, accountId, 'Gym');
     expect(body.data.createRecurringPayment.recurringPayment).toMatchObject({
       renewalDate: null,
-      renewalReminderDays: 0
+      // Both follow the account's usual timing
+      dueReminder: { off: false, days: null },
+      renewalReminder: { off: false, days: null }
     });
   });
 
@@ -76,17 +78,19 @@ describe('createRecurringPayment', () => {
     const { token, accountId } = await createUserWithAccount();
     const body = await makePayment(token, accountId, 'Home insurance', {
       renewalDate: '2031-01-01',
-      renewalReminderDays: 30
+      renewalReminder: { off: false, days: 30 }
     });
     expect(body.errors).toBeUndefined();
     expect(body.data.createRecurringPayment.recurringPayment).toMatchObject({
       renewalDate: String(new Date('2031-01-01').getTime()),
-      renewalReminderDays: 30
+      renewalReminder: { off: false, days: 30 }
     });
   });
 
   it.each([
-    ['a reminder that is not one of the choices', { renewalReminderDays: 10 }],
+    ['a renewal reminder that is not one of the choices', { renewalReminder: { off: false, days: 10 } }],
+    ['a due reminder that is not one of the choices', { dueReminder: { off: false, days: 2 } }],
+    ['a reminder that is off with days', { dueReminder: { off: true, days: 1 } }],
     ['a renewal and a last payment together', { renewalDate: '2031-01-01', lastPaymentDate: '2031-06-01' }],
     ['a renewal date on a yearly payment', { renewalDate: '2031-01-01', frequency: 'ANNUALLY' }],
     ['a renewal on or before the first payment', { renewalDate: '2030-01-01' }]
@@ -100,7 +104,7 @@ describe('createRecurringPayment', () => {
     const { token, accountId } = await createUserWithAccount();
     const body = await makePayment(token, accountId, 'Car insurance', {
       frequency: 'ANNUALLY',
-      renewalReminderDays: 30
+      renewalReminder: { off: false, days: 30 }
     });
     expect(body.errors).toBeUndefined();
   });
@@ -205,13 +209,13 @@ describe('updateRecurringPayment', () => {
     const created = await makePayment(token, accountId, 'Phone');
     const set = await gql(
       UPDATE,
-      { id: idOf(created), input: { renewalDate: '2031-01-01', renewalReminderDays: 14 } },
+      { id: idOf(created), input: { renewalDate: '2031-01-01', renewalReminder: { off: false, days: 14 } } },
       token
     );
     expect(set.errors).toBeUndefined();
     expect(set.data.updateRecurringPayment.recurringPayment).toMatchObject({
       renewalDate: String(new Date('2031-01-01').getTime()),
-      renewalReminderDays: 14
+      renewalReminder: { off: false, days: 14 }
     });
 
     const cleared = await gql(UPDATE, { id: idOf(created), input: { renewalDate: null } }, token);

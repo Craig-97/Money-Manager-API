@@ -5,6 +5,7 @@ import { accountTypeDefs } from './account';
 import { oneOffPaymentTypeDefs, recurringPaymentTypeDefs } from './payment';
 import { noteTypeDefs } from './note';
 import { paydayTypeDefs } from './payday';
+import { reminderTypeDefs } from './reminder';
 
 // Every topic's part of the schema, merged into one
 export const typeDefs = mergeTypeDefs([
@@ -14,5 +15,6 @@ export const typeDefs = mergeTypeDefs([
   oneOffPaymentTypeDefs,
   recurringPaymentTypeDefs,
   noteTypeDefs,
-  paydayTypeDefs
+  paydayTypeDefs,
+  reminderTypeDefs
 ]);

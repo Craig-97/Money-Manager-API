@@ -7,7 +7,7 @@ import { OneOffPayment } from '../../models/payment/OneOffPayment';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
 import { Payday } from '../../models/payday/Payday';
 import { withTransaction } from '../../utils/helpers/transactionHelpers';
-import { DEFAULT_PAYDAY, nextPayday, type BankHolidays } from './nextPayday';
+import { DEFAULT_PAYDAY, nextPayday, type BankHolidays } from '../../utils/payday/paydays';
 
 /*
  * v1 bills become v2 recurring payments. A bill only had a name, an amount and a paid flag, so each
