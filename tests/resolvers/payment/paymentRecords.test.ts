@@ -195,6 +195,48 @@ describe('payment history', () => {
   });
 });
 
+describe('paid off since payday', () => {
+  const PAID_OFF = `query { account { recurringPayments { debt { paidOffThisCycle } } } }`;
+  const paidOff = async (token: string) =>
+    (await gql(PAID_OFF, {}, token)).data.account.recurringPayments[0].debt.paidOffThisCycle;
+
+  it('counts what payments took off after interest, and overpayments, until payday', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const payment = await recurring(token, accountId, { debt: card });
+    // Setting the balance doesn't count as paying it off
+    expect(await paidOff(token)).toBe(0);
+
+    // £100 less a month's interest at 12% on £1,200
+    await pay(token, accountId, [payment.id]);
+    expect(await paidOff(token)).toBe(88);
+
+    const overpaid = onlyPayment(
+      await gql(OVERPAY, { input: { accountId, recurringPaymentId: payment.id, amount: 50 } }, token)
+    );
+    expect(await paidOff(token)).toBe(138);
+
+    await gql(UNDO_OVERPAY, { input: { accountId, recordId: overpaid.history[0].id } }, token);
+    expect(await paidOff(token)).toBe(88);
+
+    await startCycle(token, accountId, '2030-02-27');
+    expect(await paidOff(token)).toBe(0);
+  });
+
+  it('is there on a payment read on its own', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const payment = await recurring(token, accountId, { debt: card });
+    await pay(token, accountId, [payment.id]);
+
+    const body = await gql(
+      `query ($id: ID!) { recurringPayment(id: $id) { debt { paidOffThisCycle } } }`,
+      { id: payment.id },
+      token
+    );
+
+    expect(body.data.recurringPayment.debt.paidOffThisCycle).toBe(88);
+  });
+});
+
 describe('payday', () => {
   it('closes the cycle: its records stay as history but can no longer be undone', async () => {
     const { token, accountId } = await createUserWithAccount();

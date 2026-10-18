@@ -48,6 +48,8 @@ export const recurringPaymentTypeDefs = `
     apr: Float!
     # When the balance was last set by hand, e.g. from a statement
     balanceUpdatedAt: String
+    # How much less it owes since payday, from payments marked paid and overpayments
+    paidOffThisCycle: Float!
   }
 
   # Tracks a payment as a debt. On an update, null stops tracking it.
