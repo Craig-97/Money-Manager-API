@@ -1,9 +1,12 @@
 import type { Request } from 'express';
+import { isValidObjectId } from 'mongoose';
 import type { CreateRecurringPaymentInput, UpdateRecurringPaymentInput } from '../../types/payment/recurringPaymentTypes';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { enumValues } from '../../utils/helpers/enumHelpers';
 import { checkAuth, checkAccountAccess } from '../../middleware/isAuth';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
+import { PaymentRecord } from '../../models/payment/PaymentRecord';
+import { latestOpenRecord, recordBalanceSet } from './paymentRecordResolvers';
 import {
   RECURRING_PAYMENT_NOT_FOUND,
   RECURRING_PAYMENTS_NOT_FOUND,
@@ -16,8 +19,19 @@ import {
   parseInput,
   newRecurring,
   recurringInput,
-  updatedRecurring
+  updatedRecurring,
+  withBalanceDate
 } from '../../utils';
+
+const findRecurringPayment = async (_: unknown, { id }: { id: string }, req: Request) => {
+  checkAuth(req);
+  const payment = isValidObjectId(id) ? await RecurringPayment.findById(id) : null;
+  if (!payment) {
+    throw RECURRING_PAYMENT_NOT_FOUND(id);
+  }
+  await checkAccountAccess(payment.account, req);
+  return payment;
+};
 
 const createRecurringPayment = async (_: unknown, { input }: { input: CreateRecurringPaymentInput }, req: Request) => {
   checkAuth(req);
@@ -33,7 +47,12 @@ const createRecurringPayment = async (_: unknown, { input }: { input: CreateRecu
     // Check if payment with same name exists
     await validateUniqueName(payment.name, accountId, session);
 
-    const createdPayment = await new RecurringPayment({ ...payment, account: accountId }).save({ session });
+    const createdPayment = await new RecurringPayment({
+      ...payment,
+      debt: withBalanceDate(payment.debt),
+      account: accountId
+    }).save({ session });
+    if (createdPayment.debt) await recordBalanceSet(createdPayment, null, session);
 
     return { recurringPayment: createdPayment, success: true };
   });
@@ -74,13 +93,34 @@ const updateRecurringPayment = async (
   // The renewal rules span fields the update may leave alone, so they're checked on the result
   parseInput(updatedRecurring, { ...payment.toObject(), ...input });
 
-  // save() rather than findOneAndUpdate, so the model works out the new due date when the
-  // schedule changes
-  // A schedule change clears handled, which Mongoose versions itself; increment() joins in
-  Object.assign(payment, input).increment();
-  await payment.save();
+  // An ended payment whose end moves carries on after the latest date it had dealt with
+  if (input.lastPaymentDate !== undefined && !payment.nextDueDate) {
+    payment.$locals.latestHandled = (await latestOpenRecord(payment._id))?.dates.at(-1);
+  }
 
-  return { recurringPayment: payment, success: true };
+  return withTransaction(async session => {
+    // A debt's balance only gets a new date, and a record, when it's actually set to something
+    // else. null stops tracking it; its records stay as the payment's history.
+    const { debt, ...fields } = input;
+    const previous = payment.debt ? payment.debt.balance : null;
+    const balanceSet = debt != null && previous !== debt.balance;
+    if (debt === null) {
+      payment.set('debt', undefined);
+    } else if (debt) {
+      payment.set(
+        'debt',
+        balanceSet ? withBalanceDate(debt) : { ...debt, balanceUpdatedAt: payment.debt?.balanceUpdatedAt }
+      );
+    }
+
+    // save() rather than findOneAndUpdate, so the model works out the new due date when the
+    // schedule changes, and closes the old schedule's records
+    Object.assign(payment, fields).increment();
+    await payment.save({ session });
+    if (balanceSet) await recordBalanceSet(payment, previous, session);
+
+    return { recurringPayment: payment, success: true };
+  });
 };
 
 const batchDeleteRecurringPayments = async (_: unknown, { ids }: { ids: string[] }, req: Request) => {
@@ -100,12 +140,17 @@ const batchDeleteRecurringPayments = async (_: unknown, { ids }: { ids: string[]
     if (result.deletedCount !== ids.length) {
       throw RECURRING_PAYMENT_DELETE_FAILED();
     }
+    // Deleting a payment takes its history with it
+    await PaymentRecord.deleteMany({ recurringPayment: { $in: ids } }).session(session);
 
     return { success: true, deletedCount: result.deletedCount, ids };
   });
 };
 
 export const recurringPaymentResolvers = {
+  Query: {
+    recurringPayment: findRecurringPayment
+  },
   Mutation: {
     createRecurringPayment,
     updateRecurringPayment,

@@ -11,6 +11,7 @@ import '../../models/note/Note';
 import '../../models/payment/OneOffPayment';
 import '../../models/payday/Payday';
 import '../../models/payment/RecurringPayment';
+import '../../models/payment/PaymentRecord';
 
 export interface GqlError {
   message: string;

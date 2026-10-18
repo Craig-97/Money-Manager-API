@@ -3,6 +3,7 @@ import { setupTestApp, teardownTestApp, clearDatabase, gql, createUserWithAccoun
 import { migrateBills } from '../../scripts/migrations/billsToRecurring';
 import { removeAccountIdLists } from '../../scripts/migrations/removeAccountIdLists';
 import { fromIsoDay } from '../../scripts/migrations/nextPayday';
+import { moveHandledToRecords } from '../../scripts/migrations/handledToRecords';
 
 beforeAll(setupTestApp);
 afterAll(teardownTestApp);
@@ -43,13 +44,13 @@ describe('migrateBills', () => {
     await run(true);
 
     const body = await gql(
-      `query { account { recurringPayments { name amount type category frequency handled { outcome } firstPaymentDate } } }`,
+      `query { account { recurringPayments { name amount type category frequency thisCycle { kind } firstPaymentDate } } }`,
       undefined,
       token
     );
     expect(body.errors).toBeUndefined();
     const firstPaymentDate = String(new Date('2030-01-15').getTime());
-    const common = { type: 'EXPENSE', category: 'OTHER', frequency: 'MONTHLY', handled: [], firstPaymentDate };
+    const common = { type: 'EXPENSE', category: 'OTHER', frequency: 'MONTHLY', thisCycle: [], firstPaymentDate };
     expect(body.data.account.recurringPayments).toEqual([
       { name: 'Phone', amount: 20, ...common },
       { name: 'Rent', amount: 800, ...common }
@@ -108,5 +109,74 @@ describe('removeAccountIdLists', () => {
     expect(stored).not.toHaveProperty('notes');
     expect(stored).not.toHaveProperty('payday');
     expect(stored).toHaveProperty('bankBalance', 1000);
+  });
+});
+
+describe('moveHandledToRecords', () => {
+  const CREATE = `mutation ($input: CreateRecurringPaymentInput!) {
+    createRecurringPayment(input: $input) { recurringPayment { id } }
+  }`;
+  const HANDLED = `query { account { bankBalance recurringPayments { thisCycle { kind dates } history { kind balanceChange open } } } }`;
+  const UNPAID = `mutation ($input: MarkPaymentsUnpaidInput!) {
+    markPaymentsUnpaid(input: $input) { account { bankBalance } }
+  }`;
+  const day = (iso: string) => new Date(iso);
+
+  it('turns each handled entry into an open record and takes the list off the payment', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const created = await gql(
+      CREATE,
+      {
+        input: {
+          accountId,
+          name: 'Cleaner',
+          amount: 50,
+          category: 'OTHER',
+          frequency: 'WEEKLY',
+          type: 'EXPENSE',
+          firstPaymentDate: '2030-01-07'
+        }
+      },
+      token
+    );
+    const id = created.data.createRecurringPayment.recurringPayment.id;
+    const payments = mongoose.connection.collection('recurringpayments');
+    // As stored before records: one paid before amounts were recorded, one paid after, one skip
+    await payments.updateOne(
+      { _id: oid(id) },
+      {
+        $set: {
+          handled: [
+            { outcome: 'PAID', dates: [day('2030-01-07')] },
+            { outcome: 'PAID', dates: [day('2030-01-14')], amount: 45 },
+            { outcome: 'SKIPPED', dates: [day('2030-01-21'), day('2030-01-28')] }
+          ]
+        }
+      }
+    );
+
+    expect(await moveHandledToRecords({ apply: false })).toEqual({ payments: 1, records: 3, moved: 0 });
+    expect(await mongoose.model('PaymentRecord').countDocuments()).toBe(0);
+
+    expect(await moveHandledToRecords({ apply: true })).toEqual({ payments: 1, records: 3, moved: 1 });
+    expect(await payments.findOne({ _id: oid(id) })).not.toHaveProperty('handled');
+
+    const body = await gql(HANDLED, {}, token);
+    const [payment] = body.data.account.recurringPayments;
+    expect(payment.thisCycle.map((record: { kind: string }) => record.kind)).toEqual(['PAID', 'PAID', 'SKIPPED']);
+    expect(payment.history).toEqual([
+      { kind: 'SKIPPED', balanceChange: 0, open: true },
+      { kind: 'PAID', balanceChange: -45, open: true },
+      { kind: 'PAID', balanceChange: -50, open: true }
+    ]);
+
+    // Undoing still works from the records: the skip, then the £45 payment
+    await gql(UNPAID, { input: { accountId, recurringPaymentIds: [id] } }, token);
+    const undone = await gql(UNPAID, { input: { accountId, recurringPaymentIds: [id] } }, token);
+    expect(undone.data.markPaymentsUnpaid.account.bankBalance).toBe(1045);
+  });
+
+  it('has nothing to do once moved', async () => {
+    expect(await moveHandledToRecords({ apply: true })).toEqual({ payments: 0, records: 0, moved: 0 });
   });
 });

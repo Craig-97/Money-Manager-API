@@ -183,12 +183,13 @@ describe('updateRecurringPayment', () => {
   it('rejects paid or skipped dates with a validation error, as only paying or skipping records them', async () => {
     const { token, accountId } = await createUserWithAccount();
     const created = await makePayment(token, accountId, 'Edit me');
-    const handled = [{ outcome: 'PAID', dates: ['2030-01-01'] }];
-    const body = await gql(UPDATE, { id: idOf(created), input: { handled } }, token);
+    const thisCycle = [{ kind: 'PAID', dates: ['2030-01-01'] }];
+    const body = await gql(UPDATE, { id: idOf(created), input: { thisCycle } }, token);
     expect(body.errors).toBeDefined();
     expect(body.data).toBeUndefined();
     const stored = await mongoose.model('RecurringPayment').findById(idOf(created));
-    expect(stored.toObject().handled).toEqual([]);
+    expect(stored).not.toBeNull();
+    expect(await mongoose.model('PaymentRecord').countDocuments()).toBe(0);
   });
 
   it('rejects renaming to an existing recurring payment name', async () => {

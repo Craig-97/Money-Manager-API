@@ -29,3 +29,14 @@ export const INVALID_RECURRING_PAYMENT_TYPE = () =>
   new GraphQLError('Invalid payment type. Must be either INCOME or EXPENSE', {
     extensions: { code: 'INVALID_RECURRING_PAYMENT_TYPE' }
   });
+
+export const DEBT_NOT_TRACKED = (id: unknown) =>
+  new GraphQLError(`Recurring payment with id '${id}' isn't tracked as a debt`, {
+    extensions: { code: 'DEBT_NOT_TRACKED' }
+  });
+
+// A field error like BAD_USER_INPUT, as the form shows it against the amount
+export const OVERPAYMENT_TOO_LARGE = () =>
+  new GraphQLError("That's more than is left to pay", {
+    extensions: { code: 'BAD_USER_INPUT', field: 'amount' }
+  });

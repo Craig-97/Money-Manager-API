@@ -1,6 +1,6 @@
 import { userResolvers } from './user';
 import { accountResolvers } from './account';
-import { oneOffPaymentResolvers, recurringPaymentResolvers } from './payment';
+import { oneOffPaymentResolvers, paymentRecordResolvers, recurringPaymentResolvers } from './payment';
 import { noteResolvers } from './note';
 import { paydayResolvers } from './payday';
 
@@ -10,6 +10,7 @@ export const resolvers = [
   accountResolvers,
   oneOffPaymentResolvers,
   recurringPaymentResolvers,
+  paymentRecordResolvers,
   noteResolvers,
   paydayResolvers
 ];

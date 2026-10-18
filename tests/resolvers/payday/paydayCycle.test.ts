@@ -12,7 +12,7 @@ beforeAll(setupTestApp);
 afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
-const FIELDS = "id name nextDueDate handled { outcome dates }";
+const FIELDS = "id name nextDueDate thisCycle { kind dates }";
 const CREATE = `mutation ($input: CreateRecurringPaymentInput!) {
   createRecurringPayment(input: $input) { recurringPayment { ${FIELDS} } }
 }`;
@@ -27,7 +27,7 @@ const START = `mutation ($input: StartPaydayCycleInput!) {
 }`;
 const PAID = `mutation ($input: MarkPaymentsPaidInput!) {
   markPaymentsPaid(input: $input) {
-    account { bankBalance recurringPayments { ${FIELDS} } oneOffPayments { id } }
+    account { bankBalance recurringPayments { ${FIELDS} } oneOffPayments { id paidAt } }
   }
 }`;
 const UNPAID = `mutation ($input: MarkPaymentsUnpaidInput!) {
@@ -46,11 +46,11 @@ const SKIP = `mutation ($input: SkipRecurringPaymentsInput!) {
 const apiDate = (iso: string) => String(new Date(iso).getTime());
 
 const paid = (...dates: string[]) => ({
-  outcome: "PAID",
+  kind: "PAID",
   dates: dates.map(apiDate),
 });
 const skipped = (...dates: string[]) => ({
-  outcome: "SKIPPED",
+  kind: "SKIPPED",
   dates: dates.map(apiDate),
 });
 
@@ -116,7 +116,7 @@ const byName = (payments: any[]): Record<string, any> =>
   Object.fromEntries(payments.map((payment) => [payment.name, payment]));
 
 describe("recurring payment due dates", () => {
-  it("is due on its first payment date when that is still to come, with nothing handled", async () => {
+  it("is due on its first payment date when that is still to come, with nothing paid or skipped", async () => {
     const { token, accountId } = await createUserWithAccount();
     const payment = await createPayment(
       token,
@@ -127,7 +127,7 @@ describe("recurring payment due dates", () => {
 
     expect(payment).toMatchObject({
       nextDueDate: apiDate("2030-01-31"),
-      handled: [],
+      thisCycle: [],
     });
   });
 
@@ -164,7 +164,7 @@ describe("recurring payment due dates", () => {
     );
     expect(account.data.account.recurringPayments[0]).toMatchObject({
       nextDueDate: apiDate("2030-02-01"),
-      handled: [],
+      thisCycle: [],
     });
   });
 
@@ -187,11 +187,11 @@ describe("recurring payment due dates", () => {
     // 31 Jan moves on to the end of February
     expect(payments.Netflix).toMatchObject({
       nextDueDate: apiDate("2030-02-28"),
-      handled: [paid("2030-01-31")],
+      thisCycle: [paid("2030-01-31")],
     });
     expect(payments.Gym).toMatchObject({
       nextDueDate: apiDate("2030-02-10"),
-      handled: [skipped("2030-01-10")],
+      thisCycle: [skipped("2030-01-10")],
     });
   });
 
@@ -213,7 +213,7 @@ describe("recurring payment due dates", () => {
 
     expect(body.data.updateRecurringPayment.recurringPayment).toMatchObject({
       nextDueDate: apiDate("2030-03-05"),
-      handled: [],
+      thisCycle: [],
     });
   });
 
@@ -230,7 +230,7 @@ describe("recurring payment due dates", () => {
 
     expect(body.data.updateRecurringPayment.recurringPayment).toMatchObject({
       nextDueDate: apiDate("2030-02-10"),
-      handled: [paid("2030-01-10")],
+      thisCycle: [paid("2030-01-10")],
     });
   });
 
@@ -247,7 +247,7 @@ describe("recurring payment due dates", () => {
 
     expect(body.data.updateRecurringPayment.recurringPayment).toMatchObject({
       nextDueDate: null,
-      handled: [paid("2030-01-10")],
+      thisCycle: [paid("2030-01-10")],
     });
   });
 
@@ -266,7 +266,7 @@ describe("recurring payment due dates", () => {
 
     expect(body.data.updateRecurringPayment.recurringPayment).toMatchObject({
       nextDueDate: apiDate("2030-02-10"),
-      handled: [paid("2030-01-10")],
+      thisCycle: [paid("2030-01-10")],
     });
   });
 
@@ -283,7 +283,7 @@ describe("recurring payment due dates", () => {
 
     expect(body.data.updateRecurringPayment.recurringPayment).toMatchObject({
       nextDueDate: apiDate("2030-02-10"),
-      handled: [paid("2030-01-10")],
+      thisCycle: [paid("2030-01-10")],
     });
   });
 });
@@ -351,11 +351,11 @@ describe("startPaydayCycle", () => {
     const payments = byName(body.data.startPaydayCycle.account.recurringPayments);
     expect(payments.Netflix).toMatchObject({
       nextDueDate: apiDate("2030-02-28"),
-      handled: [],
+      thisCycle: [],
     });
     expect(payments.Gym).toMatchObject({
       nextDueDate: apiDate("2030-02-10"),
-      handled: [],
+      thisCycle: [],
     });
   });
 
@@ -375,7 +375,7 @@ describe("startPaydayCycle", () => {
 
     expect(body.data.startPaydayCycle.account.recurringPayments[0]).toMatchObject({
       nextDueDate: apiDate("2030-02-11"),
-      handled: [paid("2030-02-04")],
+      thisCycle: [paid("2030-02-04")],
     });
   });
 
@@ -482,7 +482,7 @@ describe("marking payments paid", () => {
     expect(account.recurringPayments).toEqual([
       expect.objectContaining({
         nextDueDate: apiDate("2030-02-28"),
-        handled: [paid("2030-01-31")],
+        thisCycle: [paid("2030-01-31")],
       }),
     ]);
   });
@@ -504,7 +504,7 @@ describe("marking payments paid", () => {
     expect(account.bankBalance).toBe(960);
     expect(account.recurringPayments[0]).toMatchObject({
       nextDueDate: apiDate("2030-01-21"),
-      handled: [paid("2030-01-07"), paid("2030-01-14")],
+      thisCycle: [paid("2030-01-07"), paid("2030-01-14")],
     });
   });
 
@@ -520,11 +520,11 @@ describe("marking payments paid", () => {
     expect(account.bankBalance).toBe(1000);
     expect(account.recurringPayments[0]).toMatchObject({
       nextDueDate: null,
-      handled: [],
+      thisCycle: [],
     });
   });
 
-  it("settles one-off payments, adding income, and deletes them", async () => {
+  it("settles one-off payments, adding income, and keeps them marked paid until payday", async () => {
     const { token, accountId } = await createUserWithAccount();
     const gift = await oneOff(token, accountId, "Gift", 75.5, "EXPENSE");
     const refund = await oneOff(token, accountId, "Refund", 10, "INCOME");
@@ -544,7 +544,11 @@ describe("marking payments paid", () => {
 
     const { account } = body.data.markPaymentsPaid;
     expect(account.bankBalance).toBe(934.5);
-    expect(account.oneOffPayments).toEqual([{ id: kept }]);
+    expect(account.oneOffPayments).toEqual([
+      { id: kept, paidAt: null },
+      { id: refund, paidAt: expect.any(String) },
+      { id: gift, paidAt: expect.any(String) },
+    ]);
   });
 
   it("returns whatever is selected on the account, notes included", async () => {
@@ -607,7 +611,7 @@ describe("markPaymentsUnpaid", () => {
     expect(account.bankBalance).toBe(1000);
     expect(account.recurringPayments[0]).toMatchObject({
       nextDueDate: apiDate("2030-01-31"),
-      handled: [],
+      thisCycle: [],
     });
   });
 
@@ -629,7 +633,7 @@ describe("markPaymentsUnpaid", () => {
     expect(account.bankBalance).toBe(980);
     expect(account.recurringPayments[0]).toMatchObject({
       nextDueDate: apiDate("2030-01-14"),
-      handled: [paid("2030-01-07")],
+      thisCycle: [paid("2030-01-07")],
     });
   });
 
@@ -650,7 +654,7 @@ describe("markPaymentsUnpaid", () => {
     expect(account.bankBalance).toBe(1000);
     expect(account.recurringPayments[0]).toMatchObject({
       nextDueDate: apiDate("2030-01-31"),
-      handled: [],
+      thisCycle: [],
     });
   });
 
@@ -689,7 +693,7 @@ describe("skipRecurringPayments", () => {
     expect(account.bankBalance).toBe(1000);
     expect(account.recurringPayments[0]).toMatchObject({
       nextDueDate: apiDate("2030-02-28"),
-      handled: [skipped("2030-01-31")],
+      thisCycle: [skipped("2030-01-31")],
     });
   });
 
@@ -710,7 +714,7 @@ describe("skipRecurringPayments", () => {
     expect(account.bankBalance).toBe(980);
     expect(account.recurringPayments[0]).toMatchObject({
       nextDueDate: apiDate("2030-03-31"),
-      handled: [paid("2030-01-31"), skipped("2030-02-28")],
+      thisCycle: [paid("2030-01-31"), skipped("2030-02-28")],
     });
   });
 
@@ -728,13 +732,13 @@ describe("skipRecurringPayments", () => {
 
     expect(body.data.skipRecurringPayments.account.recurringPayments[0]).toMatchObject({
       nextDueDate: apiDate("2030-02-04"),
-      handled: [skipped("2030-01-07", "2030-01-14", "2030-01-21", "2030-01-28")],
+      thisCycle: [skipped("2030-01-07", "2030-01-14", "2030-01-21", "2030-01-28")],
     });
 
     const undone = await markUnpaid(token, accountId, [cleaner.id]);
     expect(undone.data.markPaymentsUnpaid.account.recurringPayments[0]).toMatchObject({
       nextDueDate: apiDate("2030-01-07"),
-      handled: [],
+      thisCycle: [],
     });
   });
 
@@ -751,7 +755,7 @@ describe("skipRecurringPayments", () => {
 
     expect(body.data.skipRecurringPayments.account.recurringPayments[0]).toMatchObject({
       nextDueDate: apiDate("2030-01-31"),
-      handled: [],
+      thisCycle: [],
     });
   });
 
@@ -798,11 +802,11 @@ describe("skipRecurringPayments", () => {
 
     expect(errorCode(body)).toBe("FORBIDDEN");
     const mine = await gql(
-      `query { account { recurringPayments { handled { outcome } } } }`,
+      `query { account { recurringPayments { thisCycle { kind } } } }`,
       undefined,
       owner.token,
     );
-    expect(mine.data.account.recurringPayments).toEqual([{ handled: [] }]);
+    expect(mine.data.account.recurringPayments).toEqual([{ thisCycle: [] }]);
   });
 
   it("requires authentication", async () => {
