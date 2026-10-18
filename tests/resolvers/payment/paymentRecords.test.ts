@@ -163,6 +163,36 @@ describe('payment history', () => {
 
     expect(undone).toMatchObject({ thisCycle: [], history: [] });
   });
+
+  it("reads one payment's history on its own", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const payment = await recurring(token, accountId, { debt: card });
+    await pay(token, accountId, [payment.id]);
+
+    const body = await gql(
+      `query ($id: ID!) { recurringPayment(id: $id) { id name ${HISTORY} } }`,
+      { id: payment.id },
+      token
+    );
+
+    expect(body.errors).toBeUndefined();
+    expect(body.data.recurringPayment).toMatchObject({ id: payment.id, name: 'Credit card' });
+    expect(body.data.recurringPayment.history.map((record: { kind: string }) => record.kind)).toEqual([
+      'PAID',
+      'BALANCE_SET'
+    ]);
+  });
+
+  it("won't read another user's payment, or one that doesn't exist", async () => {
+    const owner = await createUserWithAccount();
+    const payment = await recurring(owner.token, owner.accountId);
+    const other = await createUserWithAccount();
+    const query = `query ($id: ID!) { recurringPayment(id: $id) { id } }`;
+
+    expect(errorCode(await gql(query, { id: payment.id }, other.token))).toBe('FORBIDDEN');
+    expect(errorCode(await gql(query, { id: 'nope' }, owner.token))).toBe('RECURRING_PAYMENT_NOT_FOUND');
+    expect(errorCode(await gql(query, { id: payment.id }))).toBe('UNAUTHENTICATED');
+  });
 });
 
 describe('payday', () => {

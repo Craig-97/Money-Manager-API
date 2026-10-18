@@ -128,6 +128,11 @@ export const recurringPaymentTypeDefs = `
     success: Boolean!
   }
 
+  type Query {
+    # One of the signed-in user's recurring payments, e.g. to read a debt's history
+    recurringPayment(id: ID!): RecurringPayment
+  }
+
   type Mutation {
     createRecurringPayment(input: CreateRecurringPaymentInput!): RecurringPaymentResponse!
     updateRecurringPayment(id: ID!, input: UpdateRecurringPaymentInput!): RecurringPaymentResponse!

@@ -1,4 +1,5 @@
 import type { Request } from 'express';
+import { isValidObjectId } from 'mongoose';
 import type { CreateRecurringPaymentInput, UpdateRecurringPaymentInput } from '../../types/payment/recurringPaymentTypes';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { enumValues } from '../../utils/helpers/enumHelpers';
@@ -21,6 +22,16 @@ import {
   updatedRecurring,
   withBalanceDate
 } from '../../utils';
+
+const findRecurringPayment = async (_: unknown, { id }: { id: string }, req: Request) => {
+  checkAuth(req);
+  const payment = isValidObjectId(id) ? await RecurringPayment.findById(id) : null;
+  if (!payment) {
+    throw RECURRING_PAYMENT_NOT_FOUND(id);
+  }
+  await checkAccountAccess(payment.account, req);
+  return payment;
+};
 
 const createRecurringPayment = async (_: unknown, { input }: { input: CreateRecurringPaymentInput }, req: Request) => {
   checkAuth(req);
@@ -137,6 +148,9 @@ const batchDeleteRecurringPayments = async (_: unknown, { ids }: { ids: string[]
 };
 
 export const recurringPaymentResolvers = {
+  Query: {
+    recurringPayment: findRecurringPayment
+  },
   Mutation: {
     createRecurringPayment,
     updateRecurringPayment,
