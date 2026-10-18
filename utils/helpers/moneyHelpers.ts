@@ -9,6 +9,7 @@ export const PAYMENTS_PER_YEAR: Record<PaymentFrequency, number> = {
   BIWEEKLY: 26,
   MONTHLY: 12,
   QUARTERLY: 4,
+  BIANNUALLY: 2,
   ANNUALLY: 1
 };
 

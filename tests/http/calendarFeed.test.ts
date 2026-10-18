@@ -218,6 +218,29 @@ describe('GET /cal/:token.ics', () => {
     expect(text.match(/SUMMARY:Payday/g)?.length).toBeGreaterThanOrEqual(12);
   });
 
+  it('puts a note that follows a payment on each of its dates', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const created = await addPayment(token, accountId, {
+      name: 'Prescription',
+      frequency: 'BIANNUALLY',
+      firstPaymentDate: day(10)
+    });
+    const payment = created.data.createRecurringPayment.recurringPayment.id;
+    await gql(
+      NOTE,
+      { input: { accountId, body: 'Book the prescription review', repeat: 'WITH_PAYMENT', remind: [14], payment } },
+      token
+    );
+    const feedToken = await turnOn(token, accountId);
+
+    const { text } = await fetchFeed(feedToken);
+
+    // Every 6 months, twice in the year ahead
+    expect(text.match(/SUMMARY:Book the prescription review/g)).toHaveLength(2);
+    expect(eventFor(text, 'Book the prescription review')).toContain(`DTSTART;VALUE=DATE:${compact(10)}`);
+    expect(eventFor(text, 'Prescription due')).toBeDefined();
+  });
+
   it('leaves out what it was told to, and adds debt-free dates when asked', async () => {
     const { token, accountId } = await createUserWithAccount();
     await addPayment(token, accountId, {

@@ -4,6 +4,8 @@ export const PaymentFrequency = {
   BIWEEKLY: 'BIWEEKLY',
   MONTHLY: 'MONTHLY',
   QUARTERLY: 'QUARTERLY',
+  // Every 6 months
+  BIANNUALLY: 'BIANNUALLY',
   ANNUALLY: 'ANNUALLY'
 } as const;
 

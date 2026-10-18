@@ -14,6 +14,8 @@ describe('occurrence', () => {
     expect(iso(occurrence(first, 'MONTHLY', 1))).toBe('2030-02-28');
     expect(iso(occurrence(first, 'MONTHLY', 2))).toBe('2030-03-31');
     expect(iso(occurrence(first, 'QUARTERLY', 1))).toBe('2030-04-30');
+    expect(iso(occurrence(first, 'BIANNUALLY', 1))).toBe('2030-07-31');
+    expect(iso(occurrence(day('2030-08-31'), 'BIANNUALLY', 1))).toBe('2031-02-28');
     expect(iso(occurrence(day('2028-02-29'), 'ANNUALLY', 1))).toBe('2029-02-28');
   });
 });

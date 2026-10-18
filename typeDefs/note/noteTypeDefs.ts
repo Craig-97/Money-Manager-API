@@ -15,7 +15,8 @@ export const noteTypeDefs = `
     date: String
     # Days before the date to remind, e.g. [30, 7]: 0, 1, 7, 14 or 30. Only used with a date.
     remind: [Int!]!
-    # Whether the date comes round every year
+    # How often the date comes round. WITH_PAYMENT follows the linked payment's dates instead of
+    # the note's own.
     repeat: NoteRepeat!
     # The recurring payment it's about, on the same account
     payment: ID

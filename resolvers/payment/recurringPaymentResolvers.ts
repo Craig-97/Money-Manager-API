@@ -7,6 +7,7 @@ import { checkAuth, checkAccountAccess } from '../../middleware/isAuth';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
 import { PaymentRecord } from '../../models/payment/PaymentRecord';
 import { Note } from '../../models/note/Note';
+import { NoteRepeat } from '../../constants/note/noteRepeat';
 import { latestOpenRecord, recordBalanceSet } from './paymentRecordResolvers';
 import {
   RECURRING_PAYMENT_NOT_FOUND,
@@ -141,8 +142,15 @@ const batchDeleteRecurringPayments = async (_: unknown, { ids }: { ids: string[]
     if (result.deletedCount !== ids.length) {
       throw RECURRING_PAYMENT_DELETE_FAILED();
     }
-    // Deleting a payment takes its history with it. Notes about it stay, no longer linked.
+    // Deleting a payment takes its history with it. Notes about it stay, no longer linked; one that
+    // followed its dates keeps the next one, once.
     await PaymentRecord.deleteMany({ recurringPayment: { $in: ids } }).session(session);
+    for (const payment of payments) {
+      await Note.updateMany(
+        { payment: payment._id, repeat: NoteRepeat.WITH_PAYMENT },
+        { $set: { repeat: NoteRepeat.NONE, date: payment.nextDueDate ?? null } }
+      ).session(session);
+    }
     await Note.updateMany({ payment: { $in: ids } }, { $set: { payment: null } }).session(session);
 
     return { success: true, deletedCount: result.deletedCount, ids };

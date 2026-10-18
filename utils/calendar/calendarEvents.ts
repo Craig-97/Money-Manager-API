@@ -140,21 +140,34 @@ const paydayEvents = ({ feed, settings, monthlyIncome, payday, holidays, today }
   }));
 };
 
-// The note's date, and each year after it when it repeats, inside the feed's dates
-const noteDates = (note: Note, today: Date) => {
-  if (!note.date) return [];
-  const from = addDays(today, -DAYS_BEHIND);
-  const until = addDays(today, DAYS_AHEAD);
-  if (note.repeat !== NoteRepeat.YEARLY) {
-    return note.date >= from && note.date <= until ? [note.date] : [];
-  }
-  return occurrencesBefore({ firstPaymentDate: note.date, frequency: PaymentFrequency.ANNUALLY }, from, until);
+// How often each repeat comes round, as the payment frequency with the same steps
+const REPEAT_FREQUENCIES: Partial<Record<NoteRepeat, PaymentFrequency>> = {
+  MONTHLY: PaymentFrequency.MONTHLY,
+  QUARTERLY: PaymentFrequency.QUARTERLY,
+  BIANNUALLY: PaymentFrequency.BIANNUALLY,
+  YEARLY: PaymentFrequency.ANNUALLY
 };
 
-const noteEvents = ({ feed, notes, today }: FeedSource): CalendarEvent[] => {
+// The note's dates inside the feed's: its own, each time it repeats, or its payment's dates
+const noteDates = (note: Note, { today, payments }: { today: Date; payments: FeedSource['payments'] }) => {
+  const from = addDays(today, -DAYS_BEHIND);
+  const until = addDays(today, DAYS_AHEAD);
+  if (note.repeat === NoteRepeat.WITH_PAYMENT) {
+    const payment = payments.find(item => String(item._id) === String(note.payment));
+    return payment?.nextDueDate
+      ? occurrencesBefore(payment, payment.nextDueDate, until).slice(0, MAX_PER_PAYMENT)
+      : [];
+  }
+  if (!note.date) return [];
+  const frequency = REPEAT_FREQUENCIES[note.repeat];
+  if (!frequency) return note.date >= from && note.date <= until ? [note.date] : [];
+  return occurrencesBefore({ firstPaymentDate: note.date, frequency }, from, until);
+};
+
+const noteEvents = ({ feed, notes, payments, today }: FeedSource): CalendarEvent[] => {
   if (!feed.notes) return [];
   return notes.flatMap(note =>
-    noteDates(note, today).map(date => {
+    noteDates(note, { today, payments }).map(date => {
       const day = toIsoDay(date);
       return {
         uid: `note-${note._id.toString()}-${day}@money-manager`,

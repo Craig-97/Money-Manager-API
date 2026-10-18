@@ -6,6 +6,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTH_STEPS: Partial<Record<PaymentFrequency, number>> = {
   MONTHLY: 1,
   QUARTERLY: 3,
+  BIANNUALLY: 6,
   ANNUALLY: 12
 };
 

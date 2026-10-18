@@ -266,4 +266,57 @@ describe('note dates', () => {
     const note = await mongoose.model('Note').findById(created.data.createNote.note.id);
     expect(note.payment).toBeNull();
   });
+
+  it('repeats every month, 3 months or 6 months as well as every year', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const body = await gql(
+      CREATE_DATED,
+      { input: { accountId, body: 'Prescription', date: '2030-10-01', remind: [7], repeat: 'BIANNUALLY' } },
+      token
+    );
+    expect(body.errors).toBeUndefined();
+    expect(body.data.createNote.note.repeat).toBe('BIANNUALLY');
+  });
+
+  it("only repeats with a payment once it's linked to one", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const unlinked = await gql(
+      CREATE_DATED,
+      { input: { accountId, body: 'Nothing to follow', repeat: 'WITH_PAYMENT' } },
+      token
+    );
+    expect(errorCode(unlinked)).toBe('BAD_USER_INPUT');
+
+    const payment = await makePayment(token, accountId);
+    const linked = await gql(
+      CREATE_DATED,
+      { input: { accountId, body: 'Follows it', repeat: 'WITH_PAYMENT', remind: [14], payment } },
+      token
+    );
+    expect(linked.errors).toBeUndefined();
+
+    // Unlinking it while it still follows the payment isn't allowed
+    const unlink = await gql(
+      UPDATE_DATED,
+      { id: linked.data.createNote.note.id, input: { payment: null } },
+      token
+    );
+    expect(errorCode(unlink)).toBe('BAD_USER_INPUT');
+  });
+
+  it("keeps the payment's next date, once, when a payment it follows is deleted", async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const payment = await makePayment(token, accountId);
+    const created = await gql(
+      CREATE_DATED,
+      { input: { accountId, body: 'Quotes', repeat: 'WITH_PAYMENT', remind: [30], payment } },
+      token
+    );
+
+    await gql(`mutation ($ids: [ID!]!) { batchDeleteRecurringPayments(ids: $ids) { success } }`, { ids: [payment] }, token);
+
+    const note = await mongoose.model('Note').findById(created.data.createNote.note.id);
+    expect(note).toMatchObject({ repeat: 'NONE', payment: null, remind: [30] });
+    expect(note.date.toISOString().slice(0, 10)).toBe('2030-11-07');
+  });
 });
