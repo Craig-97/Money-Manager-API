@@ -61,8 +61,8 @@ const updateReminderSettings = async (
 
 const UPDATES: Record<ReminderAction, (until: Date | null) => Record<string, unknown>> = {
   READ: () => ({ read: true }),
-  // Clearing one is seeing it
-  CLEAR: () => ({ cleared: true, read: true }),
+  // Leaves read alone, so undoing it brings it back just as it was
+  CLEAR: () => ({ cleared: true }),
   // When it goes off again it's new, so it counts again
   LATER: until => ({ snoozedUntil: until, read: false }),
   RESTORE: () => ({ cleared: false, snoozedUntil: null })

@@ -83,16 +83,16 @@ describe('updateReminders', () => {
     );
   });
 
-  it('clears a reminder, which counts as reading it, and brings it back', async () => {
+  it('clears a reminder and brings it back just as it was, still new', async () => {
     const { token, accountId } = await createUserWithAccount();
     const cleared = await gql(UPDATE, { input: { accountId, keys: [KEY], action: 'CLEAR' } }, token);
     expect(cleared.data.updateReminders.states).toEqual([
-      { key: KEY, read: true, cleared: true, snoozedUntil: null }
+      { key: KEY, read: false, cleared: true, snoozedUntil: null }
     ]);
 
     const restored = await gql(UPDATE, { input: { accountId, keys: [KEY], action: 'RESTORE' } }, token);
     expect(restored.data.updateReminders.states).toEqual([
-      { key: KEY, read: true, cleared: false, snoozedUntil: null }
+      { key: KEY, read: false, cleared: false, snoozedUntil: null }
     ]);
   });
 
