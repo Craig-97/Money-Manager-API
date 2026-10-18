@@ -3,6 +3,7 @@ import { rateLimit, MINUTE } from 'express-rate-limit';
 import { Account } from '../models/account/Account';
 import { Note } from '../models/note/Note';
 import { Payday } from '../models/payday/Payday';
+import { OneOffPayment } from '../models/payment/OneOffPayment';
 import { RecurringPayment } from '../models/payment/RecurringPayment';
 import { calendarEvents } from '../utils/calendar/calendarEvents';
 import { writeCalendar } from '../utils/calendar/ics';
@@ -35,8 +36,9 @@ export const calendarFeed = async (req: Request, res: Response) => {
   }
 
   try {
-    const [payments, notes, payday] = await Promise.all([
+    const [payments, oneOffPayments, notes, payday] = await Promise.all([
       RecurringPayment.find({ account: account._id }),
+      OneOffPayment.find({ account: account._id, paidAt: null }),
       Note.find({ account: account._id, date: { $ne: null } }),
       Payday.findOne({ account: account._id })
     ]);
@@ -45,6 +47,7 @@ export const calendarFeed = async (req: Request, res: Response) => {
       settings: account.reminderSettings,
       monthlyIncome: account.monthlyIncome,
       payments,
+      oneOffPayments,
       notes,
       payday,
       holidays: await bankHolidaysFor(payday?.bankHolidayRegion),

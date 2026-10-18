@@ -140,6 +140,30 @@ describe('GET /cal/:token.ics', () => {
     expect(res.text.match(/SUMMARY:Energy due/g)).toHaveLength(12);
   });
 
+  it('carries one-off payments still to pay, with their own timing', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    await gql(
+      `mutation ($input: CreateOneOffPaymentInput!) { createOneOffPayment(input: $input) { success } }`,
+      {
+        input: {
+          accountId,
+          name: 'Birthday',
+          amount: 75,
+          dueDate: day(9),
+          type: 'EXPENSE',
+          category: 'GIFT',
+          dueReminder: { off: false, days: 7 }
+        }
+      },
+      token
+    );
+    const feedToken = await turnOn(token, accountId);
+
+    const birthday = eventFor((await fetchFeed(feedToken)).text, 'Birthday due');
+    expect(birthday).toContain(`DTSTART;VALUE=DATE:${compact(9)}`);
+    expect(birthday).toContain('TRIGGER:-PT160H');
+  });
+
   it("uses a payment's own timing, and none when it's off", async () => {
     const { token, accountId } = await createUserWithAccount();
     await addPayment(token, accountId, {

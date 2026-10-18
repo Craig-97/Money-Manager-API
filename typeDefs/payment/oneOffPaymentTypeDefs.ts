@@ -17,6 +17,8 @@ export const oneOffPaymentTypeDefs = `
     # When it was marked paid. A paid one-off stays until the next payday, so it can be undone with
     # markPaymentsUnpaid; payday clears it away.
     paidAt: String
+    # When the reminder before it's due goes off
+    dueReminder: ReminderTiming!
   }
 
   input CreateOneOffPaymentInput {
@@ -26,6 +28,7 @@ export const oneOffPaymentTypeDefs = `
     dueDate: String!
     type: PaymentType!
     category: OneOffPaymentCategory!
+    dueReminder: ReminderTimingInput
   }
 
   # A one-off payment created alongside its account, so it has no accountId yet
@@ -35,6 +38,7 @@ export const oneOffPaymentTypeDefs = `
     dueDate: String!
     type: PaymentType!
     category: OneOffPaymentCategory!
+    dueReminder: ReminderTimingInput
   }
 
   input UpdateOneOffPaymentInput {
@@ -43,6 +47,7 @@ export const oneOffPaymentTypeDefs = `
     dueDate: String
     type: PaymentType
     category: OneOffPaymentCategory
+    dueReminder: ReminderTimingInput
   }
 
   type OneOffPaymentResponse {

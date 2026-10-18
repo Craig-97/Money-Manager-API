@@ -175,3 +175,31 @@ describe('batchDeleteOneOffPayments', () => {
     expect(await mongoose.model('OneOffPayment').countDocuments()).toBe(1);
   });
 });
+
+describe('one-off reminders', () => {
+  const TIMING = `mutation ($input: CreateOneOffPaymentInput!) {
+    createOneOffPayment(input: $input) { oneOffPayment { id dueReminder { off days } } }
+  }`;
+  const UPDATE_TIMING = `mutation ($id: ID!, $input: UpdateOneOffPaymentInput!) {
+    updateOneOffPayment(id: $id, input: $input) { oneOffPayment { dueReminder { off days } } }
+  }`;
+  const input = (accountId: string, extra: Variables = {}) => ({
+    input: { accountId, name: 'Birthday', amount: 75, dueDate: '2030-06-15', type: 'EXPENSE', category: 'GIFT', ...extra }
+  });
+
+  it('follows the usual timing unless given its own, which can change', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const created = await gql(TIMING, input(accountId), token);
+    expect(created.data.createOneOffPayment.oneOffPayment.dueReminder).toEqual({ off: false, days: null });
+
+    const { id } = created.data.createOneOffPayment.oneOffPayment;
+    const updated = await gql(UPDATE_TIMING, { id, input: { dueReminder: { off: false, days: 3 } } }, token);
+    expect(updated.data.updateOneOffPayment.oneOffPayment.dueReminder).toEqual({ off: false, days: 3 });
+  });
+
+  it('rejects days that are not a choice', async () => {
+    const { token, accountId } = await createUserWithAccount();
+    const body = await gql(TIMING, input(accountId, { dueReminder: { off: false, days: 5 } }), token);
+    expect(errorCode(body)).toBe('BAD_USER_INPUT');
+  });
+});

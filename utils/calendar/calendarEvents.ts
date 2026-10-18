@@ -5,6 +5,7 @@ import { PayFrequency } from '../../constants/payday';
 import type { CalendarFeed, ReminderSettings } from '../../models/account/Account';
 import type { Note } from '../../models/note/Note';
 import type { Payday } from '../../models/payday/Payday';
+import type { OneOffPayment } from '../../models/payment/OneOffPayment';
 import type { RecurringPayment } from '../../models/payment/RecurringPayment';
 import type { ReminderTiming } from '../../models/reminder/reminderTiming';
 import { addDays, nextOccurrence, occurrencesBefore } from '../dates';
@@ -29,6 +30,7 @@ export interface FeedSource {
   settings: ReminderSettings;
   monthlyIncome?: number;
   payments: WithId<RecurringPayment>[];
+  oneOffPayments: WithId<OneOffPayment>[];
   notes: WithId<Note>[];
   payday: Payday | null;
   holidays: BankHolidays;
@@ -80,6 +82,26 @@ const paymentEvents = ({ feed, settings, payments, today }: FeedSource): Calenda
           alarms
         };
       });
+  });
+};
+
+// One-off payments not paid yet, from a month back
+const oneOffEvents = ({ feed, settings, oneOffPayments, today }: FeedSource): CalendarEvent[] => {
+  if (!feed.payments) return [];
+  const from = addDays(today, -DAYS_BEHIND);
+  const until = addDays(today, DAYS_AHEAD);
+  return oneOffPayments.flatMap(payment => {
+    if (payment.paidAt || !payment.dueDate || payment.dueDate < from || payment.dueDate > until) return [];
+    const day = toIsoDay(payment.dueDate);
+    const what = payment.type === PaymentType.INCOME ? 'comes in' : 'due';
+    return [
+      {
+        uid: `one-off-${payment._id.toString()}-${day}@money-manager`,
+        date: day,
+        title: titled(`${payment.name} ${what}`, payment.amount, feed),
+        alarms: alarmsFor(payment.dueReminder, settings.paymentDays)
+      }
+    ];
   });
 };
 
@@ -180,6 +202,7 @@ const debtFreeEvents = ({ feed, payments }: FeedSource): CalendarEvent[] => {
 export const calendarEvents = (source: FeedSource) =>
   [
     ...paymentEvents(source),
+    ...oneOffEvents(source),
     ...renewalEvents(source),
     ...paydayEvents(source),
     ...noteEvents(source),
