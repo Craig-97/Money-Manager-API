@@ -1,7 +1,8 @@
 import mongoose, { Schema, Types } from 'mongoose';
 
+// The bank balance lives on the budget's accounts. Budgets saved before them carry a bankBalance
+// until npm run migrate:accounts moves it to a current account.
 export interface Budget {
-  bankBalance?: number;
   monthlyIncome?: number;
   user?: Types.ObjectId;
   // The payday the current cycle was started on, so the payday prompt only shows once per payday
@@ -58,7 +59,6 @@ const calendarFeedSchema = new Schema<CalendarFeed>(
 
 // First define the schema
 const BudgetSchema = new Schema<Budget>({
-  bankBalance: Number,
   monthlyIncome: Number,
   user: { type: Schema.Types.ObjectId, ref: 'User' },
   cycleStartedOn: Date,

@@ -36,6 +36,9 @@ export const recurringPaymentTypeDefs = `
     renewalReminder: ReminderTiming!
     # Set when it's paying off a loan or card; only ever on an expense
     debt: Debt
+    # The savings account it moves money into, like a standing order: marking it paid adds the
+    # amount there. Only ever on an expense, and never on a debt.
+    paysInto: ID
   }
 
   # A loan or card a recurring payment pays off. Marking a payment paid takes the period's interest
@@ -70,10 +73,17 @@ export const recurringPaymentTypeDefs = `
     balanceChange: Float!
     # What it did to a debt, when the payment is one
     debt: PaymentRecordDebt
+    # What it added to the savings account the payment pays into
+    transfer: PaymentRecordTransfer
     # Still in the current cycle, so it can be undone: the latest pay or skip with
     # markPaymentsUnpaid, an overpayment with undoDebtOverpayment
     open: Boolean!
     createdAt: String!
+  }
+
+  type PaymentRecordTransfer {
+    account: ID!
+    amount: Float!
   }
 
   type PaymentRecordDebt {
@@ -98,6 +108,8 @@ export const recurringPaymentTypeDefs = `
     dueReminder: ReminderTimingInput
     renewalReminder: ReminderTimingInput
     debt: DebtInput
+    # A savings account in the same budget; on an update, null stops it
+    paysInto: ID
   }
 
   # A recurring payment created alongside its budget, so it has no budgetId yet
@@ -113,6 +125,8 @@ export const recurringPaymentTypeDefs = `
     dueReminder: ReminderTimingInput
     renewalReminder: ReminderTimingInput
     debt: DebtInput
+    # A savings account in the same budget; on an update, null stops it
+    paysInto: ID
   }
 
   input UpdateRecurringPaymentInput {
@@ -127,6 +141,8 @@ export const recurringPaymentTypeDefs = `
     dueReminder: ReminderTimingInput
     renewalReminder: ReminderTimingInput
     debt: DebtInput
+    # A savings account in the same budget; on an update, null stops it
+    paysInto: ID
   }
 
   type RecurringPaymentResponse {

@@ -14,6 +14,7 @@
     "test": "jest",
     "db:copy": "tsx scripts/copyLiveToDev.ts",
     "migrate:budget": "tsx scripts/migrateBudget.ts",
+    "migrate:accounts": "tsx scripts/migrateAccounts.ts",
     "migrate:bills": "tsx scripts/migrateBills.ts",
     "migrate:budget-ids": "tsx scripts/removeBudgetIdLists.ts",
     "migrate:payment-records": "tsx scripts/moveHandledToRecords.ts",

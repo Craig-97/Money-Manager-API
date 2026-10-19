@@ -273,13 +273,13 @@ describe('updateBudget', () => {
     updateBudget(id: $id, input: $input) { success budget { bankBalance monthlyIncome } }
   }`;
 
-  it('updates only the provided fields', async () => {
+  it('updates the income, leaving the balance to the accounts', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const body = await gql(UPDATE, { id: budgetId, input: { bankBalance: 42 } }, token);
+    const body = await gql(UPDATE, { id: budgetId, input: { monthlyIncome: 42 } }, token);
     expect(body.errors).toBeUndefined();
     expect(body.data.updateBudget).toEqual({
       success: true,
-      budget: { bankBalance: 42, monthlyIncome: 2000 }
+      budget: { bankBalance: 1000, monthlyIncome: 42 }
     });
   });
 
@@ -307,7 +307,7 @@ describe('updateBudget', () => {
     const { token } = await createUserWithBudget();
     const body = await gql(
       UPDATE,
-      { id: '507f1f77bcf86cd799439011', input: { bankBalance: 1 } },
+      { id: '507f1f77bcf86cd799439011', input: { monthlyIncome: 1 } },
       token
     );
     // Refused before looking it up, the same as someone else's budget

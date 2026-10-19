@@ -37,12 +37,13 @@ describe('accountsToBudgets', () => {
   afterEach(async () => {
     if (await db().listCollections({ name: 'accounts' }).hasNext()) await db().collection('accounts').drop();
     if (await db().collection('paydays').indexExists('account_1')) await db().collection('paydays').dropIndex('account_1');
-    await mongoose.model('Payday').createIndexes();
+    await Promise.all(Object.values(mongoose.models).map(model => model.syncIndexes()));
   });
 
   // Puts a budget back the way older versions stored it: an accounts collection, each record's
   // account field, and a unique index on that field
   const asOldAccount = async () => {
+    await db().collection('accounts').drop();
     await db().renameCollection('budgets', 'accounts');
     for (const name of ['users', 'paydays']) {
       await db().collection(name).updateMany({ budget: { $exists: true } }, { $rename: { budget: 'account' } });
@@ -75,7 +76,8 @@ describe('accountsToBudgets', () => {
 
     const names = (await db().listCollections({}, { nameOnly: true }).toArray()).map(c => c.name);
     expect(names).toContain('budgets');
-    expect(names).not.toContain('accounts');
+    // The accounts collection is the bank accounts' now, with nothing of the old budgets left in it
+    expect(await db().collection('accounts').countDocuments({ user: { $exists: true } })).toBe(0);
     expect(await db().collection('paydays').countDocuments({ account: { $exists: true } })).toBe(0);
     const indexes = (await db().collection('paydays').indexes()).map(index => index.name);
     expect(indexes).toContain('budget_1');
@@ -84,6 +86,20 @@ describe('accountsToBudgets', () => {
     const body = await gql(`query { budget { id payday { id } } }`, undefined, token);
     expect(body.errors).toBeUndefined();
     expect(body.data.budget).toMatchObject({ id: budgetId, payday: { id: expect.any(String) } });
+  });
+
+  it('leaves bank accounts in the accounts collection alone', async () => {
+    await createUserWithBudget();
+    const result = await accountsToBudgets({ apply: true });
+    expect(result).toMatchObject({ renamesCollection: false, budgets: 0 });
+    expect(await db().collection('accounts').countDocuments({ kind: 'CURRENT' })).toBe(1);
+  });
+
+  it('stops when the accounts collection holds old budgets and bank accounts', async () => {
+    await createUserWithBudget();
+    await db().collection('accounts').insertOne({ user: oid('507f1f77bcf86cd799439011'), bankBalance: 1 });
+    await expect(accountsToBudgets({ apply: true })).rejects.toThrow('holds old budgets and bank accounts');
+    await db().collection('accounts').deleteMany({ user: { $exists: true } });
   });
 
   it('has nothing to do once renamed', async () => {
@@ -103,7 +119,8 @@ describe('accountsToBudgets', () => {
 
   it('stops when both collections have data, rather than guess how to merge them', async () => {
     await createUserWithBudget();
-    await db().collection('accounts').insertOne({ bankBalance: 1 });
+    await db().collection('accounts').drop();
+    await db().collection('accounts').insertOne({ user: oid('507f1f77bcf86cd799439011'), bankBalance: 1 });
     await expect(accountsToBudgets({ apply: true })).rejects.toThrow('Both an accounts and a budgets collection have data');
   });
 });
@@ -190,7 +207,7 @@ describe('removeBudgetIdLists', () => {
     const stored = await budgets.findOne({ _id: oid(budgetId) });
     expect(stored).not.toHaveProperty('notes');
     expect(stored).not.toHaveProperty('payday');
-    expect(stored).toHaveProperty('bankBalance', 1000);
+    expect(stored).toHaveProperty('monthlyIncome', 2000);
   });
 });
 

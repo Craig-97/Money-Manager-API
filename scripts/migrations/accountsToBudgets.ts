@@ -7,6 +7,10 @@ import mongoose from 'mongoose';
  * on the old field: a unique one would clash once the field is gone from every record. The
  * indexes on budget are built straight after, as the API would when it starts.
  *
+ * "accounts" now holds bank accounts, so the collection is only renamed while it still holds the
+ * old documents, which have a user. One holding both means bank accounts were added before the
+ * rename, which is a job for a person.
+ *
  * Run it before the other migrations, which use the new names. Running it again changes nothing.
  */
 
@@ -38,7 +42,14 @@ export const accountsToBudgets = async ({ apply }: { apply: boolean }) => {
 
   const collections = await db.listCollections({}, { nameOnly: true }).toArray();
   const names = new Set(collections.map(collection => collection.name));
-  const renamesCollection = names.has('accounts');
+  const accounts = db.collection('accounts');
+  const oldDocuments = names.has('accounts')
+    ? await accounts.countDocuments({ user: { $exists: true } })
+    : 0;
+  const renamesCollection = oldDocuments > 0;
+  if (renamesCollection && (await accounts.countDocuments({ budget: { $exists: true } })) > 0) {
+    throw new Error('The accounts collection holds old budgets and bank accounts. Check it by hand first.');
+  }
 
   // The API makes an empty budgets collection as soon as it connects, so one may be waiting. One
   // with budgets in means a half-done run or data written since: merging them is a job for a person.
@@ -47,7 +58,7 @@ export const accountsToBudgets = async ({ apply }: { apply: boolean }) => {
     throw new Error('Both an accounts and a budgets collection have data. Check them by hand first.');
   }
 
-  const budgets = renamesCollection ? await db.collection('accounts').countDocuments() : 0;
+  const budgets = oldDocuments;
   if (apply && replacesEmptyBudgets) await db.collection('budgets').drop();
   if (apply && renamesCollection) await db.renameCollection('accounts', 'budgets');
 
@@ -69,8 +80,10 @@ export const accountsToBudgets = async ({ apply }: { apply: boolean }) => {
     linked.push({ collection: name, records, indexes });
   }
 
+  // Indexes as the models declare them: new ones built, and any the new models made on the old
+  // collection before it moved dropped
   if (apply) {
-    await Promise.all(Object.values(mongoose.models).map(model => model.createIndexes()));
+    await Promise.all(Object.values(mongoose.models).map(model => model.syncIndexes()));
   }
   return { renamesCollection, replacesEmptyBudgets, budgets, linked };
 };

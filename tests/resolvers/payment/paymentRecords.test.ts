@@ -75,7 +75,7 @@ const pay = (token: string, budgetId: string, recurringPaymentIds: string[], one
 const unpay = (token: string, budgetId: string, recurringPaymentIds: string[], oneOffPaymentIds?: string[]) =>
   gql(UNPAID, { input: { budgetId, recurringPaymentIds, oneOffPaymentIds } }, token);
 const startCycle = (token: string, budgetId: string, payday: string) =>
-  gql(START, { input: { budgetId, payday, bankBalance: 1000, leftOver: [] } }, token);
+  gql(START, { input: { budgetId, payday, currentBalance: 1000, leftOver: [] } }, token);
 
 const budgetIn = (body: GqlBody) => {
   expect(body.errors).toBeUndefined();

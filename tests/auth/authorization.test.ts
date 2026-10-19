@@ -52,17 +52,17 @@ describe('budgets', () => {
   it("can't update another user's budget", async () => {
     const body = await asOther(
       `mutation ($id: ID!, $input: UpdateBudgetInput!) { updateBudget(id: $id, input: $input) { success } }`,
-      { id: owner.budgetId, input: { bankBalance: 0 } }
+      { id: owner.budgetId, input: { monthlyIncome: 0 } }
     );
     expect(errorCode(body)).toBe('FORBIDDEN');
-    const mine = await gql(`query { budget { bankBalance } }`, undefined, owner.token);
-    expect(mine.data.budget.bankBalance).toBe(1000);
+    const mine = await gql(`query { budget { monthlyIncome } }`, undefined, owner.token);
+    expect(mine.data.budget.monthlyIncome).toBe(2000);
   });
 
   it("can't run payday or change payments on another user's budget", async () => {
     const payday = await asOther(
       `mutation ($input: StartPaydayCycleInput!) { startPaydayCycle(input: $input) { success } }`,
-      { input: { budgetId: owner.budgetId, payday: '2030-01-01', bankBalance: 0, leftOver: [] } }
+      { input: { budgetId: owner.budgetId, payday: '2030-01-01', currentBalance: 0, leftOver: [] } }
     );
     expect(errorCode(payday)).toBe('FORBIDDEN');
     const paid = await asOther(

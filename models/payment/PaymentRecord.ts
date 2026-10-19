@@ -20,6 +20,12 @@ export interface RecordDebt {
   balanceAfter: number;
 }
 
+// Money a record moved into one of the budget's other accounts: a payment into savings
+export interface RecordTransfer {
+  account: Types.ObjectId;
+  amount: number;
+}
+
 /*
  * Something that happened to a payment: a date paid or skipped, an overpayment, or a debt's balance
  * set by hand. These are the history, and the open ones are the current cycle: what the dashboard
@@ -37,6 +43,8 @@ export interface PaymentRecord {
   // What it did to the bank balance: negative for money out, 0 when it left it alone
   balanceChange: number;
   debt?: RecordDebt | null;
+  // What it added to the account the payment pays into, so undoing takes exactly that back off
+  transfer?: RecordTransfer | null;
   // Still in the current cycle, so it can be undone. Payday, or a change to the payment's
   // schedule, closes it.
   open: boolean;
@@ -61,6 +69,14 @@ const recordDebtSchema = new Schema<RecordDebt>(
   { _id: false }
 );
 
+const recordTransferSchema = new Schema<RecordTransfer>(
+  {
+    account: { type: Schema.Types.ObjectId, ref: 'Account', required: true },
+    amount: { type: Number, required: true }
+  },
+  { _id: false }
+);
+
 const paymentRecordSchema = new Schema<PaymentRecord>(
   {
     budget: { type: Schema.Types.ObjectId, ref: 'Budget', required: true },
@@ -71,6 +87,7 @@ const paymentRecordSchema = new Schema<PaymentRecord>(
     dates: { type: [Date], required: true },
     balanceChange: { type: Number, required: true },
     debt: { type: recordDebtSchema, default: undefined },
+    transfer: { type: recordTransferSchema, default: undefined },
     open: { type: Boolean, default: true }
   },
   { timestamps: { createdAt: true, updatedAt: false } }

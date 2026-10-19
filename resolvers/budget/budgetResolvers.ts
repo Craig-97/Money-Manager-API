@@ -13,6 +13,16 @@ import type {
 import { PaymentType } from "../../constants/payment/paymentType";
 import { PaymentRecordKind } from "../../constants/payment/paymentRecordKind";
 import { LeftOverOutcome } from "../../constants/payday/leftOverOutcome";
+import { AccountKind } from "../../constants/account/accountKind";
+import { Account } from "../../models/account/Account";
+import {
+  accountsOf,
+  countedBalance,
+  currentAccountOf,
+  moveMoney,
+  setBalance,
+  setBalances,
+} from "../account/accountResolvers";
 import { checkBudgetAccess, checkAuth } from "../../middleware/isAuth";
 import { Budget } from "../../models/budget/Budget";
 import { User } from "../../models/user/User";
@@ -20,7 +30,11 @@ import { Note } from "../../models/note/Note";
 import { OneOffPayment } from "../../models/payment/OneOffPayment";
 import { Payday } from "../../models/payday/Payday";
 import { RecurringPayment } from "../../models/payment/RecurringPayment";
-import { PaymentRecord, type RecordDebt } from "../../models/payment/PaymentRecord";
+import {
+  PaymentRecord,
+  type RecordDebt,
+  type RecordTransfer,
+} from "../../models/payment/PaymentRecord";
 import {
   latestOpenRecord,
   recordBalanceSet,
@@ -121,11 +135,20 @@ const createBudget = async (
     }
 
     const budget = await new Budget({
-      bankBalance,
       monthlyIncome,
       user: user._id,
       // Setup starts the first cycle, so the payday prompt waits for the next payday
       cycleStartedOn: ukDay(),
+    }).save({ session });
+
+    // Where pay lands, holding the balance the user started with
+    await new Account({
+      budget: budget._id,
+      name: "Current account",
+      kind: AccountKind.CURRENT,
+      balance: bankBalance,
+      counts: true,
+      balanceUpdatedAt: new Date(),
     }).save({ session });
 
     // The budget the app opens when it isn't given one
@@ -151,6 +174,8 @@ const createBudget = async (
         recurringPayments.map((payment) =>
           new RecurringPayment({
             ...payment,
+            // There are no savings yet to pay into
+            paysInto: null,
             debt: withBalanceDate(payment.debt),
             budget: budget._id,
           }).save({ session }),
@@ -178,9 +203,8 @@ const updateBudget = async (
   checkAuth(req);
   await checkBudgetAccess(id, req);
 
-  const { bankBalance, monthlyIncome } = parseInput(budgetInput, input);
-  // Check if neither bankBalance nor monthlyIncome is provided
-  if (bankBalance === undefined && monthlyIncome === undefined) {
+  const { monthlyIncome } = parseInput(budgetInput, input);
+  if (monthlyIncome === undefined) {
     throw BUDGET_UPDATE_FAILED();
   }
 
@@ -189,9 +213,7 @@ const updateBudget = async (
     throw BUDGET_NOT_FOUND(id);
   }
 
-  // Only update fields that are provided
-  if (bankBalance !== undefined) budget.bankBalance = bankBalance;
-  if (monthlyIncome !== undefined) budget.monthlyIncome = monthlyIncome;
+  budget.monthlyIncome = monthlyIncome;
 
   incrementVersion(budget);
   await budget.save();
@@ -214,7 +236,7 @@ const startPaydayCycle = async (
   req: Request,
 ) => {
   checkAuth(req);
-  const { budgetId, payday, bankBalance, leftOver, alreadyPaid } = parseInput(
+  const { budgetId, payday, currentBalance, accountBalances, leftOver, alreadyPaid } = parseInput(
     paydayCycle,
     input,
   );
@@ -302,7 +324,12 @@ const startPaydayCycle = async (
       await payment.save({ session });
     }
 
-    budget.bankBalance = bankBalance;
+    // The balances the user confirmed go on last, over anything moved into savings above
+    const current = await currentAccountOf(budgetId, session);
+    setBalance(current, currentBalance);
+    await current.save({ session });
+    await setBalances(budgetId, { balances: accountBalances ?? [], session });
+
     budget.cycleStartedOn = cycleStart;
     incrementVersion(budget);
     await budget.save({ session });
@@ -357,7 +384,8 @@ const changeRecurringPayments = (
 
     if (more) balance += await more(session);
 
-    budget.bankBalance = roundPence((budget.bankBalance ?? 0) + balance);
+    const current = await currentAccountOf(budgetId, session);
+    await moveMoney(current._id, { amount: balance, session });
     incrementVersion(budget);
     await budget.save({ session });
 
@@ -373,7 +401,12 @@ const handle = async (
   kind: typeof PaymentRecordKind.PAID | typeof PaymentRecordKind.SKIPPED,
   dates: Date[],
   session: ClientSession,
-  paid: { balanceChange: number; debt?: RecordDebt; open?: boolean } = { balanceChange: 0 },
+  paid: {
+    balanceChange: number;
+    debt?: RecordDebt;
+    transfer?: RecordTransfer;
+    open?: boolean;
+  } = { balanceChange: 0 },
 ) => {
   if (!dates.length) return false;
   await new PaymentRecord({
@@ -413,7 +446,27 @@ const recordAlreadyPaid = async (
       balanceAfter: payment.debt.balance,
     };
   }
-  return handle(payment, PaymentRecordKind.PAID, dates, session, { balanceChange: 0, debt, open });
+  const transfer = await payInto(payment, { times: dates.length, session });
+  return handle(payment, PaymentRecordKind.PAID, dates, session, {
+    balanceChange: 0,
+    debt,
+    transfer,
+    open,
+  });
+};
+
+/*
+ * A payment into savings adds its amount there for each date paid, and says so for its record, so
+ * undoing takes exactly that back off
+ */
+const payInto = async (
+  payment: RecurringPaymentDocument,
+  { times, session }: { times: number; session: ClientSession },
+): Promise<RecordTransfer | undefined> => {
+  if (!payment.paysInto || !times) return undefined;
+  const amount = roundPence(payment.amount * times);
+  await moveMoney(payment.paysInto, { amount, session });
+  return { account: payment.paysInto, amount };
 };
 
 // Paying payments from the dashboard, as the bank balance sees it. A recurring payment has its
@@ -446,9 +499,11 @@ const markPaymentsPaid = async (
         };
       }
       const change = balanceChange(payment);
+      const transfer = await payInto(payment, { times: 1, session });
       await handle(payment, PaymentRecordKind.PAID, [payment.nextDueDate], session, {
         balanceChange: change,
         debt,
+        transfer,
       });
       return change;
     },
@@ -505,6 +560,9 @@ const markPaymentsUnpaid = async (
       payment.nextDueDate = latest.dates[0];
       if (payment.debt && latest.debt) {
         payment.debt.balance = roundPence(payment.debt.balance + latest.debt.reduction);
+      }
+      if (latest.transfer) {
+        await moveMoney(latest.transfer.account, { amount: -latest.transfer.amount, session });
       }
       return -latest.balanceChange;
     },
@@ -652,6 +710,8 @@ const byAmount = { amount: 1 } as const;
 // rather than the query itself: Apollo calls then() more than once, and a query runs on each call.
 const budgetFields = {
   user: (budget: BudgetDocument) => User.findById(budget.user).exec(),
+  accounts: (budget: BudgetDocument) => accountsOf(budget._id),
+  bankBalance: (budget: BudgetDocument) => countedBalance(budget._id),
   oneOffPayments: (budget: BudgetDocument) =>
     OneOffPayment.find({ budget: budget._id }).sort(byAmount).exec(),
   // With this cycle's pays and skips loaded in one go, for their thisCycle field

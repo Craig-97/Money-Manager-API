@@ -12,7 +12,10 @@ export const budgetTypeDefs = `
   type Budget {
     id: ID!
     user: User
+    # The bank balance on the dashboard: the accounts that count in free to spend, added up
     bankBalance: Float!
+    # The current account first, then savings, oldest first
+    accounts: [Account!]!
     monthlyIncome: Float!
     oneOffPayments: [OneOffPayment]
     recurringPayments: [RecurringPayment]
@@ -24,6 +27,7 @@ export const budgetTypeDefs = `
 
   # A new budget for the signed-in user, with the payments and payday set up alongside it
   input CreateBudgetInput {
+    # The opening balance of the current account, which is made with the budget
     bankBalance: Float!
     monthlyIncome: Float!
     oneOffPayments: [OneOffPaymentInput!]
@@ -31,8 +35,8 @@ export const budgetTypeDefs = `
     payday: PaydayInput
   }
 
+  # Balances are set on the accounts, with updateAccount
   input UpdateBudgetInput {
-    bankBalance: Float
     monthlyIncome: Float
   }
 
@@ -90,8 +94,10 @@ export const budgetTypeDefs = `
     budgetId: ID!
     # The payday being started, as YYYY-MM-DD
     payday: String!
-    # The balance the user confirmed
-    bankBalance: Float!
+    # The current account's balance, as the user confirmed it
+    currentBalance: Float!
+    # Savings balances the user checked at the same time
+    accountBalances: [AccountBalanceInput!]
     # PAID and SKIPPED are recorded and move the payment on; DUE leaves it overdue. One that isn't
     # listed stays due too.
     leftOver: [LeftOverPaymentInput!]!

@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import { ThemePreference } from "../../constants/user/themePreference";
 import { checkAuth } from "../../middleware/isAuth";
 import { Budget } from "../../models/budget/Budget";
+import { Account } from "../../models/account/Account";
 import { User, type UserDocument } from "../../models/user/User";
 import { Note } from "../../models/note/Note";
 import { OneOffPayment } from "../../models/payment/OneOffPayment";
@@ -343,6 +344,7 @@ const deleteUserAndBudget = (id: string) =>
       await PaymentRecord.deleteMany({ budget }).session(session);
       await Payday.deleteMany({ budget }).session(session);
       await ReminderState.deleteMany({ budget }).session(session);
+      await Account.deleteMany({ budget }).session(session);
       await Budget.deleteOne({ _id: budget }).session(session);
     }
 

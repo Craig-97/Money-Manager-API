@@ -26,6 +26,8 @@ export interface RecurringPaymentFields {
   renewalReminder?: ReminderTimingInput;
   // null stops tracking it as a debt
   debt?: DebtFields | null;
+  // A savings account it pays into; null stops it
+  paysInto?: string | null;
 }
 
 export interface CreateRecurringPaymentInput extends RecurringPaymentFields {

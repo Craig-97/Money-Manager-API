@@ -1,4 +1,5 @@
 import type { LeftOverOutcome } from '../../constants/payday/leftOverOutcome';
+import type { AccountBalanceInput } from '../account/accountTypes';
 import type { OneOffPaymentFields } from '../payment/oneOffPaymentTypes';
 import type { PaydayInput } from '../payday/paydayTypes';
 import type { RecurringPaymentFields } from '../payment/recurringPaymentTypes';
@@ -12,7 +13,6 @@ export interface CreateBudgetInput {
 }
 
 export interface UpdateBudgetInput {
-  bankBalance?: number;
   monthlyIncome?: number;
 }
 
@@ -48,7 +48,8 @@ export interface LogDebtOverpaymentInput {
 export interface StartPaydayCycleInput {
   budgetId: string;
   payday: string;
-  bankBalance: number;
+  currentBalance: number;
+  accountBalances?: AccountBalanceInput[] | null;
   leftOver: { recurringPaymentId: string; outcome: LeftOverOutcome }[];
   alreadyPaid?: { recurringPaymentIds: string[]; oneOffPaymentIds: string[] } | null;
 }

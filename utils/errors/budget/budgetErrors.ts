@@ -17,7 +17,7 @@ export const BUDGET_EXISTS = (id: unknown) =>
 
 export const BUDGET_UPDATE_FAILED = () =>
   new GraphQLError(
-    'No valid fields provided for update. Please provide at least one of: bankBalance, monthlyIncome.',
+    'No valid fields provided for update. Please provide monthlyIncome.',
     {
       extensions: {
         code: 'NO_VALID_FIELDS_PROVIDED'

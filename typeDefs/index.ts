@@ -2,6 +2,7 @@ import { mergeTypeDefs } from '@graphql-tools/merge';
 import { commonTypeDefs } from './common';
 import { userTypeDefs } from './user';
 import { budgetTypeDefs } from './budget';
+import { accountTypeDefs } from './account';
 import { oneOffPaymentTypeDefs, recurringPaymentTypeDefs } from './payment';
 import { noteTypeDefs } from './note';
 import { paydayTypeDefs } from './payday';
@@ -12,6 +13,7 @@ export const typeDefs = mergeTypeDefs([
   commonTypeDefs,
   userTypeDefs,
   budgetTypeDefs,
+  accountTypeDefs,
   oneOffPaymentTypeDefs,
   recurringPaymentTypeDefs,
   noteTypeDefs,

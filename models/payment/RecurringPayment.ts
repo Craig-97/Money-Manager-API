@@ -38,6 +38,9 @@ export interface RecurringPayment {
   renewalReminder: ReminderTiming;
   // Set when the payment is paying off a debt; only ever on an expense
   debt?: Debt | null;
+  // A savings account it moves money into, like a standing order: marking it paid adds the amount
+  // there. Only ever on an expense, and never on a debt.
+  paysInto?: Types.ObjectId | null;
 }
 
 const debtSchema = new Schema<Debt>(
@@ -107,7 +110,8 @@ const recurringPaymentSchema = new Schema<RecurringPayment>({
   debt: {
     type: debtSchema,
     default: undefined
-  }
+  },
+  paysInto: { type: Schema.Types.ObjectId, ref: 'Account', default: null }
 });
 
 /*
