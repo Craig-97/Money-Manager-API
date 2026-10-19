@@ -6,7 +6,7 @@ export interface User {
   surname?: string;
   email: string;
   password: string;
-  account?: Types.ObjectId;
+  budget?: Types.ObjectId;
   // Only a hash of the emailed reset token is stored, so a leaked database can't be used to reset passwords
   passwordResetTokenHash?: string;
   passwordResetExpires?: Date;
@@ -31,9 +31,9 @@ const UserSchema = new Schema<User>({
     type: String,
     required: true
   },
-  account: {
+  budget: {
     type: Schema.Types.ObjectId,
-    ref: 'Account'
+    ref: 'Budget'
   },
   passwordResetTokenHash: String,
   passwordResetExpires: Date,

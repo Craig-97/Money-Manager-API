@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { ThemePreference } from "../../constants/user/themePreference";
 import { checkAuth } from "../../middleware/isAuth";
-import { Account } from "../../models/account/Account";
+import { Budget } from "../../models/budget/Budget";
 import { User, type UserDocument } from "../../models/user/User";
 import { Note } from "../../models/note/Note";
 import { OneOffPayment } from "../../models/payment/OneOffPayment";
@@ -118,8 +118,8 @@ const registerAndLogin = async (
   return login(_, { email: input.email, password: input.password }, req);
 };
 
-// Registration. A new user always starts without an account, which is made afterwards with
-// createAccount.
+// Registration. A new user always starts without a budget, which is made afterwards with
+// createBudget.
 const createUser = async (user: RegisterInput) => {
   user = parseInput(newUser, user);
   validatePassword(user.password);
@@ -326,24 +326,24 @@ const updatePreferences = async (
   return { user, success: true };
 };
 
-// Deletes a user and everything on their account
-const deleteUserAndAccount = (id: string) =>
+// Deletes a user and everything on their budget
+const deleteUserAndBudget = (id: string) =>
   withTransaction(async (session) => {
     const user = await User.findById(id).session(session);
     if (!user) {
       throw USER_NOT_FOUND(id);
     }
 
-    // Everything on the account is found by its own account field, so nothing can be left behind
-    if (user.account) {
-      const account = user.account;
-      await Note.deleteMany({ account }).session(session);
-      await OneOffPayment.deleteMany({ account }).session(session);
-      await RecurringPayment.deleteMany({ account }).session(session);
-      await PaymentRecord.deleteMany({ account }).session(session);
-      await Payday.deleteMany({ account }).session(session);
-      await ReminderState.deleteMany({ account }).session(session);
-      await Account.deleteOne({ _id: account }).session(session);
+    // Everything on the budget is found by its own budget field, so nothing can be left behind
+    if (user.budget) {
+      const budget = user.budget;
+      await Note.deleteMany({ budget }).session(session);
+      await OneOffPayment.deleteMany({ budget }).session(session);
+      await RecurringPayment.deleteMany({ budget }).session(session);
+      await PaymentRecord.deleteMany({ budget }).session(session);
+      await Payday.deleteMany({ budget }).session(session);
+      await ReminderState.deleteMany({ budget }).session(session);
+      await Budget.deleteOne({ _id: budget }).session(session);
     }
 
     const response = await User.deleteOne({ _id: id }).session(session);
@@ -354,11 +354,11 @@ const deleteUserAndAccount = (id: string) =>
     return { success: true };
   });
 
-// Deletes the signed-in user and everything on their account. It takes no id, so it can only ever
+// Deletes the signed-in user and everything on their budget. It takes no id, so it can only ever
 // remove the caller.
 const deleteCurrentUser = async (_: unknown, _1: unknown, req: Request) => {
   checkAuth(req);
-  const result = await deleteUserAndAccount(req.userId as string);
+  const result = await deleteUserAndBudget(req.userId as string);
   clearRefreshCookie(req.res as Response);
   authLog.info({ event: 'account_deleted', userId: req.userId, ip: req.ip }, 'User deleted');
   return result;

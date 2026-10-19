@@ -6,7 +6,7 @@ import { enumValues } from '../../utils/helpers/enumHelpers';
 export interface Note {
   body?: string;
   color: NoteColor;
-  account: Types.ObjectId;
+  budget: Types.ObjectId;
   // A day the note is about, e.g. an MOT, as midnight UTC like payment dates
   date?: Date | null;
   // Days before the date to remind, e.g. [30, 7]; only used with a date
@@ -27,10 +27,10 @@ const noteSchema = new Schema<Note>(
       enum: enumValues(NoteColor),
       default: NoteColor.BLUE
     },
-    account: {
+    budget: {
       type: Schema.Types.ObjectId,
-      ref: 'Account',
-      required: [true, 'Account ID required']
+      ref: 'Budget',
+      required: [true, 'Budget ID required']
     },
     date: { type: Date, default: null },
     remind: { type: [Number], default: [] },
@@ -40,16 +40,16 @@ const noteSchema = new Schema<Note>(
   { timestamps: true }
 );
 
-// Used to ensure unique note content within an account
+// Used to ensure unique note content within a budget
 // Also speeds up duplicate content checks during creation
-noteSchema.index({ body: 1, account: 1 }, { unique: true });
+noteSchema.index({ body: 1, budget: 1 }, { unique: true });
 
 // Used for quick lookups during edit/delete operations
-// Also helps with auth checks that need both ID and account
-noteSchema.index({ _id: 1, account: 1 });
+// Also helps with auth checks that need both ID and budget
+noteSchema.index({ _id: 1, budget: 1 });
 
-// Used for finding all notes belonging to an account
-// Helps with account population
-noteSchema.index({ account: 1 });
+// Used for finding all notes belonging to a budget
+// Helps with budget population
+noteSchema.index({ budget: 1 });
 
 export const Note = mongoose.model<Note>('Note', noteSchema);

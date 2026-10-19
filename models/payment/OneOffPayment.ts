@@ -7,7 +7,7 @@ import { reminderTimingSchema, USUAL_TIMING, type ReminderTiming } from '../remi
 export interface OneOffPayment {
   name: string;
   amount: number;
-  account: Types.ObjectId;
+  budget: Types.ObjectId;
   dueDate?: Date;
   type: PaymentType;
   category: OneOffPaymentCategory;
@@ -27,10 +27,10 @@ const OneOffPaymentSchema = new Schema<OneOffPayment>({
     type: Number,
     required: true
   },
-  account: {
+  budget: {
     type: Schema.Types.ObjectId,
-    ref: 'Account',
-    required: [true, 'Account ID required']
+    ref: 'Budget',
+    required: [true, 'Budget ID required']
   },
   dueDate: Date,
   type: {
@@ -54,13 +54,13 @@ const OneOffPaymentSchema = new Schema<OneOffPayment>({
 });
 
 // Add indexes to the schema
-// Used to ensure unique payment names within an account
+// Used to ensure unique payment names within a budget
 // Also speeds up duplicate name checks during creation
-OneOffPaymentSchema.index({ name: 1, account: 1 }, { unique: true });
+OneOffPaymentSchema.index({ name: 1, budget: 1 }, { unique: true });
 
-// Used for finding all payments belonging to an account
-// Helps with batch operations and account population
-OneOffPaymentSchema.index({ account: 1 });
+// Used for finding all payments belonging to a budget
+// Helps with batch operations and budget population
+OneOffPaymentSchema.index({ budget: 1 });
 
 // Create and export the model using the schema
 export const OneOffPayment = mongoose.model<OneOffPayment>('OneOffPayment', OneOffPaymentSchema);

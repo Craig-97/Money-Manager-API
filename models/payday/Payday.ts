@@ -16,7 +16,7 @@ export interface Payday {
   firstPayDate?: string;
   bankHolidayRegion?: BankHolidayRegion;
   overrides: PaydayOverride[];
-  account: Types.ObjectId;
+  budget: Types.ObjectId;
 }
 
 const isoDate = {
@@ -65,14 +65,14 @@ const PaydaySchema = new Schema<Payday>({
     type: [new Schema({ for: isoDate, date: isoDate }, { _id: false })],
     default: []
   },
-  account: {
+  budget: {
     type: Schema.Types.ObjectId,
-    ref: 'Account',
-    required: [true, 'Account ID required']
+    ref: 'Budget',
+    required: [true, 'Budget ID required']
   }
 });
 
-// Each account can only have one payday setup
-PaydaySchema.index({ account: 1 }, { unique: true });
+// Each budget can only have one payday setup
+PaydaySchema.index({ budget: 1 }, { unique: true });
 
 export const Payday = mongoose.model<Payday>('Payday', PaydaySchema);

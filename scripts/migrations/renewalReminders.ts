@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 /*
  * Recurring payments used to keep one renewal reminder as renewalReminderDays: 0 (off), 7, 14 or
  * 30. They now have a reminder timing for when each payment is due and one for renewing, either of
- * which can follow the account's usual timing.
+ * which can follow the budget's usual timing.
  *
  * - 7, 14 or 30 days keep their days.
  * - 0 on a payment with a renewal date was turned off by hand, so it stays off.

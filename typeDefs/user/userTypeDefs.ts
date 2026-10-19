@@ -11,7 +11,7 @@ export const userTypeDefs = `
 
   type User {
     id: ID!
-    account: ID
+    budget: ID
     email: String!
     firstName: String!
     surname: String!
@@ -35,7 +35,7 @@ export const userTypeDefs = `
 
   type UserResponse {
     user: User
-    account: ID
+    budget: ID
     success: Boolean!
   }
 
@@ -68,7 +68,7 @@ export const userTypeDefs = `
     updateCurrentUser(input: UserDetailsInput!): UserResponse!
     # Change the signed-in user's password; the current one has to be right
     changePassword(currentPassword: String!, newPassword: String!): UserResponse!
-    # Delete the signed-in user and everything on their account
+    # Delete the signed-in user and everything on their budget
     deleteCurrentUser: UserResponse!
     # Save the signed-in user's theme and accent; whatever is left out stays as it is
     updatePreferences(theme: ThemePreference, accent: String): UserResponse!

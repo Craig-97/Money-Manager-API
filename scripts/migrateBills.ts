@@ -21,16 +21,16 @@ void runMigration('Bills to recurring payments', async apply => {
 
   for (const result of results) {
     if (result.skipped) {
-      console.log(`Account ${result.account}: skipped, ${result.skipped}`);
+      console.log(`Budget ${result.budget}: skipped, ${result.skipped}`);
       continue;
     }
-    console.log(`Account ${result.account}: ${result.moved.length} bill(s), first due ${result.firstPaymentDate}`);
+    console.log(`Budget ${result.budget}: ${result.moved.length} bill(s), first due ${result.firstPaymentDate}`);
     for (const { name, amount } of result.moved) console.log(`  ${name}  £${amount.toFixed(2)}`);
     for (const bill of result.unusable) console.log(`  bill ${bill} has no name or amount, left out`);
   }
 
   const moved = results.reduce((total, result) => total + result.moved.length, 0);
-  const accounts = results.filter(result => result.moved.length).length;
-  console.log(`\n${apply ? 'Created' : 'Would create'} ${moved} recurring payment(s) on ${accounts} account(s).`);
+  const budgets = results.filter(result => result.moved.length).length;
+  console.log(`\n${apply ? 'Created' : 'Would create'} ${moved} recurring payment(s) on ${budgets} budget(s).`);
   if (apply) console.log('The bills collection is untouched; drop it once you are happy with the result.');
 });

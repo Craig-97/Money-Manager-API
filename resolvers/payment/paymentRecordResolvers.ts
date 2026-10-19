@@ -27,7 +27,7 @@ export const recordBalanceSet = (
 ) => {
   const balance = payment.debt?.balance ?? 0;
   return new PaymentRecord({
-    account: payment.account,
+    budget: payment.budget,
     recurringPayment: payment._id,
     payment: snapshotOf(payment),
     kind: PaymentRecordKind.BALANCE_SET,
@@ -67,7 +67,7 @@ const openRecords = async (ids: Types.ObjectId[]) => {
 };
 
 /*
- * Loads the open records of a list of payments in one query, so an account's payments don't each
+ * Loads the open records of a list of payments in one query, so a budget's payments don't each
  * run their own
  */
 export const withThisCycle = async (payments: RecurringPaymentDocument[]) => {
@@ -76,7 +76,7 @@ export const withThisCycle = async (payments: RecurringPaymentDocument[]) => {
   return payments;
 };
 
-// A payment's open records, loaded with the rest of the account's or on their own
+// A payment's open records, loaded with the rest of the budget's or on their own
 const openRecordsOf = async (payment: RecurringPaymentDocument) =>
   (payment.$locals.openRecords as RecordDocument[] | undefined) ??
   (await openRecords([payment._id])).get(payment.id) ??

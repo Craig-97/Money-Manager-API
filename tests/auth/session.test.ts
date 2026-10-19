@@ -6,7 +6,7 @@ import {
   gqlRaw,
   errorCode,
   refreshCookieFrom,
-  createUserWithAccount
+  createUserWithBudget
 } from '../helpers';
 
 beforeAll(setupTestApp);
@@ -27,7 +27,7 @@ const PREFERENCES = `mutation ($theme: ThemePreference, $accent: String) {
 }`;
 
 const signIn = async () => {
-  const { email, password } = await createUserWithAccount({ withAccount: false });
+  const { email, password } = await createUserWithBudget({ withBudget: false });
   const res = await gqlRaw(LOGIN, { email, password });
   return { email, password, res, cookie: refreshCookieFrom(res) as string };
 };

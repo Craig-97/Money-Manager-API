@@ -1,6 +1,6 @@
 import type { Request } from 'express';
 import type { PaydayInput } from '../../types/payday/paydayTypes';
-import { checkAuth, checkAccountAccess } from '../../middleware/isAuth';
+import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
 import { Payday } from '../../models/payday/Payday';
 import {
   PAYDAY_NOT_FOUND,
@@ -18,7 +18,7 @@ const updatePayday = async (_: unknown, { id, input }: { id: string; input: Payd
   if (!currentPayday) {
     throw PAYDAY_NOT_FOUND(id);
   }
-  await checkAccountAccess(currentPayday.account, req);
+  await checkBudgetAccess(currentPayday.budget, req);
   input = parseInput(paydayInput, input);
 
   const mergedPayday = incrementVersion(Object.assign(currentPayday, input));
@@ -49,7 +49,7 @@ const setPaydayOverride = async (
   if (!payday) {
     throw PAYDAY_NOT_FOUND(id);
   }
-  await checkAccountAccess(payday.account, req);
+  await checkBudgetAccess(payday.budget, req);
 
   parseInput(paydayOverride, { for: usual, date }, issue => PAYDAY_OVERRIDE_INVALID(issue.message));
 

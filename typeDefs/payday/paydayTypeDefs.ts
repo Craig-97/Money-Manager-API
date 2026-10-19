@@ -14,7 +14,7 @@ export const paydayTypeDefs = `
 
   type Payday {
     id: ID!
-    account: ID!
+    budget: ID!
     frequency: PayFrequency!
     type: PaydayType!
     dayOfMonth: Int
@@ -24,7 +24,7 @@ export const paydayTypeDefs = `
     overrides: [PaydayOverride!]!
   }
 
-  # How someone is paid. Set up with the account, and replaced whole when it changes.
+  # How someone is paid. Set up with the budget, and replaced whole when it changes.
   input PaydayInput {
     frequency: PayFrequency!
     type: PaydayType!

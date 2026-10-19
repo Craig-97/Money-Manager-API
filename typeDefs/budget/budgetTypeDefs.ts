@@ -1,10 +1,10 @@
-export const accountTypeDefs = `
+export const budgetTypeDefs = `
   type Query {
-    # One of the signed-in user's accounts; their default account when no id is given
-    account(id: ID): Account
+    # One of the signed-in user's budgets; their default budget when no id is given
+    budget(id: ID): Budget
   }
 
-  type Account {
+  type Budget {
     id: ID!
     user: User
     bankBalance: Float!
@@ -17,8 +17,8 @@ export const accountTypeDefs = `
     cycleStartedOn: String
   }
 
-  # A new account for the signed-in user, with the payments and payday set up alongside it
-  input CreateAccountInput {
+  # A new budget for the signed-in user, with the payments and payday set up alongside it
+  input CreateBudgetInput {
     bankBalance: Float!
     monthlyIncome: Float!
     oneOffPayments: [OneOffPaymentInput!]
@@ -26,13 +26,13 @@ export const accountTypeDefs = `
     payday: PaydayInput
   }
 
-  input UpdateAccountInput {
+  input UpdateBudgetInput {
     bankBalance: Float
     monthlyIncome: Float
   }
 
   input MarkPaymentsPaidInput {
-    accountId: ID!
+    budgetId: ID!
     # Each has its next date paid, and moves on to the date after
     recurringPaymentIds: [ID!]!
     # Marked paid; they stay until the next payday, so paying can be undone
@@ -40,7 +40,7 @@ export const accountTypeDefs = `
   }
 
   input MarkPaymentsUnpaidInput {
-    accountId: ID!
+    budgetId: ID!
     # Each has its latest pay or skip this cycle undone
     recurringPaymentIds: [ID!]!
     # Paid this cycle, made unpaid again
@@ -48,13 +48,13 @@ export const accountTypeDefs = `
   }
 
   input UndoDebtOverpaymentInput {
-    accountId: ID!
+    budgetId: ID!
     # An overpayment record from this cycle
     recordId: ID!
   }
 
   input SkipRecurringPaymentsInput {
-    accountId: ID!
+    budgetId: ID!
     recurringPaymentIds: [ID!]!
     # Skips every date before this day (YYYY-MM-DD), usually the next payday. Without it, only the
     # next date is skipped.
@@ -62,7 +62,7 @@ export const accountTypeDefs = `
   }
 
   input LogDebtOverpaymentInput {
-    accountId: ID!
+    budgetId: ID!
     # The recurring payment tracked as a debt
     recurringPaymentId: ID!
     # Paid on top of the usual payments; no more than is left to pay
@@ -70,7 +70,7 @@ export const accountTypeDefs = `
   }
 
   input StartPaydayCycleInput {
-    accountId: ID!
+    budgetId: ID!
     # The payday being started, as YYYY-MM-DD
     payday: String!
     # The balance the user confirmed
@@ -79,27 +79,27 @@ export const accountTypeDefs = `
     recurringPaymentIds: [ID!]!
   }
 
-  type AccountResponse {
-    account: Account
+  type BudgetResponse {
+    budget: Budget
     success: Boolean!
   }
 
   type Mutation {
-    createAccount(input: CreateAccountInput!): AccountResponse!
-    updateAccount(id: ID!, input: UpdateAccountInput!): AccountResponse!
-    startPaydayCycle(input: StartPaydayCycleInput!): AccountResponse!
+    createBudget(input: CreateBudgetInput!): BudgetResponse!
+    updateBudget(id: ID!, input: UpdateBudgetInput!): BudgetResponse!
+    startPaydayCycle(input: StartPaydayCycleInput!): BudgetResponse!
     # Takes the payments off (or adds income to) the bank balance: recurring ones have their next
     # date paid and one-offs are marked paid
-    markPaymentsPaid(input: MarkPaymentsPaidInput!): AccountResponse!
+    markPaymentsPaid(input: MarkPaymentsPaidInput!): BudgetResponse!
     # Undoes the latest pay or skip this cycle on each recurring payment, bringing its dates back,
     # and makes paid one-offs unpaid. Whatever paying did to the bank balance and debts is put back.
-    markPaymentsUnpaid(input: MarkPaymentsUnpaidInput!): AccountResponse!
+    markPaymentsUnpaid(input: MarkPaymentsUnpaidInput!): BudgetResponse!
     # Leaves recurring payments' dates unpaid without touching the balance: the next one, or
     # every one before until
-    skipRecurringPayments(input: SkipRecurringPaymentsInput!): AccountResponse!
+    skipRecurringPayments(input: SkipRecurringPaymentsInput!): BudgetResponse!
     # Pays extra off a debt: it comes off the debt's balance and off the bank balance
-    logDebtOverpayment(input: LogDebtOverpaymentInput!): AccountResponse!
+    logDebtOverpayment(input: LogDebtOverpaymentInput!): BudgetResponse!
     # Takes back an overpayment from this cycle, putting it back on the debt and the bank balance
-    undoDebtOverpayment(input: UndoDebtOverpaymentInput!): AccountResponse!
+    undoDebtOverpayment(input: UndoDebtOverpaymentInput!): BudgetResponse!
   }
 `;

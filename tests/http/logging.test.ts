@@ -1,7 +1,7 @@
 import { GraphQLError } from 'graphql';
 import { formatError } from '../../utils/errors';
 import { authLog, logger } from '../../utils/logger';
-import { setupTestApp, teardownTestApp, clearDatabase, gql, createUserWithAccount } from '../helpers';
+import { setupTestApp, teardownTestApp, clearDatabase, gql, createUserWithBudget } from '../helpers';
 
 beforeAll(setupTestApp);
 afterAll(teardownTestApp);
@@ -45,7 +45,7 @@ describe('auth events', () => {
 
   it('logs a failed sign in with the user but not the password', async () => {
     const warn = jest.spyOn(authLog, 'warn');
-    const { email, user } = await createUserWithAccount({ withAccount: false });
+    const { email, user } = await createUserWithBudget({ withBudget: false });
 
     await gql(LOGIN, { email, password: 'WrongPassword1' });
 
@@ -58,7 +58,7 @@ describe('auth events', () => {
 
   it('logs signing out everywhere', async () => {
     const info = jest.spyOn(authLog, 'info');
-    const { token, user } = await createUserWithAccount({ withAccount: false });
+    const { token, user } = await createUserWithBudget({ withBudget: false });
 
     await gql(`mutation { logoutEverywhere { success } }`, undefined, token);
 

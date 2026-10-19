@@ -7,7 +7,7 @@ import {
   gqlRaw,
   agent,
   errorCode,
-  createUserWithAccount
+  createUserWithBudget
 } from '../helpers';
 
 beforeAll(setupTestApp);
@@ -29,7 +29,7 @@ const attempt = (query: string, variables: Record<string, unknown>) => gqlRaw(qu
 
 describe('login attempts', () => {
   it('blocks an email after 10 attempts', async () => {
-    const { email } = await createUserWithAccount({ withAccount: false });
+    const { email } = await createUserWithBudget({ withBudget: false });
 
     for (let i = 0; i < 10; i++) {
       expect(errorCode((await attempt(LOGIN, { email, password: 'wrong' })).body)).toBe(
@@ -46,14 +46,14 @@ describe('login attempts', () => {
   });
 
   it('blocks the right password too once the limit is reached', async () => {
-    const { email, password } = await createUserWithAccount({ withAccount: false });
+    const { email, password } = await createUserWithBudget({ withBudget: false });
     for (let i = 0; i < 10; i++) await attempt(LOGIN, { email, password: 'wrong' });
 
     expect((await attempt(LOGIN, { email, password })).status).toBe(429);
   });
 
   it('counts the email without regard to case or surrounding spaces', async () => {
-    const { email } = await createUserWithAccount({ withAccount: false });
+    const { email } = await createUserWithBudget({ withBudget: false });
     for (let i = 0; i < 10; i++) {
       await attempt(LOGIN, { email: i % 2 ? email.toUpperCase() : ` ${email} `, password: 'wrong' });
     }
@@ -62,8 +62,8 @@ describe('login attempts', () => {
   });
 
   it('still lets other emails sign in from the same IP', async () => {
-    const first = await createUserWithAccount({ withAccount: false });
-    const second = await createUserWithAccount({ withAccount: false });
+    const first = await createUserWithBudget({ withBudget: false });
+    const second = await createUserWithBudget({ withBudget: false });
     for (let i = 0; i < 10; i++) await attempt(LOGIN, { email: first.email, password: 'wrong' });
 
     const body = await gql(LOGIN, { email: second.email, password: second.password });
@@ -82,7 +82,7 @@ describe('login attempts', () => {
   });
 
   it('counts attempts sent in the URL of a GET request', async () => {
-    const { email } = await createUserWithAccount({ withAccount: false });
+    const { email } = await createUserWithBudget({ withBudget: false });
     for (let i = 0; i < 10; i++) {
       await agent()
         .get('/graphql')
@@ -94,7 +94,7 @@ describe('login attempts', () => {
   });
 
   it('counts a login written with the values inline', async () => {
-    const { email } = await createUserWithAccount({ withAccount: false });
+    const { email } = await createUserWithBudget({ withBudget: false });
     for (let i = 0; i < 10; i++) {
       await gqlRaw(`mutation { login(email: "${email}", password: "wrong") { token } }`);
     }
@@ -105,7 +105,7 @@ describe('login attempts', () => {
 
 describe('password reset requests', () => {
   it('allows 3 emails an hour to the same address, then blocks', async () => {
-    const { email } = await createUserWithAccount({ withAccount: false });
+    const { email } = await createUserWithBudget({ withBudget: false });
 
     for (let i = 0; i < 3; i++) {
       expect((await gql(REQUEST, { email })).data.requestPasswordReset.success).toBe(true);
@@ -147,7 +147,7 @@ describe('reset token attempts', () => {
 
 describe('other operations', () => {
   it('are not limited', async () => {
-    const { token } = await createUserWithAccount({ withAccount: false });
+    const { token } = await createUserWithBudget({ withBudget: false });
 
     for (let i = 0; i < 60; i++) {
       const body = await gql(`query { tokenFindUser { id } }`, undefined, token);

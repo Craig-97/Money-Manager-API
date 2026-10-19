@@ -2,7 +2,7 @@ import type { Payday, PaydayOverride } from '../../models/payday/Payday';
 import { PayFrequency, PaydayType } from '../../constants/payday';
 
 /*
- * When an account's paydays fall, ported from the front end's src/lib/payday so a migration and
+ * When a budget's paydays fall, ported from the front end's src/lib/payday so a migration and
  * the calendar feed line up with the pay cycle the app shows. Dates here are UTC midnights,
  * whatever the server's time zone, and come out as 'YYYY-MM-DD'.
  */
@@ -14,7 +14,7 @@ export type PaydayRule = Pick<Payday, 'frequency' | 'type' | 'dayOfMonth' | 'wee
 // Bank holidays as 'YYYY-MM-DD'
 export type BankHolidays = ReadonlySet<string>;
 
-// What the app assumes for an account with no payday saved: the last working day of the month
+// What the app assumes for a budget with no payday saved: the last working day of the month
 export const DEFAULT_PAYDAY: PaydayRule = {
   frequency: PayFrequency.MONTHLY,
   type: PaydayType.LAST_DAY
@@ -109,7 +109,7 @@ const paydaysAround = (rule: PaydayRule, holidays: BankHolidays, from: Date, to:
   return [...new Set(usual.map(date => moves.get(toIsoDay(date)) ?? toIsoDay(date)))].sort();
 };
 
-// The first payday after `today`, with any payday the user moved taken into account
+// The first payday after `today`, with any payday the user moved taken into budget
 export const nextPayday = (rule: PaydayRule, holidays: BankHolidays, today: Date) => {
   const span = (MONTHS_BETWEEN[rule.frequency] ?? 1) * 31;
   const to = addDays(today, span);

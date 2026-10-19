@@ -7,7 +7,7 @@ import mongoose, { Schema, Types } from 'mongoose';
  * the next time round is a new reminder.
  */
 export interface ReminderState {
-  account: Types.ObjectId;
+  budget: Types.ObjectId;
   key: string;
   // Seen, so it no longer counts towards the bell's number
   read: boolean;
@@ -21,7 +21,7 @@ export interface ReminderState {
 
 const reminderStateSchema = new Schema<ReminderState>(
   {
-    account: { type: Schema.Types.ObjectId, ref: 'Account', required: true },
+    budget: { type: Schema.Types.ObjectId, ref: 'Budget', required: true },
     key: { type: String, required: true },
     read: { type: Boolean, default: false },
     cleared: { type: Boolean, default: false },
@@ -30,7 +30,7 @@ const reminderStateSchema = new Schema<ReminderState>(
   { timestamps: true }
 );
 
-// One state per reminder, found by its account
-reminderStateSchema.index({ account: 1, key: 1 }, { unique: true });
+// One state per reminder, found by its budget
+reminderStateSchema.index({ budget: 1, key: 1 }, { unique: true });
 
 export const ReminderState = mongoose.model<ReminderState>('ReminderState', reminderStateSchema);

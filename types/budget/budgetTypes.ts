@@ -2,7 +2,7 @@ import type { OneOffPaymentFields } from '../payment/oneOffPaymentTypes';
 import type { PaydayInput } from '../payday/paydayTypes';
 import type { RecurringPaymentFields } from '../payment/recurringPaymentTypes';
 
-export interface CreateAccountInput {
+export interface CreateBudgetInput {
   bankBalance: number;
   monthlyIncome: number;
   oneOffPayments?: OneOffPaymentFields[];
@@ -10,42 +10,42 @@ export interface CreateAccountInput {
   payday?: PaydayInput;
 }
 
-export interface UpdateAccountInput {
+export interface UpdateBudgetInput {
   bankBalance?: number;
   monthlyIncome?: number;
 }
 
 export interface MarkPaymentsPaidInput {
-  accountId: string;
+  budgetId: string;
   recurringPaymentIds: string[];
   oneOffPaymentIds: string[];
 }
 
 export interface MarkPaymentsUnpaidInput {
-  accountId: string;
+  budgetId: string;
   recurringPaymentIds: string[];
   oneOffPaymentIds?: string[] | null;
 }
 
 export interface UndoDebtOverpaymentInput {
-  accountId: string;
+  budgetId: string;
   recordId: string;
 }
 
 export interface SkipRecurringPaymentsInput {
-  accountId: string;
+  budgetId: string;
   recurringPaymentIds: string[];
   until?: string | null;
 }
 
 export interface LogDebtOverpaymentInput {
-  accountId: string;
+  budgetId: string;
   recurringPaymentId: string;
   amount: number;
 }
 
 export interface StartPaydayCycleInput {
-  accountId: string;
+  budgetId: string;
   payday: string;
   bankBalance: number;
   recurringPaymentIds: string[];

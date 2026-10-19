@@ -12,7 +12,7 @@ export interface OneOffPaymentFields {
 }
 
 export interface CreateOneOffPaymentInput extends OneOffPaymentFields {
-  accountId: string;
+  budgetId: string;
 }
 
 export type UpdateOneOffPaymentInput = Partial<OneOffPaymentFields>;

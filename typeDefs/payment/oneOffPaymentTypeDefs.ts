@@ -8,7 +8,7 @@ export const oneOffPaymentTypeDefs = `
 
   type OneOffPayment {
     id: ID!
-    account: ID!
+    budget: ID!
     name: String!
     amount: Float!
     dueDate: String!
@@ -22,7 +22,7 @@ export const oneOffPaymentTypeDefs = `
   }
 
   input CreateOneOffPaymentInput {
-    accountId: ID!
+    budgetId: ID!
     name: String!
     amount: Float!
     dueDate: String!
@@ -31,7 +31,7 @@ export const oneOffPaymentTypeDefs = `
     dueReminder: ReminderTimingInput
   }
 
-  # A one-off payment created alongside its account, so it has no accountId yet
+  # A one-off payment created alongside its budget, so it has no budgetId yet
   input OneOffPaymentInput {
     name: String!
     amount: Float!

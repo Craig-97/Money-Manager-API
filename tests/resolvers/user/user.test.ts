@@ -5,37 +5,37 @@ import {
   clearDatabase,
   gql,
   errorCode,
-  createUserWithAccount
+  createUserWithBudget
 } from '../../helpers';
 
 beforeAll(setupTestApp);
 afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
-const USER_FIELDS = 'id email firstName surname account';
+const USER_FIELDS = 'id email firstName surname budget';
 
 describe('registerAndLogin', () => {
   const REGISTER = `mutation ($input: RegisterInput!) { registerAndLogin(input: $input) { user { ${USER_FIELDS} } } }`;
 
-  it('registers a user without an account', async () => {
+  it('registers a user without a budget', async () => {
     const body = await gql(REGISTER, {
       input: { email: 'second@example.com', password: 'Password1', firstName: 'S', surname: 'U' }
     });
     expect(body.errors).toBeUndefined();
-    expect(body.data.registerAndLogin.user.account).toBeNull();
+    expect(body.data.registerAndLogin.user.budget).toBeNull();
   });
 
-  it("rejects an account in the input with a validation error, so nobody can join someone else's", async () => {
-    const { accountId, token } = await createUserWithAccount();
+  it("rejects a budget in the input with a validation error, so nobody can join someone else's", async () => {
+    const { budgetId, token } = await createUserWithBudget();
     const body = await gql(REGISTER, {
-      input: { email: 'x@example.com', password: 'Password1', firstName: 'S', surname: 'U', account: accountId }
+      input: { email: 'x@example.com', password: 'Password1', firstName: 'S', surname: 'U', budget: budgetId }
     });
     expect(body.errors).toBeDefined();
     expect(body.data).toBeUndefined();
     expect(await mongoose.model('User').countDocuments({ email: 'x@example.com' })).toBe(0);
 
-    const owner = await gql(`query { tokenFindUser { account } }`, undefined, token);
-    expect(owner.data.tokenFindUser.account).toBe(accountId);
+    const owner = await gql(`query { tokenFindUser { budget } }`, undefined, token);
+    expect(owner.data.tokenFindUser.budget).toBe(budgetId);
   });
 });
 
@@ -47,7 +47,7 @@ describe('updateCurrentUser', () => {
   }`;
 
   it("changes the signed-in user's name and email", async () => {
-    const { token } = await createUserWithAccount();
+    const { token } = await createUserWithBudget();
 
     const body = await gql(
       UPDATE,
@@ -62,8 +62,8 @@ describe('updateCurrentUser', () => {
   });
 
   it('refuses an email someone else uses', async () => {
-    const first = await createUserWithAccount();
-    const second = await createUserWithAccount();
+    const first = await createUserWithBudget();
+    const second = await createUserWithBudget();
 
     const body = await gql(UPDATE, { input: { firstName: 'A', surname: 'B', email: first.email } }, second.token);
 
@@ -82,7 +82,7 @@ describe('changePassword', () => {
   }`;
 
   it('changes the password when the current one is right', async () => {
-    const { token, email, password } = await createUserWithAccount();
+    const { token, email, password } = await createUserWithBudget();
 
     const body = await gql(CHANGE, { current: password, next: 'newpass123' }, token);
 
@@ -92,13 +92,13 @@ describe('changePassword', () => {
   });
 
   it('refuses a wrong current password', async () => {
-    const { token } = await createUserWithAccount();
+    const { token } = await createUserWithBudget();
     const body = await gql(CHANGE, { current: 'wrong', next: 'newpass123' }, token);
     expect(errorCode(body)).toBe('INVALID_CREDENTIALS');
   });
 
   it('refuses a new password that breaks the rules', async () => {
-    const { token, password } = await createUserWithAccount();
+    const { token, password } = await createUserWithBudget();
     const body = await gql(CHANGE, { current: password, next: 'short' }, token);
     expect(errorCode(body)).toBe('INVALID_PASSWORD');
   });
@@ -113,8 +113,8 @@ describe('deleteCurrentUser', () => {
   const DELETE_ME = `mutation { deleteCurrentUser { success } }`;
 
   it('deletes the signed-in user only', async () => {
-    const { token, email, password } = await createUserWithAccount();
-    const other = await createUserWithAccount();
+    const { token, email, password } = await createUserWithBudget();
+    const other = await createUserWithBudget();
 
     const body = await gql(DELETE_ME, undefined, token);
 
@@ -123,9 +123,9 @@ describe('deleteCurrentUser', () => {
     expect((await gql(LOGIN, { email: other.email, password: other.password })).errors).toBeUndefined();
   });
 
-  it('deletes the account and everything on it', async () => {
-    const { token, user, accountId } = await createUserWithAccount({
-      account: {
+  it('deletes the budget and everything on it', async () => {
+    const { token, user, budgetId } = await createUserWithBudget({
+      budget: {
         oneOffPayments: [{ name: 'Gift', amount: 20, dueDate: '2030-01-01', type: 'EXPENSE', category: 'OTHER' }],
         recurringPayments: [
           {
@@ -142,25 +142,25 @@ describe('deleteCurrentUser', () => {
     });
     await gql(
       `mutation ($input: CreateNoteInput!) { createNote(input: $input) { success } }`,
-      { input: { accountId, body: 'bye' } },
+      { input: { budgetId, body: 'bye' } },
       token
     );
-    const other = await createUserWithAccount();
+    const other = await createUserWithBudget();
     const children = ['Note', 'OneOffPayment', 'RecurringPayment', 'Payday'];
     const count = (model: string, filter: object) => mongoose.model(model).countDocuments(filter);
     for (const model of children) {
-      expect(await count(model, { account: accountId })).toBe(1);
+      expect(await count(model, { budget: budgetId })).toBe(1);
     }
 
     const body = await gql(DELETE_ME, undefined, token);
 
     expect(body.errors).toBeUndefined();
     expect(await count('User', { _id: user.id })).toBe(0);
-    expect(await count('Account', { _id: accountId })).toBe(0);
+    expect(await count('Budget', { _id: budgetId })).toBe(0);
     for (const model of children) {
-      expect(await count(model, { account: accountId })).toBe(0);
+      expect(await count(model, { budget: budgetId })).toBe(0);
     }
-    // Someone else's account is left alone
-    expect(await count('Account', { _id: other.accountId })).toBe(1);
+    // Someone else's budget is left alone
+    expect(await count('Budget', { _id: other.budgetId })).toBe(1);
   });
 });

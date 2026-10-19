@@ -5,7 +5,7 @@ import {
   clearDatabase,
   gql,
   errorCode,
-  createUserWithAccount,
+  createUserWithBudget,
   GqlBody,
   Variables
 } from '../../helpers';
@@ -15,18 +15,18 @@ afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
 const FIELDS =
-  'id name amount category frequency type firstPaymentDate lastPaymentDate renewalDate dueReminder { off days } renewalReminder { off days } account';
+  'id name amount category frequency type firstPaymentDate lastPaymentDate renewalDate dueReminder { off days } renewalReminder { off days } budget';
 const CREATE = `mutation ($input: CreateRecurringPaymentInput!) {
   createRecurringPayment(input: $input) { success recurringPayment { ${FIELDS} } }
 }`;
 const UNKNOWN = '507f1f77bcf86cd799439011';
 
-const makePayment = (token: string | undefined, accountId: string, name: string, extra: Variables = {}) =>
+const makePayment = (token: string | undefined, budgetId: string, name: string, extra: Variables = {}) =>
   gql(
     CREATE,
     {
       input: {
-        accountId,
+        budgetId,
         name,
         amount: 10,
         category: 'SUBSCRIPTION',
@@ -42,9 +42,9 @@ const makePayment = (token: string | undefined, accountId: string, name: string,
 const idOf = (body: GqlBody) => body.data.createRecurringPayment.recurringPayment.id;
 
 describe('createRecurringPayment', () => {
-  it('creates a payment and adds it to the account', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const body = await makePayment(token, accountId, 'Netflix', { amount: 9.99 });
+  it('creates a payment and adds it to the budget', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const body = await makePayment(token, budgetId, 'Netflix', { amount: 9.99 });
     expect(body.errors).toBeUndefined();
     const { success, recurringPayment } = body.data.createRecurringPayment;
     expect(success).toBe(true);
@@ -54,29 +54,29 @@ describe('createRecurringPayment', () => {
       category: 'SUBSCRIPTION',
       frequency: 'MONTHLY',
       type: 'EXPENSE',
-      account: accountId,
+      budget: budgetId,
       lastPaymentDate: null
     });
     // Date fields are exposed through GraphQL String, which serializes as epoch milliseconds
     expect(recurringPayment.firstPaymentDate).toBe(String(new Date('2030-01-01').getTime()));
-    const account = await mongoose.model('Account').findById(accountId).populate('recurringPayments');
-    expect(account.recurringPayments.map((r: { id: string }) => r.id)).toEqual([recurringPayment.id]);
+    const budget = await mongoose.model('Budget').findById(budgetId).populate('recurringPayments');
+    expect(budget.recurringPayments.map((r: { id: string }) => r.id)).toEqual([recurringPayment.id]);
   });
 
   it('keeps going with no renewal unless one is given', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const body = await makePayment(token, accountId, 'Gym');
+    const { token, budgetId } = await createUserWithBudget();
+    const body = await makePayment(token, budgetId, 'Gym');
     expect(body.data.createRecurringPayment.recurringPayment).toMatchObject({
       renewalDate: null,
-      // Both follow the account's usual timing
+      // Both follow the budget's usual timing
       dueReminder: { off: false, days: null },
       renewalReminder: { off: false, days: null }
     });
   });
 
   it('saves a renewal and its reminder', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const body = await makePayment(token, accountId, 'Home insurance', {
+    const { token, budgetId } = await createUserWithBudget();
+    const body = await makePayment(token, budgetId, 'Home insurance', {
       renewalDate: '2031-01-01',
       renewalReminder: { off: false, days: 30 }
     });
@@ -95,14 +95,14 @@ describe('createRecurringPayment', () => {
     ['a renewal date on a yearly payment', { renewalDate: '2031-01-01', frequency: 'ANNUALLY' }],
     ['a renewal on or before the first payment', { renewalDate: '2030-01-01' }]
   ])('rejects %s', async (_, extra) => {
-    const { token, accountId } = await createUserWithAccount();
-    const body = await makePayment(token, accountId, 'Bad', extra);
+    const { token, budgetId } = await createUserWithBudget();
+    const body = await makePayment(token, budgetId, 'Bad', extra);
     expect(errorCode(body)).toBe('BAD_USER_INPUT');
   });
 
   it('allows a reminder on a yearly payment, counted back from each payment', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const body = await makePayment(token, accountId, 'Car insurance', {
+    const { token, budgetId } = await createUserWithBudget();
+    const body = await makePayment(token, budgetId, 'Car insurance', {
       frequency: 'ANNUALLY',
       renewalReminder: { off: false, days: 30 }
     });
@@ -110,47 +110,47 @@ describe('createRecurringPayment', () => {
   });
 
   it('rejects a duplicate name', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    await makePayment(token, accountId, 'Dup');
-    const body = await makePayment(token, accountId, 'Dup');
+    const { token, budgetId } = await createUserWithBudget();
+    await makePayment(token, budgetId, 'Dup');
+    const body = await makePayment(token, budgetId, 'Dup');
     expect(errorCode(body)).toBe('PAYMENT_EXISTS');
   });
 
   it('rejects a name used by a one-off payment', async () => {
-    const { token, accountId } = await createUserWithAccount();
+    const { token, budgetId } = await createUserWithBudget();
     await gql(
       `mutation ($input: CreateOneOffPaymentInput!) { createOneOffPayment(input: $input) { success } }`,
       {
-        input: { accountId, name: 'Shared', amount: 1, dueDate: '2030-06-15', type: 'EXPENSE', category: 'FOOD' }
+        input: { budgetId, name: 'Shared', amount: 1, dueDate: '2030-06-15', type: 'EXPENSE', category: 'FOOD' }
       },
       token
     );
-    const body = await makePayment(token, accountId, 'Shared');
+    const body = await makePayment(token, budgetId, 'Shared');
     expect(errorCode(body)).toBe('PAYMENT_EXISTS');
   });
 
-  it('returns FORBIDDEN for another users account', async () => {
-    const owner = await createUserWithAccount();
-    const other = await createUserWithAccount();
-    const body = await makePayment(other.token, owner.accountId, 'Sneaky');
+  it('returns FORBIDDEN for another users budget', async () => {
+    const owner = await createUserWithBudget();
+    const other = await createUserWithBudget();
+    const body = await makePayment(other.token, owner.budgetId, 'Sneaky');
     expect(errorCode(body)).toBe('FORBIDDEN');
   });
 
   it('requires authentication', async () => {
-    const { accountId } = await createUserWithAccount();
-    const body = await makePayment(undefined, accountId, 'x');
+    const { budgetId } = await createUserWithBudget();
+    const body = await makePayment(undefined, budgetId, 'x');
     expect(errorCode(body)).toBe('UNAUTHENTICATED');
   });
 });
 
 describe('reading recurring payments', () => {
-  it("lists them on the user's account, sorted by amount", async () => {
-    const { token, accountId } = await createUserWithAccount();
-    await makePayment(token, accountId, 'Big', { amount: 900 });
-    await makePayment(token, accountId, 'Small', { amount: 5 });
-    const body = await gql(`query { account { recurringPayments { name amount } } }`, undefined, token);
+  it("lists them on the user's budget, sorted by amount", async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    await makePayment(token, budgetId, 'Big', { amount: 900 });
+    await makePayment(token, budgetId, 'Small', { amount: 5 });
+    const body = await gql(`query { budget { recurringPayments { name amount } } }`, undefined, token);
     expect(body.errors).toBeUndefined();
-    expect(body.data.account.recurringPayments.map((p: { name: string }) => p.name)).toEqual(['Small', 'Big']);
+    expect(body.data.budget.recurringPayments.map((p: { name: string }) => p.name)).toEqual(['Small', 'Big']);
   });
 });
 
@@ -160,8 +160,8 @@ describe('updateRecurringPayment', () => {
   }`;
 
   it('updates provided fields only', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const created = await makePayment(token, accountId, 'Edit me');
+    const { token, budgetId } = await createUserWithBudget();
+    const created = await makePayment(token, budgetId, 'Edit me');
     const body = await gql(
       UPDATE,
       { id: idOf(created), input: { amount: 55, frequency: 'ANNUALLY' } },
@@ -173,20 +173,20 @@ describe('updateRecurringPayment', () => {
       amount: 55,
       frequency: 'ANNUALLY',
       type: 'EXPENSE',
-      account: accountId
+      budget: budgetId
     });
   });
 
   it('rejects an empty update', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const created = await makePayment(token, accountId, 'Edit me');
+    const { token, budgetId } = await createUserWithBudget();
+    const created = await makePayment(token, budgetId, 'Edit me');
     const body = await gql(UPDATE, { id: idOf(created), input: {} }, token);
     expect(errorCode(body)).toBe('RECURRING_PAYMENT_UPDATE_FAILED');
   });
 
   it('rejects paid or skipped dates with a validation error, as only paying or skipping records them', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const created = await makePayment(token, accountId, 'Edit me');
+    const { token, budgetId } = await createUserWithBudget();
+    const created = await makePayment(token, budgetId, 'Edit me');
     const thisCycle = [{ kind: 'PAID', dates: ['2030-01-01'] }];
     const body = await gql(UPDATE, { id: idOf(created), input: { thisCycle } }, token);
     expect(body.errors).toBeDefined();
@@ -197,16 +197,16 @@ describe('updateRecurringPayment', () => {
   });
 
   it('rejects renaming to an existing recurring payment name', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    await makePayment(token, accountId, 'First');
-    const second = await makePayment(token, accountId, 'Second');
+    const { token, budgetId } = await createUserWithBudget();
+    await makePayment(token, budgetId, 'First');
+    const second = await makePayment(token, budgetId, 'Second');
     const body = await gql(UPDATE, { id: idOf(second), input: { name: 'First' } }, token);
     expect(errorCode(body)).toBe('RECURRING_PAYMENT_EXISTS');
   });
 
   it('sets and clears a renewal', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const created = await makePayment(token, accountId, 'Phone');
+    const { token, budgetId } = await createUserWithBudget();
+    const created = await makePayment(token, budgetId, 'Phone');
     const set = await gql(
       UPDATE,
       { id: idOf(created), input: { renewalDate: '2031-01-01', renewalReminder: { off: false, days: 14 } } },
@@ -223,15 +223,15 @@ describe('updateRecurringPayment', () => {
   });
 
   it('rejects a last payment on a payment that renews', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const created = await makePayment(token, accountId, 'Phone', { renewalDate: '2031-01-01' });
+    const { token, budgetId } = await createUserWithBudget();
+    const created = await makePayment(token, budgetId, 'Phone', { renewalDate: '2031-01-01' });
     const body = await gql(UPDATE, { id: idOf(created), input: { lastPaymentDate: '2031-06-01' } }, token);
     expect(errorCode(body)).toBe('BAD_USER_INPUT');
   });
 
   it('allows swapping a renewal for a last payment in one update', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const created = await makePayment(token, accountId, 'Phone', { renewalDate: '2031-01-01' });
+    const { token, budgetId } = await createUserWithBudget();
+    const created = await makePayment(token, budgetId, 'Phone', { renewalDate: '2031-01-01' });
     const body = await gql(
       UPDATE,
       { id: idOf(created), input: { renewalDate: null, lastPaymentDate: '2031-06-01' } },
@@ -241,22 +241,22 @@ describe('updateRecurringPayment', () => {
   });
 
   it('rejects making a payment with a renewal date yearly', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const created = await makePayment(token, accountId, 'Phone', { renewalDate: '2031-01-01' });
+    const { token, budgetId } = await createUserWithBudget();
+    const created = await makePayment(token, budgetId, 'Phone', { renewalDate: '2031-01-01' });
     const body = await gql(UPDATE, { id: idOf(created), input: { frequency: 'ANNUALLY' } }, token);
     expect(errorCode(body)).toBe('BAD_USER_INPUT');
   });
 
   it('returns RECURRING_PAYMENT_NOT_FOUND for an unknown id', async () => {
-    const { token } = await createUserWithAccount();
+    const { token } = await createUserWithBudget();
     const body = await gql(UPDATE, { id: UNKNOWN, input: { amount: 1 } }, token);
     expect(errorCode(body)).toBe('RECURRING_PAYMENT_NOT_FOUND');
   });
 
   it('returns FORBIDDEN for another users payment', async () => {
-    const owner = await createUserWithAccount();
-    const other = await createUserWithAccount();
-    const created = await makePayment(owner.token, owner.accountId, 'Private');
+    const owner = await createUserWithBudget();
+    const other = await createUserWithBudget();
+    const created = await makePayment(owner.token, owner.budgetId, 'Private');
     const body = await gql(UPDATE, { id: idOf(created), input: { amount: 1 } }, other.token);
     expect(errorCode(body)).toBe('FORBIDDEN');
   });
@@ -266,16 +266,16 @@ describe('batchDeleteRecurringPayments', () => {
   const BATCH = `mutation ($ids: [ID!]!) { batchDeleteRecurringPayments(ids: $ids) { success deletedCount ids } }`;
 
   const createThree = async () => {
-    const user = await createUserWithAccount();
+    const user = await createUserWithBudget();
     const ids = [];
     for (const name of ['A', 'B', 'C']) {
-      ids.push(idOf(await makePayment(user.token, user.accountId, name)));
+      ids.push(idOf(await makePayment(user.token, user.budgetId, name)));
     }
     return { ...user, ids };
   };
 
-  it('deletes payments, pulls them from the account and returns their ids', async () => {
-    const { token, accountId, ids } = await createThree();
+  it('deletes payments, pulls them from the budget and returns their ids', async () => {
+    const { token, budgetId, ids } = await createThree();
     const body = await gql(BATCH, { ids: ids.slice(0, 2) }, token);
     expect(body.errors).toBeUndefined();
     expect(body.data.batchDeleteRecurringPayments).toEqual({
@@ -284,8 +284,8 @@ describe('batchDeleteRecurringPayments', () => {
       ids: ids.slice(0, 2)
     });
     expect(await mongoose.model('RecurringPayment').countDocuments()).toBe(1);
-    const account = await mongoose.model('Account').findById(accountId).populate('recurringPayments');
-    expect(account.recurringPayments.map((r: { id: string }) => r.id)).toEqual([ids[2]]);
+    const budget = await mongoose.model('Budget').findById(budgetId).populate('recurringPayments');
+    expect(budget.recurringPayments.map((r: { id: string }) => r.id)).toEqual([ids[2]]);
   });
 
   it('fails when any payment is missing', async () => {
@@ -297,7 +297,7 @@ describe('batchDeleteRecurringPayments', () => {
 
   it('returns FORBIDDEN for another users payments', async () => {
     const { ids } = await createThree();
-    const other = await createUserWithAccount();
+    const other = await createUserWithBudget();
     const body = await gql(BATCH, { ids }, other.token);
     expect(errorCode(body)).toBe('FORBIDDEN');
     expect(await mongoose.model('RecurringPayment').countDocuments()).toBe(3);

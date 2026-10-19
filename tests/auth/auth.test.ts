@@ -5,14 +5,14 @@ import {
   gql,
   errorCode,
   expiredToken,
-  createUserWithAccount
+  createUserWithBudget
 } from '../helpers';
 
 beforeAll(setupTestApp);
 afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
-const USER_FIELDS = 'id email firstName surname account';
+const USER_FIELDS = 'id email firstName surname budget';
 
 describe('registerAndLogin / login', () => {
   const REGISTER = `mutation ($input: RegisterInput!) {
@@ -63,7 +63,7 @@ describe('authentication', () => {
   const ME = `query { tokenFindUser { ${USER_FIELDS} } }`;
 
   it('returns the current user for a valid token', async () => {
-    const { token, user } = await createUserWithAccount({ withAccount: false });
+    const { token, user } = await createUserWithBudget({ withBudget: false });
     const body = await gql(ME, undefined, token);
     expect(body.errors).toBeUndefined();
     expect(body.data.tokenFindUser.id).toBe(user.id);
@@ -83,7 +83,7 @@ describe('authentication', () => {
   });
 
   it('returns an expired token error for an expired token', async () => {
-    const { user } = await createUserWithAccount({ withAccount: false });
+    const { user } = await createUserWithBudget({ withBudget: false });
     const body = await gql(ME, undefined, expiredToken(user.id));
     expect(errorCode(body)).toBe('UNAUTHENTICATED');
     expect(body.errors?.[0].message).toBe('Unauthenticated! - Expired token');

@@ -8,7 +8,7 @@ export const noteTypeDefs = `
 
   type Note {
     id: ID!
-    account: ID!
+    budget: ID!
     body: String!
     color: NoteColor!
     # A day the note is about, e.g. an MOT
@@ -18,14 +18,14 @@ export const noteTypeDefs = `
     # How often the date comes round. WITH_PAYMENT follows the linked payment's dates instead of
     # the note's own.
     repeat: NoteRepeat!
-    # The recurring payment it's about, on the same account
+    # The recurring payment it's about, on the same budget
     payment: ID
     createdAt: String!
     updatedAt: String!
   }
 
   input CreateNoteInput {
-    accountId: ID!
+    budgetId: ID!
     body: String!
     color: NoteColor
     # YYYY-MM-DD

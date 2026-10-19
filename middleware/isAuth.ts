@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { isValidObjectId, type Types } from 'mongoose';
-import { Account } from '../models/account/Account';
+import { Budget } from '../models/budget/Budget';
 import { User } from '../models/user/User';
 import { authLog } from '../utils/logger';
 import {
@@ -73,16 +73,16 @@ export const checkAuth = (req: Request) => {
   }
 };
 
-// The account has to belong to the signed-in user. Someone else's account is refused the same as one
+// The budget has to belong to the signed-in user. Someone else's budget is refused the same as one
 // that doesn't exist, so the answer doesn't reveal which ids are real.
-export const checkAccountAccess = async (
-  accountId: Types.ObjectId | string | null | undefined,
+export const checkBudgetAccess = async (
+  budgetId: Types.ObjectId | string | null | undefined,
   req: Request
 ) => {
-  if (!req.userId || !accountId || !isValidObjectId(accountId)) {
+  if (!req.userId || !budgetId || !isValidObjectId(budgetId)) {
     throw FORBIDDEN();
   }
-  if (!(await Account.exists({ _id: accountId, user: req.userId }))) {
+  if (!(await Budget.exists({ _id: budgetId, user: req.userId }))) {
     throw FORBIDDEN();
   }
 };

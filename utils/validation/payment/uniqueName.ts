@@ -5,14 +5,14 @@ import { PAYMENT_EXISTS } from '../../errors';
 
 export const validateUniqueName = async (
   name: string,
-  accountId: Types.ObjectId | string,
+  budgetId: Types.ObjectId | string,
   session: ClientSession | null = null,
   excludeId: Types.ObjectId | string | null = null
 ) => {
   // Check for existing payment with same name
   const existingPayment = await OneOffPayment.findOne({
     name,
-    account: accountId,
+    budget: budgetId,
     _id: { $ne: excludeId }
   }).session(session);
 
@@ -23,7 +23,7 @@ export const validateUniqueName = async (
   // Check for existing recurring payment with same name
   const existingRecurringPayment = await RecurringPayment.findOne({
     name,
-    account: accountId,
+    budget: budgetId,
     _id: { $ne: excludeId }
   }).session(session);
 

@@ -6,7 +6,7 @@ import {
   clearDatabase,
   gql,
   errorCode,
-  createUserWithAccount
+  createUserWithBudget
 } from '../helpers';
 
 beforeAll(setupTestApp);
@@ -34,7 +34,7 @@ const requestToken = async (email: string) => {
 
 describe('requestPasswordReset', () => {
   it('emails a reset link to the user', async () => {
-    const { email } = await createUserWithAccount({ withAccount: false });
+    const { email } = await createUserWithBudget({ withBudget: false });
     const body = await gql(REQUEST, { email });
     expect(body.errors).toBeUndefined();
     expect(body.data.requestPasswordReset.success).toBe(true);
@@ -54,7 +54,7 @@ describe('requestPasswordReset', () => {
   });
 
   it('stores only a hash of the token', async () => {
-    const { email } = await createUserWithAccount({ withAccount: false });
+    const { email } = await createUserWithBudget({ withBudget: false });
     const token = await requestToken(email);
     const stored = await mongoose.model('User').findOne({ email });
     expect(stored.passwordResetTokenHash).toEqual(expect.any(String));
@@ -62,7 +62,7 @@ describe('requestPasswordReset', () => {
   });
 
   it('replaces the previous link when requested again', async () => {
-    const { email } = await createUserWithAccount({ withAccount: false });
+    const { email } = await createUserWithBudget({ withBudget: false });
     const first = await requestToken(email);
     const second = await requestToken(email);
     expect((await gql(VALID, { token: first })).data.passwordResetTokenValid.valid).toBe(false);
@@ -72,7 +72,7 @@ describe('requestPasswordReset', () => {
 
 describe('resetPassword', () => {
   it('sets the new password and signs the user in', async () => {
-    const { email, password, user } = await createUserWithAccount({ withAccount: false });
+    const { email, password, user } = await createUserWithBudget({ withBudget: false });
     const token = await requestToken(email);
 
     const body = await gql(RESET, { token, password: 'NewPassword1' });
@@ -88,7 +88,7 @@ describe('resetPassword', () => {
   });
 
   it('only lets a link be used once', async () => {
-    const { email } = await createUserWithAccount({ withAccount: false });
+    const { email } = await createUserWithBudget({ withBudget: false });
     const token = await requestToken(email);
     await gql(RESET, { token, password: 'NewPassword1' });
 
@@ -99,7 +99,7 @@ describe('resetPassword', () => {
   });
 
   it('rejects an expired link', async () => {
-    const { email } = await createUserWithAccount({ withAccount: false });
+    const { email } = await createUserWithBudget({ withBudget: false });
     const token = await requestToken(email);
     await mongoose
       .model('User')
@@ -118,7 +118,7 @@ describe('resetPassword', () => {
   });
 
   it.each(['short1', 'nonumbers'])('rejects the weak password %s and keeps the link usable', async weak => {
-    const { email } = await createUserWithAccount({ withAccount: false });
+    const { email } = await createUserWithBudget({ withBudget: false });
     const token = await requestToken(email);
 
     expect(errorCode(await gql(RESET, { token, password: weak }))).toBe('INVALID_PASSWORD');

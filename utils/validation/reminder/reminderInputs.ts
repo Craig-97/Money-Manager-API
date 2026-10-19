@@ -5,7 +5,7 @@ import { isoDay } from '../common';
 const oneOf = (choices: readonly number[], what: string) =>
   z.number().refine(days => choices.includes(days), `${what} must be ${choices.join(', ')} days before`);
 
-// Loose, so fields without rules here (the account, the action, the switches) come through
+// Loose, so fields without rules here (the budget, the action, the switches) come through
 // parsing untouched
 
 export const reminderSettingsInput = z.looseObject({

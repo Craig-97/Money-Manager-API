@@ -1,7 +1,7 @@
 import { Schema } from 'mongoose';
 
 // When one payment's reminder goes off: never, a set number of days before, or (days left unset)
-// whenever the account's usual timing says
+// whenever the budget's usual timing says
 export interface ReminderTiming {
   off: boolean;
   days?: number | null;

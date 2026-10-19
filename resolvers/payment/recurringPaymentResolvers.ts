@@ -3,7 +3,7 @@ import { isValidObjectId } from 'mongoose';
 import type { CreateRecurringPaymentInput, UpdateRecurringPaymentInput } from '../../types/payment/recurringPaymentTypes';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { enumValues } from '../../utils/helpers/enumHelpers';
-import { checkAuth, checkAccountAccess } from '../../middleware/isAuth';
+import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
 import { PaymentRecord } from '../../models/payment/PaymentRecord';
 import { Note } from '../../models/note/Note';
@@ -31,14 +31,14 @@ const findRecurringPayment = async (_: unknown, { id }: { id: string }, req: Req
   if (!payment) {
     throw RECURRING_PAYMENT_NOT_FOUND(id);
   }
-  await checkAccountAccess(payment.account, req);
+  await checkBudgetAccess(payment.budget, req);
   return payment;
 };
 
 const createRecurringPayment = async (_: unknown, { input }: { input: CreateRecurringPaymentInput }, req: Request) => {
   checkAuth(req);
-  const { accountId, ...payment } = parseInput(newRecurring, input);
-  await checkAccountAccess(accountId, req);
+  const { budgetId, ...payment } = parseInput(newRecurring, input);
+  await checkBudgetAccess(budgetId, req);
 
   // Validate payment type
   if (!enumValues(PaymentType).includes(payment.type)) {
@@ -47,12 +47,12 @@ const createRecurringPayment = async (_: unknown, { input }: { input: CreateRecu
 
   return withTransaction(async session => {
     // Check if payment with same name exists
-    await validateUniqueName(payment.name, accountId, session);
+    await validateUniqueName(payment.name, budgetId, session);
 
     const createdPayment = await new RecurringPayment({
       ...payment,
       debt: withBalanceDate(payment.debt),
-      account: accountId
+      budget: budgetId
     }).save({ session });
     if (createdPayment.debt) await recordBalanceSet(createdPayment, null, session);
 
@@ -70,7 +70,7 @@ const updateRecurringPayment = async (
   if (!payment) {
     throw RECURRING_PAYMENT_NOT_FOUND(id);
   }
-  await checkAccountAccess(payment.account, req);
+  await checkBudgetAccess(payment.budget, req);
   input = parseInput(recurringInput, input);
 
   if (Object.keys(input).length === 0) {
@@ -83,7 +83,7 @@ const updateRecurringPayment = async (
 
   if (input.name) {
     const existingPayment = await RecurringPayment.findOne({
-      account: payment.account,
+      budget: payment.budget,
       name: input.name,
       _id: { $ne: id }
     });
@@ -129,13 +129,13 @@ const batchDeleteRecurringPayments = async (_: unknown, { ids }: { ids: string[]
   checkAuth(req);
 
   return withTransaction(async session => {
-    // Verify all payments exist and belong to the user's accounts
+    // Verify all payments exist and belong to the user's budgets
     const payments = await RecurringPayment.find({ _id: { $in: ids } }).session(session);
     if (payments.length !== ids.length) {
       throw RECURRING_PAYMENTS_NOT_FOUND(ids);
     }
-    for (const account of new Set(payments.map(payment => String(payment.account)))) {
-      await checkAccountAccess(account, req);
+    for (const budget of new Set(payments.map(payment => String(payment.budget)))) {
+      await checkBudgetAccess(budget, req);
     }
 
     const result = await RecurringPayment.deleteMany({ _id: { $in: ids } }).session(session);

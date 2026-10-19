@@ -4,8 +4,8 @@ export const PAYMENT_NOT_FOUND = (id: unknown) =>
     extensions: { code: 'PAYMENT_NOT_FOUND' }
   });
 
-export const PAYMENTS_NOT_FOUND = (accountId: unknown) =>
-  new GraphQLError(`No one-off payments exist for account with ID '${accountId}'`, {
+export const PAYMENTS_NOT_FOUND = (budgetId: unknown) =>
+  new GraphQLError(`No one-off payments exist for budget with ID '${budgetId}'`, {
     extensions: { code: 'PAYMENTS_NOT_FOUND' }
   });
 

@@ -1,7 +1,7 @@
 import type { Request } from 'express';
 import { isValidObjectId, type Types } from 'mongoose';
 import type { CreateNoteInput, UpdateNoteInput } from '../../types/note/noteTypes';
-import { checkAuth, checkAccountAccess } from '../../middleware/isAuth';
+import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
 import { NoteRepeat } from '../../constants/note/noteRepeat';
 import { Note } from '../../models/note/Note';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
@@ -18,10 +18,10 @@ import {
   noteInput
 } from '../../utils';
 
-// A note can only be about a payment on its own account
-const checkNotePayment = async (payment: string | null | undefined, account: Types.ObjectId | string) => {
+// A note can only be about a payment on its own budget
+const checkNotePayment = async (payment: string | null | undefined, budget: Types.ObjectId | string) => {
   if (!payment) return;
-  if (!isValidObjectId(payment) || !(await RecurringPayment.exists({ _id: payment, account }))) {
+  if (!isValidObjectId(payment) || !(await RecurringPayment.exists({ _id: payment, budget }))) {
     throw NOTE_PAYMENT_NOT_FOUND(payment);
   }
 };
@@ -33,18 +33,18 @@ const checkRepeat = (note: { repeat?: string | null; payment?: unknown }) => {
 
 const createNote = async (_: unknown, { input }: { input: CreateNoteInput }, req: Request) => {
   checkAuth(req);
-  const { accountId, ...note } = parseInput(newNote, input);
-  await checkAccountAccess(accountId, req);
+  const { budgetId, ...note } = parseInput(newNote, input);
+  await checkBudgetAccess(budgetId, req);
 
-  await checkNotePayment(note.payment, accountId);
+  await checkNotePayment(note.payment, budgetId);
   checkRepeat(note);
 
-  const existingNote = await Note.findOne({ body: note.body, account: accountId });
+  const existingNote = await Note.findOne({ body: note.body, budget: budgetId });
   if (existingNote) {
     throw NOTE_EXISTS(note.body);
   }
 
-  const createdNote = await new Note({ ...note, account: accountId }).save();
+  const createdNote = await new Note({ ...note, budget: budgetId }).save();
 
   return { note: createdNote, success: true };
 };
@@ -55,9 +55,9 @@ const updateNote = async (_: unknown, { id, input }: { id: string; input: Update
   if (!currentNote) {
     throw NOTE_NOT_FOUND(id);
   }
-  await checkAccountAccess(currentNote.account, req);
+  await checkBudgetAccess(currentNote.budget, req);
   input = parseInput(noteInput, input);
-  await checkNotePayment(input.payment, currentNote.account);
+  await checkNotePayment(input.payment, currentNote.budget);
   checkRepeat({
     repeat: input.repeat ?? currentNote.repeat,
     payment: input.payment !== undefined ? input.payment : currentNote.payment
@@ -83,7 +83,7 @@ const deleteNote = async (_: unknown, { id }: { id: string }, req: Request) => {
     throw NOTE_NOT_FOUND(id);
   }
 
-  await checkAccountAccess(note.account, req);
+  await checkBudgetAccess(note.budget, req);
 
   const response = await Note.deleteOne({ _id: id });
   if (response.deletedCount !== 1) {

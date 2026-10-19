@@ -1,7 +1,7 @@
 import type { PaymentType } from '../../constants/payment/paymentType';
 import type { PaymentFrequency, RecurringPaymentCategory } from '../../constants/payment';
 
-// Days left out (null) follow the account's usual timing
+// Days left out (null) follow the budget's usual timing
 export interface ReminderTimingInput {
   off: boolean;
   days?: number | null;
@@ -29,7 +29,7 @@ export interface RecurringPaymentFields {
 }
 
 export interface CreateRecurringPaymentInput extends RecurringPaymentFields {
-  accountId: string;
+  budgetId: string;
 }
 
 export type UpdateRecurringPaymentInput = Partial<RecurringPaymentFields>;

@@ -1,14 +1,14 @@
 import type { ReminderAction } from '../../constants/reminder';
 
 export interface UpdateReminderSettingsInput {
-  accountId: string;
+  budgetId: string;
   paymentDays?: number | null;
   renewalDays?: number | null;
   payday?: boolean | null;
 }
 
 export interface UpdateRemindersInput {
-  accountId: string;
+  budgetId: string;
   keys: string[];
   action: ReminderAction;
   // YYYY-MM-DD, for LATER
@@ -16,7 +16,7 @@ export interface UpdateRemindersInput {
 }
 
 export interface UpdateCalendarFeedInput {
-  accountId: string;
+  budgetId: string;
   enabled?: boolean | null;
   payments?: boolean | null;
   paydays?: boolean | null;

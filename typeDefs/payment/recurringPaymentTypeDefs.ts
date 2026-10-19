@@ -11,7 +11,7 @@ export const recurringPaymentTypeDefs = `
 
   type RecurringPayment {
     id: ID!
-    account: ID!
+    budget: ID!
     name: String!
     amount: Float!
     category: RecurringPaymentCategory!
@@ -86,7 +86,7 @@ export const recurringPaymentTypeDefs = `
 
 
   input CreateRecurringPaymentInput {
-    accountId: ID!
+    budgetId: ID!
     name: String!
     amount: Float!
     category: RecurringPaymentCategory!
@@ -100,7 +100,7 @@ export const recurringPaymentTypeDefs = `
     debt: DebtInput
   }
 
-  # A recurring payment created alongside its account, so it has no accountId yet
+  # A recurring payment created alongside its budget, so it has no budgetId yet
   input RecurringPaymentInput {
     name: String!
     amount: Float!

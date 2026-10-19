@@ -6,7 +6,7 @@ import jwt from 'jsonwebtoken';
 import { createApp } from '../../app';
 import { resetRateLimits } from '../../middleware/rateLimit';
 import '../../models/user/User';
-import '../../models/account/Account';
+import '../../models/budget/Budget';
 import '../../models/note/Note';
 import '../../models/payment/OneOffPayment';
 import '../../models/payday/Payday';
@@ -88,13 +88,13 @@ export const expiredToken = (userId: string) =>
 
 const REGISTER = `
   mutation ($input: RegisterInput!) {
-    registerAndLogin(input: $input) { token tokenExpiration user { id email firstName surname account } }
+    registerAndLogin(input: $input) { token tokenExpiration user { id email firstName surname budget } }
   }
 `;
 
-const CREATE_ACCOUNT = `
-  mutation ($input: CreateAccountInput!) {
-    createAccount(input: $input) { success account { id bankBalance monthlyIncome } }
+const CREATE_BUDGET = `
+  mutation ($input: CreateBudgetInput!) {
+    createBudget(input: $input) { success budget { id bankBalance monthlyIncome } }
   }
 `;
 
@@ -105,7 +105,7 @@ export interface TestUser {
   email: string;
   firstName: string;
   surname: string;
-  account: string | null;
+  budget: string | null;
 }
 
 export interface Credentials {
@@ -116,22 +116,22 @@ export interface Credentials {
 }
 
 interface CreateUserOptions {
-  withAccount?: boolean;
-  // Extra fields merged into the createAccount input (payday, recurringPayments, ...)
-  account?: Variables;
+  withBudget?: boolean;
+  // Extra fields merged into the createBudget input (payday, recurringPayments, ...)
+  budget?: Variables;
 }
 
-// Registers a user (and optionally an account) and returns their credentials
-export async function createUserWithAccount(
-  options: CreateUserOptions & { withAccount: false }
+// Registers a user (and optionally a budget) and returns their credentials
+export async function createUserWithBudget(
+  options: CreateUserOptions & { withBudget: false }
 ): Promise<Credentials>;
-export async function createUserWithAccount(
+export async function createUserWithBudget(
   options?: CreateUserOptions
-): Promise<Credentials & { accountId: string }>;
-export async function createUserWithAccount({
-  withAccount = true,
-  account = {}
-}: CreateUserOptions = {}): Promise<Credentials & { accountId?: string }> {
+): Promise<Credentials & { budgetId: string }>;
+export async function createUserWithBudget({
+  withBudget = true,
+  budget = {}
+}: CreateUserOptions = {}): Promise<Credentials & { budgetId?: string }> {
   counter += 1;
   const email = `user${counter}-${crypto.randomBytes(3).toString('hex')}@example.com`;
   const password = 'Password123!';
@@ -139,13 +139,13 @@ export async function createUserWithAccount({
     input: { email, password, firstName: 'Test', surname: `User${counter}` }
   });
   const { token, user } = registered.data.registerAndLogin;
-  if (!withAccount) return { token, user, email, password };
+  if (!withBudget) return { token, user, email, password };
 
   const created = await gql(
-    CREATE_ACCOUNT,
-    { input: { bankBalance: 1000, monthlyIncome: 2000, ...account } },
+    CREATE_BUDGET,
+    { input: { bankBalance: 1000, monthlyIncome: 2000, ...budget } },
     token
   );
-  const accountId = created.data.createAccount.account.id;
-  return { token, user, email, password, accountId };
+  const budgetId = created.data.createBudget.budget.id;
+  return { token, user, email, password, budgetId };
 }

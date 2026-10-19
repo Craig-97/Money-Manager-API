@@ -27,7 +27,7 @@ export interface RecordDebt {
  * nothing behind. Payday closes the cycle's records, and they stay as history.
  */
 export interface PaymentRecord {
-  account: Types.ObjectId;
+  budget: Types.ObjectId;
   recurringPayment?: Types.ObjectId | null;
   oneOffPayment?: Types.ObjectId | null;
   payment: PaymentSnapshot;
@@ -63,7 +63,7 @@ const recordDebtSchema = new Schema<RecordDebt>(
 
 const paymentRecordSchema = new Schema<PaymentRecord>(
   {
-    account: { type: Schema.Types.ObjectId, ref: 'Account', required: true },
+    budget: { type: Schema.Types.ObjectId, ref: 'Budget', required: true },
     recurringPayment: { type: Schema.Types.ObjectId, ref: 'RecurringPayment', default: null },
     oneOffPayment: { type: Schema.Types.ObjectId, ref: 'OneOffPayment', default: null },
     payment: { type: snapshotSchema, required: true },
@@ -77,7 +77,7 @@ const paymentRecordSchema = new Schema<PaymentRecord>(
 );
 
 // A cycle's records, for the dashboard and payday
-paymentRecordSchema.index({ account: 1, open: 1 });
+paymentRecordSchema.index({ budget: 1, open: 1 });
 // A payment's history and its latest record, newest first
 paymentRecordSchema.index({ recurringPayment: 1, createdAt: -1 });
 paymentRecordSchema.index({ oneOffPayment: 1 });

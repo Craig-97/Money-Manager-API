@@ -5,8 +5,8 @@ export const RECURRING_PAYMENT_NOT_FOUND = (id: unknown) =>
     extensions: { code: 'RECURRING_PAYMENT_NOT_FOUND' }
   });
 
-export const RECURRING_PAYMENTS_NOT_FOUND = (accountId: unknown) =>
-  new GraphQLError(`No recurring payments exist for account with ID '${accountId}'`, {
+export const RECURRING_PAYMENTS_NOT_FOUND = (budgetId: unknown) =>
+  new GraphQLError(`No recurring payments exist for budget with ID '${budgetId}'`, {
     extensions: { code: 'RECURRING_PAYMENTS_NOT_FOUND' }
   });
 

@@ -12,8 +12,10 @@
     "start:prod": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "jest",
+    "db:copy": "tsx scripts/copyLiveToDev.ts",
+    "migrate:budget": "tsx scripts/migrateBudget.ts",
     "migrate:bills": "tsx scripts/migrateBills.ts",
-    "migrate:account-ids": "tsx scripts/removeAccountIdLists.ts",
+    "migrate:budget-ids": "tsx scripts/removeBudgetIdLists.ts",
     "migrate:payment-records": "tsx scripts/moveHandledToRecords.ts",
     "migrate:renewal-reminders": "tsx scripts/migrateRenewalReminders.ts"
   },

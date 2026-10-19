@@ -21,8 +21,8 @@ export const NOTE_REPEAT_NEEDS_PAYMENT = () =>
     extensions: { code: 'BAD_USER_INPUT', field: 'repeat' }
   });
 
-// The payment a note is linked to has to be one of the account's recurring payments
+// The payment a note is linked to has to be one of the budget's recurring payments
 export const NOTE_PAYMENT_NOT_FOUND = (id: unknown) =>
-  new GraphQLError(`Recurring payment with id '${id}' does not exist on this account`, {
+  new GraphQLError(`Recurring payment with id '${id}' does not exist on this budget`, {
     extensions: { code: 'BAD_USER_INPUT', field: 'payment' }
   });

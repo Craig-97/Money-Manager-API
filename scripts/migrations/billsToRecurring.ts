@@ -2,7 +2,7 @@ import mongoose, { type Types } from 'mongoose';
 import type { BankHolidayRegion } from '../../constants/payday';
 import { RecurringPaymentCategory, PaymentFrequency } from '../../constants/payment';
 import { PaymentType } from '../../constants/payment/paymentType';
-import { Account } from '../../models/account/Account';
+import { Budget } from '../../models/budget/Budget';
 import { OneOffPayment } from '../../models/payment/OneOffPayment';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
 import { Payday } from '../../models/payday/Payday';
@@ -11,16 +11,16 @@ import { DEFAULT_PAYDAY, nextPayday, type BankHolidays } from '../../utils/payda
 
 /*
  * v1 bills become v2 recurring payments. A bill only had a name, an amount and a paid flag, so each
- * one becomes a monthly expense in OTHER, first due on the account's next payday. That payday
+ * one becomes a monthly expense in OTHER, first due on the budget's next payday. That payday
  * starts the next cycle, so every payment starts unpaid whatever the bill's flag said.
  *
- * Only accounts with bills and no recurring payments are moved, so running it again changes
+ * Only budgets with bills and no recurring payments are moved, so running it again changes
  * nothing. Bills are read straight from their collection and left there.
  */
 
 interface StoredBill {
   _id: Types.ObjectId;
-  account: Types.ObjectId;
+  budget: Types.ObjectId;
   name?: string;
   amount?: number;
   paid?: boolean;
@@ -32,8 +32,8 @@ export interface MovedBill {
   amount: number;
 }
 
-export interface AccountResult {
-  account: string;
+export interface BudgetResult {
+  budget: string;
   // Why nothing was moved, when nothing was
   skipped?: string;
   firstPaymentDate?: string;
@@ -50,7 +50,7 @@ export interface BillsMigrationOptions {
 
 const NO_HOLIDAYS: BankHolidays = new Set();
 
-// A name already used by one of the account's one-off payments gets "(bill)" on the end
+// A name already used by one of the budget's one-off payments gets "(bill)" on the end
 const freeName = (name: string, taken: Set<string>) => {
   let candidate = name;
   for (let n = 1; taken.has(candidate); n++) {
@@ -60,26 +60,26 @@ const freeName = (name: string, taken: Set<string>) => {
   return candidate;
 };
 
-const migrateAccount = async (
-  account: Types.ObjectId,
+const migrateBudget = async (
+  budget: Types.ObjectId,
   bills: StoredBill[],
   { apply, today, loadHolidays }: BillsMigrationOptions
-): Promise<AccountResult> => {
-  const result: AccountResult = { account: String(account), moved: [], unusable: [] };
+): Promise<BudgetResult> => {
+  const result: BudgetResult = { budget: String(budget), moved: [], unusable: [] };
 
-  if (!(await Account.exists({ _id: account }))) {
-    return { ...result, skipped: 'the account no longer exists' };
+  if (!(await Budget.exists({ _id: budget }))) {
+    return { ...result, skipped: 'the budget no longer exists' };
   }
-  if (await RecurringPayment.exists({ account })) {
+  if (await RecurringPayment.exists({ budget })) {
     return { ...result, skipped: 'it already has recurring payments' };
   }
 
-  const payday = await Payday.findOne({ account }).lean();
+  const payday = await Payday.findOne({ budget }).lean();
   const holidays = payday?.bankHolidayRegion ? await loadHolidays(payday.bankHolidayRegion) : NO_HOLIDAYS;
   const firstPaymentDate = nextPayday(payday ?? DEFAULT_PAYDAY, holidays, today);
 
   const taken = new Set(
-    (await OneOffPayment.find({ account }, { name: 1 }).lean()).map(payment => payment.name as string)
+    (await OneOffPayment.find({ budget }, { name: 1 }).lean()).map(payment => payment.name as string)
   );
 
   for (const bill of bills) {
@@ -96,7 +96,7 @@ const migrateAccount = async (
       // One at a time: operations in a transaction can't run in parallel
       for (const { name, amount } of result.moved) {
         await new RecurringPayment({
-          account,
+          budget,
           name,
           amount,
           type: PaymentType.EXPENSE,
@@ -117,16 +117,16 @@ export const migrateBills = async (options: BillsMigrationOptions) => {
     .find({}, { sort: { amount: 1 } })
     .toArray();
 
-  const byAccount = new Map<string, StoredBill[]>();
+  const byBudget = new Map<string, StoredBill[]>();
   for (const bill of bills) {
-    const key = String(bill.account);
-    byAccount.set(key, [...(byAccount.get(key) ?? []), bill]);
+    const key = String(bill.budget);
+    byBudget.set(key, [...(byBudget.get(key) ?? []), bill]);
   }
 
-  const results: AccountResult[] = [];
-  // One account at a time, each in its own transaction, so a failure leaves the others done
-  for (const accountBills of byAccount.values()) {
-    results.push(await migrateAccount(accountBills[0].account, accountBills, options));
+  const results: BudgetResult[] = [];
+  // One budget at a time, each in its own transaction, so a failure leaves the others done
+  for (const budgetBills of byBudget.values()) {
+    results.push(await migrateBudget(budgetBills[0].budget, budgetBills, options));
   }
   return results;
 };

@@ -8,7 +8,7 @@ export const noteBody = z
   .min(1, 'Notes cannot be empty')
   .max(2000, 'Notes must be 2000 characters or fewer');
 
-// Loose, so fields without rules here (the colour, the repeat, the account) come through parsing
+// Loose, so fields without rules here (the colour, the repeat, the budget) come through parsing
 // untouched
 
 const noteFields = {

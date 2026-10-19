@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { rateLimit, MINUTE } from 'express-rate-limit';
-import { Account } from '../models/account/Account';
+import { Budget } from '../models/budget/Budget';
 import { Note } from '../models/note/Note';
 import { Payday } from '../models/payday/Payday';
 import { OneOffPayment } from '../models/payment/OneOffPayment';
@@ -23,29 +23,29 @@ export const calendarFeedRateLimit = rateLimit({
 });
 
 /*
- * The calendar feed: the account's payments, paydays, renewals, note dates and debt-free dates as
+ * The calendar feed: the budget's payments, paydays, renewals, note dates and debt-free dates as
  * an .ics file. Anyone with the address can read it, so it carries amounts only when asked to, and
  * an address that isn't a feed's gets the same answer as one that never was.
  */
 export const calendarFeed = async (req: Request, res: Response) => {
   const token = FEED_FILE.exec(String(req.params.file ?? ''))?.[1];
-  const account = token ? await Account.findOne({ 'calendarFeed.token': token }) : null;
-  if (!account) {
+  const budget = token ? await Budget.findOne({ 'calendarFeed.token': token }) : null;
+  if (!budget) {
     res.status(404).type('text/plain').send('Not found');
     return;
   }
 
   try {
     const [payments, oneOffPayments, notes, payday] = await Promise.all([
-      RecurringPayment.find({ account: account._id }),
-      OneOffPayment.find({ account: account._id, paidAt: null }),
-      Note.find({ account: account._id, $or: [{ date: { $ne: null } }, { repeat: 'WITH_PAYMENT' }] }),
-      Payday.findOne({ account: account._id })
+      RecurringPayment.find({ budget: budget._id }),
+      OneOffPayment.find({ budget: budget._id, paidAt: null }),
+      Note.find({ budget: budget._id, $or: [{ date: { $ne: null } }, { repeat: 'WITH_PAYMENT' }] }),
+      Payday.findOne({ budget: budget._id })
     ]);
     const events = calendarEvents({
-      feed: account.calendarFeed,
-      settings: account.reminderSettings,
-      monthlyIncome: account.monthlyIncome,
+      feed: budget.calendarFeed,
+      settings: budget.reminderSettings,
+      monthlyIncome: budget.monthlyIncome,
       payments,
       oneOffPayments,
       notes,

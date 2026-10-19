@@ -2,7 +2,7 @@ import { PaymentFrequency } from '../../constants/payment';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { NoteRepeat } from '../../constants/note/noteRepeat';
 import { PayFrequency } from '../../constants/payday';
-import type { CalendarFeed, ReminderSettings } from '../../models/account/Account';
+import type { CalendarFeed, ReminderSettings } from '../../models/budget/Budget';
 import type { Note } from '../../models/note/Note';
 import type { Payday } from '../../models/payday/Payday';
 import type { OneOffPayment } from '../../models/payment/OneOffPayment';

@@ -21,7 +21,7 @@ export interface Debt {
 export interface RecurringPayment {
   name: string;
   amount: number;
-  account: Types.ObjectId;
+  budget: Types.ObjectId;
   category: RecurringPaymentCategory;
   frequency: PaymentFrequency;
   type: PaymentType;
@@ -61,10 +61,10 @@ const recurringPaymentSchema = new Schema<RecurringPayment>({
     required: true,
     min: 0
   },
-  account: {
+  budget: {
     type: Schema.Types.ObjectId,
-    ref: 'Account',
-    required: [true, 'Account ID required']
+    ref: 'Budget',
+    required: [true, 'Budget ID required']
   },
   category: {
     type: String,
@@ -139,7 +139,7 @@ recurringPaymentSchema.post('save', async function () {
   );
 });
 
-// Used for finding all recurring payments belonging to an account
-recurringPaymentSchema.index({ account: 1 });
+// Used for finding all recurring payments belonging to a budget
+recurringPaymentSchema.index({ budget: 1 });
 
 export const RecurringPayment = mongoose.model<RecurringPayment>('RecurringPayment', recurringPaymentSchema);

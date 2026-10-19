@@ -5,7 +5,7 @@ import {
   clearDatabase,
   gql,
   errorCode,
-  createUserWithAccount,
+  createUserWithBudget,
   Variables
 } from '../../helpers';
 
@@ -14,40 +14,40 @@ afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
 const FIELDS =
-  'id account frequency type dayOfMonth weekday firstPayDate bankHolidayRegion overrides { for date }';
+  'id budget frequency type dayOfMonth weekday firstPayDate bankHolidayRegion overrides { for date }';
 const UNKNOWN = '507f1f77bcf86cd799439011';
 const PAYDAY = { frequency: 'MONTHLY', type: 'SET_DAY', dayOfMonth: 25 };
 
-const CREATE_ACCOUNT = `mutation ($input: CreateAccountInput!) {
-  createAccount(input: $input) { success account { payday { ${FIELDS} } } }
+const CREATE_BUDGET = `mutation ($input: CreateBudgetInput!) {
+  createBudget(input: $input) { success budget { payday { ${FIELDS} } } }
 }`;
 
-// A payday is set up alongside its account, so this registers a user and makes the account with one
+// A payday is set up alongside its budget, so this registers a user and makes the budget with one
 const makePayday = async (extra: Variables = {}) => {
-  const { token } = await createUserWithAccount({ withAccount: false });
+  const { token } = await createUserWithBudget({ withBudget: false });
   const body = await gql(
-    CREATE_ACCOUNT,
+    CREATE_BUDGET,
     { input: { bankBalance: 1, monthlyIncome: 1, payday: { ...PAYDAY, ...extra } } },
     token
   );
   return { token, body };
 };
 
-// A user with an account and a payday, and that payday's id
+// A user with a budget and a payday, and that payday's id
 const withPayday = async () => {
-  const { token } = await createUserWithAccount({ account: { payday: PAYDAY } });
-  const body = await gql(`query { account { payday { id } } }`, undefined, token);
-  return { token, id: body.data.account.payday.id as string };
+  const { token } = await createUserWithBudget({ budget: { payday: PAYDAY } });
+  const body = await gql(`query { budget { payday { id } } }`, undefined, token);
+  return { token, id: body.data.budget.payday.id as string };
 };
 
-describe('payday on createAccount', () => {
-  it('creates a payday and links it to the account', async () => {
+describe('payday on createBudget', () => {
+  it('creates a payday and links it to the budget', async () => {
     const { token, body } = await makePayday({
       firstPayDate: '2030-01-25',
       bankHolidayRegion: 'SCOTLAND'
     });
     expect(body.errors).toBeUndefined();
-    const { payday } = body.data.createAccount.account;
+    const { payday } = body.data.createBudget.budget;
     expect(payday).toMatchObject({
       frequency: 'MONTHLY',
       type: 'SET_DAY',
@@ -57,11 +57,11 @@ describe('payday on createAccount', () => {
       bankHolidayRegion: 'SCOTLAND',
       overrides: []
     });
-    const read = await gql(`query { account { id payday { ${FIELDS} } } }`, undefined, token);
-    expect(read.data.account.payday).toEqual(payday);
-    expect(payday.account).toBe(read.data.account.id);
-    const account = await mongoose.model('Account').findById(read.data.account.id).populate('payday');
-    expect(account.payday.id).toBe(payday.id);
+    const read = await gql(`query { budget { id payday { ${FIELDS} } } }`, undefined, token);
+    expect(read.data.budget.payday).toEqual(payday);
+    expect(payday.budget).toBe(read.data.budget.id);
+    const budget = await mongoose.model('Budget').findById(read.data.budget.id).populate('payday');
+    expect(budget.payday.id).toBe(payday.id);
   });
 
   it('rejects an invalid firstPayDate format', async () => {
@@ -102,7 +102,7 @@ describe('updatePayday', () => {
   });
 
   it('returns PAYDAY_NOT_FOUND for an unknown id', async () => {
-    const { token } = await createUserWithAccount();
+    const { token } = await createUserWithBudget();
     const body = await gql(
       UPDATE,
       { id: UNKNOWN, input: { frequency: 'WEEKLY', type: 'LAST_DAY' } },
@@ -113,7 +113,7 @@ describe('updatePayday', () => {
 
   it('returns FORBIDDEN for another users payday', async () => {
     const owner = await withPayday();
-    const other = await createUserWithAccount();
+    const other = await createUserWithBudget();
     const body = await gql(
       UPDATE,
       { id: owner.id, input: { frequency: 'WEEKLY', type: 'LAST_DAY' } },
@@ -131,8 +131,8 @@ describe('setPaydayOverride', () => {
 
   it('starts with no overrides', async () => {
     const { token } = await withPayday();
-    const body = await gql(`query { account { payday { overrides { for date } } } }`, undefined, token);
-    expect(body.data.account.payday.overrides).toEqual([]);
+    const body = await gql(`query { budget { payday { overrides { for date } } } }`, undefined, token);
+    expect(body.data.budget.payday.overrides).toEqual([]);
   });
 
   it('moves one payday', async () => {
@@ -192,14 +192,14 @@ describe('setPaydayOverride', () => {
   });
 
   it('returns PAYDAY_NOT_FOUND for an unknown id', async () => {
-    const { token } = await createUserWithAccount();
+    const { token } = await createUserWithBudget();
     const body = await gql(SET, { id: UNKNOWN, for: inDays(20), date: inDays(13) }, token);
     expect(errorCode(body)).toBe('PAYDAY_NOT_FOUND');
   });
 
   it('returns FORBIDDEN for another users payday', async () => {
     const { id } = await withPayday();
-    const other = await createUserWithAccount();
+    const other = await createUserWithBudget();
     const body = await gql(SET, { id, for: inDays(20), date: inDays(13) }, other.token);
     expect(errorCode(body)).toBe('FORBIDDEN');
   });

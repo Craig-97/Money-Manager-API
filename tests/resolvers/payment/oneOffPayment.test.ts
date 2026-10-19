@@ -5,7 +5,7 @@ import {
   clearDatabase,
   gql,
   errorCode,
-  createUserWithAccount,
+  createUserWithBudget,
   GqlBody,
   Variables
 } from '../../helpers';
@@ -14,18 +14,18 @@ beforeAll(setupTestApp);
 afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
-const FIELDS = 'id account name amount dueDate type category';
+const FIELDS = 'id budget name amount dueDate type category';
 const CREATE = `mutation ($input: CreateOneOffPaymentInput!) {
   createOneOffPayment(input: $input) { success oneOffPayment { ${FIELDS} } }
 }`;
 const UNKNOWN = '507f1f77bcf86cd799439011';
 
-const makePayment = (token: string | undefined, accountId: string, name: string, extra: Variables = {}) =>
+const makePayment = (token: string | undefined, budgetId: string, name: string, extra: Variables = {}) =>
   gql(
     CREATE,
     {
       input: {
-        accountId,
+        budgetId,
         name,
         amount: 10,
         dueDate: '2030-06-15',
@@ -40,14 +40,14 @@ const makePayment = (token: string | undefined, accountId: string, name: string,
 const idOf = (body: GqlBody) => body.data.createOneOffPayment.oneOffPayment.id;
 
 describe('createOneOffPayment', () => {
-  it('creates a payment and adds it to the account', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const body = await makePayment(token, accountId, 'Holiday', { amount: 250.75 });
+  it('creates a payment and adds it to the budget', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const body = await makePayment(token, budgetId, 'Holiday', { amount: 250.75 });
     expect(body.errors).toBeUndefined();
     const { success, oneOffPayment } = body.data.createOneOffPayment;
     expect(success).toBe(true);
     expect(oneOffPayment).toMatchObject({
-      account: accountId,
+      budget: budgetId,
       name: 'Holiday',
       amount: 250.75,
       type: 'EXPENSE',
@@ -55,46 +55,46 @@ describe('createOneOffPayment', () => {
     });
     // Date fields are exposed through GraphQL String, which serializes as epoch milliseconds
     expect(oneOffPayment.dueDate).toBe(String(new Date('2030-06-15').getTime()));
-    const account = await mongoose.model('Account').findById(accountId).populate('oneOffPayments');
-    expect(account.oneOffPayments.map((r: { id: string }) => r.id)).toEqual([oneOffPayment.id]);
+    const budget = await mongoose.model('Budget').findById(budgetId).populate('oneOffPayments');
+    expect(budget.oneOffPayments.map((r: { id: string }) => r.id)).toEqual([oneOffPayment.id]);
   });
 
   it('rejects a duplicate name', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    await makePayment(token, accountId, 'Dup');
-    const body = await makePayment(token, accountId, 'Dup');
+    const { token, budgetId } = await createUserWithBudget();
+    await makePayment(token, budgetId, 'Dup');
+    const body = await makePayment(token, budgetId, 'Dup');
     expect(errorCode(body)).toBe('PAYMENT_EXISTS');
   });
 
   it('rejects an enum value outside the schema with a validation error', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const body = await makePayment(token, accountId, 'Bad', { type: 'NOPE' });
+    const { token, budgetId } = await createUserWithBudget();
+    const body = await makePayment(token, budgetId, 'Bad', { type: 'NOPE' });
     expect(body.errors).toBeDefined();
     expect(body.data).toBeUndefined();
   });
 
-  it('returns FORBIDDEN for another users account', async () => {
-    const owner = await createUserWithAccount();
-    const other = await createUserWithAccount();
-    const body = await makePayment(other.token, owner.accountId, 'Sneaky');
+  it('returns FORBIDDEN for another users budget', async () => {
+    const owner = await createUserWithBudget();
+    const other = await createUserWithBudget();
+    const body = await makePayment(other.token, owner.budgetId, 'Sneaky');
     expect(errorCode(body)).toBe('FORBIDDEN');
   });
 
   it('requires authentication', async () => {
-    const { accountId } = await createUserWithAccount();
-    const body = await makePayment(undefined, accountId, 'x');
+    const { budgetId } = await createUserWithBudget();
+    const body = await makePayment(undefined, budgetId, 'x');
     expect(errorCode(body)).toBe('UNAUTHENTICATED');
   });
 });
 
 describe('reading one-off payments', () => {
-  it("lists them on the user's account, sorted by amount", async () => {
-    const { token, accountId } = await createUserWithAccount();
-    await makePayment(token, accountId, 'Big', { amount: 900 });
-    await makePayment(token, accountId, 'Small', { amount: 5 });
-    const body = await gql(`query { account { oneOffPayments { name amount } } }`, undefined, token);
+  it("lists them on the user's budget, sorted by amount", async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    await makePayment(token, budgetId, 'Big', { amount: 900 });
+    await makePayment(token, budgetId, 'Small', { amount: 5 });
+    const body = await gql(`query { budget { oneOffPayments { name amount } } }`, undefined, token);
     expect(body.errors).toBeUndefined();
-    expect(body.data.account.oneOffPayments.map((p: { name: string }) => p.name)).toEqual(['Small', 'Big']);
+    expect(body.data.budget.oneOffPayments.map((p: { name: string }) => p.name)).toEqual(['Small', 'Big']);
   });
 });
 
@@ -104,8 +104,8 @@ describe('updateOneOffPayment', () => {
   }`;
 
   it('updates provided fields only', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const created = await makePayment(token, accountId, 'Edit me', { amount: 10 });
+    const { token, budgetId } = await createUserWithBudget();
+    const created = await makePayment(token, budgetId, 'Edit me', { amount: 10 });
     const body = await gql(
       UPDATE,
       { id: idOf(created), input: { amount: 99, category: 'GIFT' } },
@@ -121,15 +121,15 @@ describe('updateOneOffPayment', () => {
   });
 
   it('returns PAYMENT_NOT_FOUND for an unknown id', async () => {
-    const { token } = await createUserWithAccount();
+    const { token } = await createUserWithBudget();
     const body = await gql(UPDATE, { id: UNKNOWN, input: { amount: 1 } }, token);
     expect(errorCode(body)).toBe('PAYMENT_NOT_FOUND');
   });
 
   it('returns FORBIDDEN for another users payment', async () => {
-    const owner = await createUserWithAccount();
-    const other = await createUserWithAccount();
-    const created = await makePayment(owner.token, owner.accountId, 'Private');
+    const owner = await createUserWithBudget();
+    const other = await createUserWithBudget();
+    const created = await makePayment(owner.token, owner.budgetId, 'Private');
     const body = await gql(UPDATE, { id: idOf(created), input: { amount: 1 } }, other.token);
     expect(errorCode(body)).toBe('FORBIDDEN');
   });
@@ -140,11 +140,11 @@ describe('batchDeleteOneOffPayments', () => {
     batchDeleteOneOffPayments(ids: $ids) { success deletedCount ids }
   }`;
 
-  it('deletes payments, pulls them from the account and returns their ids', async () => {
-    const { token, accountId } = await createUserWithAccount();
+  it('deletes payments, pulls them from the budget and returns their ids', async () => {
+    const { token, budgetId } = await createUserWithBudget();
     const ids = [];
     for (const name of ['A', 'B', 'C']) {
-      ids.push(idOf(await makePayment(token, accountId, name)));
+      ids.push(idOf(await makePayment(token, budgetId, name)));
     }
     const body = await gql(BATCH, { ids: ids.slice(0, 2) }, token);
     expect(body.errors).toBeUndefined();
@@ -154,22 +154,22 @@ describe('batchDeleteOneOffPayments', () => {
       ids: ids.slice(0, 2)
     });
     expect(await mongoose.model('OneOffPayment').countDocuments()).toBe(1);
-    const account = await mongoose.model('Account').findById(accountId).populate('oneOffPayments');
-    expect(account.oneOffPayments.map((r: { id: string }) => r.id)).toEqual([ids[2]]);
+    const budget = await mongoose.model('Budget').findById(budgetId).populate('oneOffPayments');
+    expect(budget.oneOffPayments.map((r: { id: string }) => r.id)).toEqual([ids[2]]);
   });
 
   it('fails when any payment is missing', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const id = idOf(await makePayment(token, accountId, 'A'));
+    const { token, budgetId } = await createUserWithBudget();
+    const id = idOf(await makePayment(token, budgetId, 'A'));
     const body = await gql(BATCH, { ids: [id, UNKNOWN] }, token);
     expect(errorCode(body)).toBe('PAYMENTS_NOT_FOUND');
     expect(await mongoose.model('OneOffPayment').countDocuments()).toBe(1);
   });
 
   it('returns FORBIDDEN for another users payments', async () => {
-    const owner = await createUserWithAccount();
-    const other = await createUserWithAccount();
-    const id = idOf(await makePayment(owner.token, owner.accountId, 'A'));
+    const owner = await createUserWithBudget();
+    const other = await createUserWithBudget();
+    const id = idOf(await makePayment(owner.token, owner.budgetId, 'A'));
     const body = await gql(BATCH, { ids: [id] }, other.token);
     expect(errorCode(body)).toBe('FORBIDDEN');
     expect(await mongoose.model('OneOffPayment').countDocuments()).toBe(1);
@@ -183,13 +183,13 @@ describe('one-off reminders', () => {
   const UPDATE_TIMING = `mutation ($id: ID!, $input: UpdateOneOffPaymentInput!) {
     updateOneOffPayment(id: $id, input: $input) { oneOffPayment { dueReminder { off days } } }
   }`;
-  const input = (accountId: string, extra: Variables = {}) => ({
-    input: { accountId, name: 'Birthday', amount: 75, dueDate: '2030-06-15', type: 'EXPENSE', category: 'GIFT', ...extra }
+  const input = (budgetId: string, extra: Variables = {}) => ({
+    input: { budgetId, name: 'Birthday', amount: 75, dueDate: '2030-06-15', type: 'EXPENSE', category: 'GIFT', ...extra }
   });
 
   it('follows the usual timing unless given its own, which can change', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const created = await gql(TIMING, input(accountId), token);
+    const { token, budgetId } = await createUserWithBudget();
+    const created = await gql(TIMING, input(budgetId), token);
     expect(created.data.createOneOffPayment.oneOffPayment.dueReminder).toEqual({ off: false, days: null });
 
     const { id } = created.data.createOneOffPayment.oneOffPayment;
@@ -198,8 +198,8 @@ describe('one-off reminders', () => {
   });
 
   it('rejects days that are not a choice', async () => {
-    const { token, accountId } = await createUserWithAccount();
-    const body = await gql(TIMING, input(accountId, { dueReminder: { off: false, days: 5 } }), token);
+    const { token, budgetId } = await createUserWithBudget();
+    const body = await gql(TIMING, input(budgetId, { dueReminder: { off: false, days: 5 } }), token);
     expect(errorCode(body)).toBe('BAD_USER_INPUT');
   });
 });

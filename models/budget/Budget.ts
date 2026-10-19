@@ -1,6 +1,6 @@
 import mongoose, { Schema, Types } from 'mongoose';
 
-export interface Account {
+export interface Budget {
   bankBalance?: number;
   monthlyIncome?: number;
   user?: Types.ObjectId;
@@ -57,7 +57,7 @@ const calendarFeedSchema = new Schema<CalendarFeed>(
 );
 
 // First define the schema
-const AccountSchema = new Schema<Account>({
+const BudgetSchema = new Schema<Budget>({
   bankBalance: Number,
   monthlyIncome: Number,
   user: { type: Schema.Types.ObjectId, ref: 'User' },
@@ -66,28 +66,28 @@ const AccountSchema = new Schema<Account>({
   calendarFeed: { type: calendarFeedSchema, default: () => ({}) }
 });
 
-// Used for ensuring one account per user and quick user->account lookups
-AccountSchema.index({ user: 1 }, { unique: true });
+// Used for ensuring one budget per user and quick user->budget lookups
+BudgetSchema.index({ user: 1 }, { unique: true });
 
-// For finding the account a calendar feed's address belongs to; only feeds that are on have one
-AccountSchema.index(
+// For finding the budget a calendar feed's address belongs to; only feeds that are on have one
+BudgetSchema.index(
   { 'calendarFeed.token': 1 },
   { unique: true, partialFilterExpression: { 'calendarFeed.token': { $type: 'string' } } }
 );
 
-// What's on an account is found through each record's own account field, so there's only one link
+// What's on a budget is found through each record's own budget field, so there's only one link
 // to keep right. These fill in when populated, e.g. .populate('notes').
-const onAccount = (ref: string, justOne = false) => ({
+const onBudget = (ref: string, justOne = false) => ({
   ref,
   localField: '_id',
-  foreignField: 'account',
+  foreignField: 'budget',
   justOne
 });
 
-AccountSchema.virtual('notes', onAccount('Note'));
-AccountSchema.virtual('oneOffPayments', onAccount('OneOffPayment'));
-AccountSchema.virtual('recurringPayments', onAccount('RecurringPayment'));
-AccountSchema.virtual('payday', onAccount('Payday', true));
+BudgetSchema.virtual('notes', onBudget('Note'));
+BudgetSchema.virtual('oneOffPayments', onBudget('OneOffPayment'));
+BudgetSchema.virtual('recurringPayments', onBudget('RecurringPayment'));
+BudgetSchema.virtual('payday', onBudget('Payday', true));
 
 // Create and export the model using the schema
-export const Account = mongoose.model<Account>('Account', AccountSchema);
+export const Budget = mongoose.model<Budget>('Budget', BudgetSchema);

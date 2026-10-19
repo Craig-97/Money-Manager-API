@@ -5,7 +5,7 @@ export const reminderTypeDefs = `
   ${gqlEnum('ReminderAction', ReminderAction)}
 
   # When one reminder goes off: never (off), or a number of days before. Days left out (null)
-  # follow the account's usual timing.
+  # follow the budget's usual timing.
   type ReminderTiming {
     off: Boolean!
     days: Int
@@ -39,7 +39,7 @@ export const reminderTypeDefs = `
     snoozedUntil: String
   }
 
-  # A private address a calendar app checks for the account's dates: /cal/<token>.ics
+  # A private address a calendar app checks for the budget's dates: /cal/<token>.ics
   type CalendarFeed {
     # The secret in the address; null while the feed is off
     token: String
@@ -52,7 +52,7 @@ export const reminderTypeDefs = `
     showAmounts: Boolean!
   }
 
-  extend type Account {
+  extend type Budget {
     reminderSettings: ReminderSettings!
     reminderStates: [ReminderState!]!
     calendarFeed: CalendarFeed!
@@ -60,14 +60,14 @@ export const reminderTypeDefs = `
 
   # Whatever is left out stays as it is
   input UpdateReminderSettingsInput {
-    accountId: ID!
+    budgetId: ID!
     paymentDays: Int
     renewalDays: Int
     payday: Boolean
   }
 
   input UpdateRemindersInput {
-    accountId: ID!
+    budgetId: ID!
     keys: [String!]!
     action: ReminderAction!
     # For LATER: the day it comes back, YYYY-MM-DD, after today and within a year
@@ -76,7 +76,7 @@ export const reminderTypeDefs = `
 
   # Whatever is left out stays as it is
   input UpdateCalendarFeedInput {
-    accountId: ID!
+    budgetId: ID!
     # Turning it on gives it an address; turning it off stops the address working
     enabled: Boolean
     payments: Boolean
@@ -94,11 +94,11 @@ export const reminderTypeDefs = `
   }
 
   type Mutation {
-    updateReminderSettings(input: UpdateReminderSettingsInput!): AccountResponse!
+    updateReminderSettings(input: UpdateReminderSettingsInput!): BudgetResponse!
     # Marks reminders read, clears them, puts them away until a day, or brings them back
     updateReminders(input: UpdateRemindersInput!): ReminderStatesResponse!
-    updateCalendarFeed(input: UpdateCalendarFeedInput!): AccountResponse!
+    updateCalendarFeed(input: UpdateCalendarFeedInput!): BudgetResponse!
     # A new address for the feed; the old one stops working
-    resetCalendarFeed(accountId: ID!): AccountResponse!
+    resetCalendarFeed(budgetId: ID!): BudgetResponse!
   }
 `;

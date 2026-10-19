@@ -18,7 +18,7 @@ interface HandledEntry {
 
 interface StoredPayment {
   _id: Types.ObjectId;
-  account: Types.ObjectId;
+  budget: Types.ObjectId;
   name: string;
   category: string;
   type: 'INCOME' | 'EXPENSE';
@@ -39,7 +39,7 @@ export const moveHandledToRecords = async ({ apply }: { apply: boolean }) => {
       const amount = entry.amount ?? payment.amount;
       const paid = entry.outcome === 'PAID';
       return {
-        account: payment.account,
+        budget: payment.budget,
         recurringPayment: payment._id,
         oneOffPayment: null,
         payment: { name: payment.name, category: payment.category, type: payment.type },
