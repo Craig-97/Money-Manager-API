@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LeftOverOutcome } from '../../../constants/payday/leftOverOutcome';
 import { isoDay, money } from '../common';
 import { newOneOff, newRecurring } from '../payment';
 import { paydayInput } from '../payday';
@@ -16,7 +17,11 @@ export const newBudget = z.looseObject({
 
 export const budgetInput = z.looseObject({ bankBalance: money.optional(), monthlyIncome: money.optional() });
 
-export const paydayCycle = z.looseObject({ payday: isoDay, bankBalance: money });
+export const paydayCycle = z.looseObject({
+  payday: isoDay,
+  bankBalance: money,
+  leftOver: z.array(z.looseObject({ outcome: z.enum(LeftOverOutcome) }))
+});
 
 export const skipRecurring = z.looseObject({ until: isoDay.nullish() });
 

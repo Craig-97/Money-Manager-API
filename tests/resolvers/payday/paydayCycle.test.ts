@@ -6,6 +6,7 @@ import {
   errorCode,
   createUserWithBudget,
 } from "../../helpers";
+import mongoose from "mongoose";
 import { nextOccurrence, ukDay } from "../../../utils/dates";
 
 beforeAll(setupTestApp);
@@ -99,15 +100,23 @@ const skip = (
   until?: string,
 ) => gql(SKIP, { input: { budgetId, recurringPaymentIds: ids, until } }, token);
 
+// Starts a cycle, saying the left-over payments listed didn't go out, so they move on as skipped
 const startCycle = (
   token: string,
   budgetId: string,
   payday: string,
-  recurringPaymentIds: string[],
+  skippedIds: string[],
 ) =>
   gql(
     START,
-    { input: { budgetId, payday, bankBalance: 0, recurringPaymentIds } },
+    {
+      input: {
+        budgetId,
+        payday,
+        bankBalance: 0,
+        leftOver: skippedIds.map((recurringPaymentId) => ({ recurringPaymentId, outcome: "SKIPPED" })),
+      },
+    },
     token,
   );
 
@@ -301,7 +310,7 @@ describe("a new budget", () => {
 });
 
 describe("startPaydayCycle", () => {
-  it("sets the balance and moves the chosen payments on from dates left over", async () => {
+  it("sets the balance and moves on left-over payments that are paid or skipped", async () => {
     const { token, budgetId } = await createUserWithBudget();
     const netflix = await createPayment(
       token,
@@ -318,7 +327,7 @@ describe("startPaydayCycle", () => {
           budgetId,
           payday: "2030-02-01",
           bankBalance: 2500.5,
-          recurringPaymentIds: [netflix.id],
+          leftOver: [{ recurringPaymentId: netflix.id, outcome: "SKIPPED" }],
         },
       },
       token,
@@ -330,7 +339,7 @@ describe("startPaydayCycle", () => {
     expect(budget.cycleStartedOn).toBe(apiDate("2030-02-01"));
     const payments = byName(budget.recurringPayments);
     expect(payments.Netflix.nextDueDate).toBe(apiDate("2030-02-28"));
-    // Not chosen, so still due on its date in the last cycle
+    // Not listed, so still due on its date in the last cycle
     expect(payments.Gym.nextDueDate).toBe(apiDate("2030-01-10"));
   });
 
@@ -432,6 +441,153 @@ describe("startPaydayCycle", () => {
     ]);
 
     expect(errorCode(body)).toBe("RECURRING_PAYMENT_NOT_FOUND");
+  });
+
+  describe("what happened to the payments", () => {
+    const HISTORY = `mutation ($input: StartPaydayCycleInput!) {
+      startPaydayCycle(input: $input) {
+        budget {
+          bankBalance
+          recurringPayments { name nextDueDate debt { balance } thisCycle { kind dates } history { kind balanceChange open dates } }
+          oneOffPayments { name paidAt }
+        }
+      }
+    }`;
+    const DAY = 24 * 60 * 60 * 1000;
+    // A day relative to today, as YYYY-MM-DD, for payments that have to be due before today
+    const day = (offset: number) => new Date(ukDay().getTime() + offset * DAY).toISOString().slice(0, 10);
+    const start = (token: string, input: Record<string, unknown>) =>
+      gql(HISTORY, { input: { bankBalance: 500, alreadyPaid: null, ...input } }, token);
+
+    it("records a left-over payment as paid without changing the confirmed balance, but pays down a debt", async () => {
+      const { token, budgetId } = await createUserWithBudget();
+      const card = await createPayment(token, budgetId, "Card", "2030-01-10", {
+        category: "CREDIT_CARD",
+        debt: { balance: 1000, apr: 12, startingBalance: 1000 },
+      });
+
+      const body = await start(token, {
+        budgetId,
+        payday: "2030-02-01",
+        leftOver: [{ recurringPaymentId: card.id, outcome: "PAID" }],
+      });
+
+      expect(body.errors).toBeUndefined();
+      const { budget } = body.data.startPaydayCycle;
+      expect(budget.bankBalance).toBe(500);
+      // £10 of interest goes on first, then the £20 comes off
+      expect(budget.recurringPayments[0]).toMatchObject({
+        nextDueDate: apiDate("2030-02-10"),
+        debt: { balance: 990 },
+        thisCycle: [],
+      });
+      // Alongside the record of the balance being set when the debt was added
+      expect(budget.recurringPayments[0].history).toContainEqual({
+        kind: "PAID",
+        balanceChange: 0,
+        open: false,
+        dates: [apiDate("2030-01-10")],
+      });
+    });
+
+    it("records a left-over payment that didn't go out as skipped, and leaves one still to pay overdue", async () => {
+      const { token, budgetId } = await createUserWithBudget();
+      const gym = await createPayment(token, budgetId, "Gym", "2030-01-10");
+      const phone = await createPayment(token, budgetId, "Phone", "2030-01-12");
+
+      const body = await start(token, {
+        budgetId,
+        payday: "2030-02-01",
+        leftOver: [
+          { recurringPaymentId: gym.id, outcome: "SKIPPED" },
+          { recurringPaymentId: phone.id, outcome: "DUE" },
+        ],
+      });
+
+      const payments = byName(body.data.startPaydayCycle.budget.recurringPayments);
+      expect(payments.Gym).toMatchObject({
+        nextDueDate: apiDate("2030-02-10"),
+        history: [{ kind: "SKIPPED", balanceChange: 0, open: false, dates: [apiDate("2030-01-10")] }],
+      });
+      expect(payments.Phone).toMatchObject({ nextDueDate: apiDate("2030-01-12"), history: [] });
+    });
+
+    it("records every left-over date of a weekly payment", async () => {
+      const { token, budgetId } = await createUserWithBudget();
+      const cleaner = await createPayment(token, budgetId, "Cleaner", "2030-01-14", { frequency: "WEEKLY" });
+
+      const body = await start(token, {
+        budgetId,
+        payday: "2030-02-01",
+        leftOver: [{ recurringPaymentId: cleaner.id, outcome: "PAID" }],
+      });
+
+      expect(body.data.startPaydayCycle.budget.recurringPayments[0]).toMatchObject({
+        nextDueDate: apiDate("2030-02-04"),
+        history: [{ kind: "PAID", dates: ["2030-01-14", "2030-01-21", "2030-01-28"].map(apiDate) }],
+      });
+    });
+
+    it("records payments that already went out since payday as paid in the new cycle, so they can be undone", async () => {
+      const { token, budgetId } = await createUserWithBudget();
+      // Due yesterday and not yet marked paid
+      const gym = await createPayment(token, budgetId, "Gym", day(-8), { frequency: "WEEKLY" });
+      await mongoose.model("RecurringPayment").updateOne({ _id: gym.id }, { nextDueDate: new Date(day(-1)) });
+
+      const body = await start(token, {
+        budgetId,
+        payday: day(-2),
+        leftOver: [],
+        alreadyPaid: { recurringPaymentIds: [gym.id], oneOffPaymentIds: [] },
+      });
+
+      expect(body.errors).toBeUndefined();
+      const { budget } = body.data.startPaydayCycle;
+      expect(budget.bankBalance).toBe(500);
+      expect(budget.recurringPayments[0].thisCycle).toEqual([paid(day(-1))]);
+      expect(budget.recurringPayments[0].history).toEqual([
+        { kind: "PAID", balanceChange: 0, open: true, dates: [apiDate(day(-1))] },
+      ]);
+
+      // Undone, the balance stays put, as nothing came off it
+      const undone = await markUnpaid(token, budgetId, [gym.id]);
+      expect(undone.data.markPaymentsUnpaid.budget).toMatchObject({ bankBalance: 500 });
+      expect(undone.data.markPaymentsUnpaid.budget.recurringPayments[0].nextDueDate).toBe(apiDate(day(-1)));
+    });
+
+    it("marks one-off payments that already went out as paid without changing the balance", async () => {
+      const { token, budgetId } = await createUserWithBudget();
+      const created = await gql(
+        `mutation ($input: CreateOneOffPaymentInput!) { createOneOffPayment(input: $input) { oneOffPayment { id } } }`,
+        { input: { budgetId, name: "Gift", amount: 30, dueDate: day(-1), type: "EXPENSE", category: "OTHER" } },
+        token,
+      );
+      const gift = created.data.createOneOffPayment.oneOffPayment.id;
+
+      const body = await start(token, {
+        budgetId,
+        payday: day(-2),
+        leftOver: [],
+        alreadyPaid: { recurringPaymentIds: [], oneOffPaymentIds: [gift] },
+      });
+
+      const { budget } = body.data.startPaydayCycle;
+      expect(budget.bankBalance).toBe(500);
+      expect(budget.oneOffPayments).toEqual([{ name: "Gift", paidAt: expect.any(String) }]);
+    });
+
+    it("refuses an unknown left-over outcome", async () => {
+      const { token, budgetId } = await createUserWithBudget();
+      const gym = await createPayment(token, budgetId, "Gym", "2030-01-10");
+
+      const body = await start(token, {
+        budgetId,
+        payday: "2030-02-01",
+        leftOver: [{ recurringPaymentId: gym.id, outcome: "MAYBE" }],
+      });
+
+      expect(body.errors).toBeDefined();
+    });
   });
 });
 

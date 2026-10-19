@@ -1,4 +1,9 @@
+import { LeftOverOutcome } from '../../constants/payday/leftOverOutcome';
+import { gqlEnum } from '../../utils/helpers/enumHelpers';
+
 export const budgetTypeDefs = `
+  ${gqlEnum('LeftOverOutcome', LeftOverOutcome)}
+
   type Query {
     # One of the signed-in user's budgets; their default budget when no id is given
     budget(id: ID): Budget
@@ -69,14 +74,29 @@ export const budgetTypeDefs = `
     amount: Float!
   }
 
+  # A recurring payment with dates left over from the last cycle, and what happened to them
+  input LeftOverPaymentInput {
+    recurringPaymentId: ID!
+    outcome: LeftOverOutcome!
+  }
+
+  # Payments due from payday to today that have already gone out
+  input AlreadyPaidInput {
+    recurringPaymentIds: [ID!]!
+    oneOffPaymentIds: [ID!]!
+  }
+
   input StartPaydayCycleInput {
     budgetId: ID!
     # The payday being started, as YYYY-MM-DD
     payday: String!
     # The balance the user confirmed
     bankBalance: Float!
-    # Recurring payments with dates left over from the last cycle, to move on to their next date
-    recurringPaymentIds: [ID!]!
+    # PAID and SKIPPED are recorded and move the payment on; DUE leaves it overdue. One that isn't
+    # listed stays due too.
+    leftOver: [LeftOverPaymentInput!]!
+    # Recorded as paid in the new cycle without changing the confirmed balance, which allows for them
+    alreadyPaid: AlreadyPaidInput
   }
 
   type BudgetResponse {

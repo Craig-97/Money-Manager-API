@@ -12,6 +12,7 @@ import type {
 } from "../../types/budget/budgetTypes";
 import { PaymentType } from "../../constants/payment/paymentType";
 import { PaymentRecordKind } from "../../constants/payment/paymentRecordKind";
+import { LeftOverOutcome } from "../../constants/payday/leftOverOutcome";
 import { checkBudgetAccess, checkAuth } from "../../middleware/isAuth";
 import { Budget } from "../../models/budget/Budget";
 import { User } from "../../models/user/User";
@@ -198,17 +199,22 @@ const updateBudget = async (
   return { budget, success: true };
 };
 
-// Payday: sets the confirmed balance and moves the chosen recurring payments on from dates left over
-// from the last cycle. The cycle's records are closed: they stay as history but can't be undone,
-// as the confirmed balance already allows for them. Paid one-offs are cleared away. Recording the
-// payday stops the prompt showing again for it.
+// Payday: sets the confirmed balance and starts the new cycle. Last cycle's records are closed: they
+// stay as history but can't be undone, as the confirmed balance already allows for them. Paid
+// one-offs are cleared away. Recording the payday stops the prompt showing again for it.
+//
+// Recurring payments with dates left over from last cycle get what the user said happened: PAID
+// records them as paid and SKIPPED as skipped (both closed, and moved on to their first date from
+// payday), while DUE, or not saying, leaves them overdue. Payments due from payday to today that
+// have already gone out are recorded as paid in the new cycle. Neither changes the balance, since
+// the confirmed one already has them taken off, but a debt still goes down.
 const startPaydayCycle = async (
   _: unknown,
   { input }: { input: StartPaydayCycleInput },
   req: Request,
 ) => {
   checkAuth(req);
-  const { budgetId, payday, bankBalance, recurringPaymentIds } = parseInput(
+  const { budgetId, payday, bankBalance, leftOver, alreadyPaid } = parseInput(
     paydayCycle,
     input,
   );
@@ -221,11 +227,15 @@ const startPaydayCycle = async (
     }
 
     const cycleStart = new Date(payday);
+    const today = ukDay();
     const payments = await RecurringPayment.find({ budget: budgetId }).session(
       session,
     );
-    const chosen = new Set(recurringPaymentIds);
-    for (const id of chosen) {
+    const outcomes = new Map(
+      leftOver.map(({ recurringPaymentId, outcome }) => [recurringPaymentId, outcome]),
+    );
+    const goneOut = new Set(alreadyPaid?.recurringPaymentIds ?? []);
+    for (const id of [...outcomes.keys(), ...goneOut]) {
       if (!payments.some((payment) => payment.id === id)) {
         throw RECURRING_PAYMENT_NOT_FOUND(id);
       }
@@ -250,17 +260,45 @@ const startPaydayCycle = async (
 
     // Sequential: operations within a transaction session can't run in parallel
     for (const payment of payments) {
-      // Its dates before payday weren't paid or skipped: the new cycle starts from its first date
-      // from payday on
-      if (
-        !chosen.has(payment.id) ||
-        !payment.nextDueDate ||
-        payment.nextDueDate >= cycleStart
-      ) {
-        continue;
+      let changed = false;
+      const outcome = outcomes.get(payment.id);
+      const next = payment.nextDueDate;
+      if (next && next < cycleStart && outcome && outcome !== LeftOverOutcome.DUE) {
+        const dates = occurrencesBefore(payment, next, cycleStart);
+        changed =
+          outcome === LeftOverOutcome.PAID
+            ? await recordAlreadyPaid(payment, { dates, session, open: false })
+            : await handle(payment, PaymentRecordKind.SKIPPED, dates, session, {
+                balanceChange: 0,
+                open: false,
+              });
       }
-      payment.nextDueDate = nextOccurrence(payment, cycleStart);
+      // Gone out since payday: its dates up to today, once it's in the new cycle
+      if (goneOut.has(payment.id) && payment.nextDueDate && payment.nextDueDate >= cycleStart) {
+        const dates = occurrencesBefore(payment, payment.nextDueDate, addDays(today, 1));
+        if (await recordAlreadyPaid(payment, { dates, session, open: true })) changed = true;
+      }
+      if (!changed) continue;
       payment.increment();
+      await payment.save({ session });
+    }
+
+    for (const id of alreadyPaid?.oneOffPaymentIds ?? []) {
+      const payment = await OneOffPayment.findOne({ _id: id, budget: budgetId }).session(session);
+      if (!payment) {
+        throw PAYMENT_NOT_FOUND(id);
+      }
+      if (payment.paidAt) continue;
+      await new PaymentRecord({
+        budget: payment.budget,
+        oneOffPayment: payment._id,
+        payment: snapshotOf(payment),
+        kind: PaymentRecordKind.PAID,
+        dates: [payment.dueDate ?? today],
+        balanceChange: 0,
+      }).save({ session });
+      payment.paidAt = new Date();
+      incrementVersion(payment);
       await payment.save({ session });
     }
 
@@ -335,7 +373,7 @@ const handle = async (
   kind: typeof PaymentRecordKind.PAID | typeof PaymentRecordKind.SKIPPED,
   dates: Date[],
   session: ClientSession,
-  paid: { balanceChange: number; debt?: RecordDebt } = { balanceChange: 0 },
+  paid: { balanceChange: number; debt?: RecordDebt; open?: boolean } = { balanceChange: 0 },
 ) => {
   if (!dates.length) return false;
   await new PaymentRecord({
@@ -348,6 +386,34 @@ const handle = async (
   }).save({ session });
   payment.nextDueDate = nextOccurrence(payment, addDays(dates[dates.length - 1], 1));
   return true;
+};
+
+/*
+ * Records dates as paid that the confirmed payday balance already allows for: nothing comes off the
+ * balance, but a debt still has each period's interest added and the payment taken off. Returns
+ * false when there's nothing to record.
+ */
+const recordAlreadyPaid = async (
+  payment: RecurringPaymentDocument,
+  { dates, session, open }: { dates: Date[]; session: ClientSession; open: boolean },
+) => {
+  let debt: RecordDebt | undefined;
+  if (payment.debt && dates.length) {
+    let interest = 0;
+    let reduction = 0;
+    for (let k = 0; k < dates.length; k++) {
+      const paidOff = payTowardsDebt(payment.debt, payment.amount, payment.frequency);
+      interest += paidOff.interest;
+      reduction += paidOff.reduction;
+      payment.debt.balance = paidOff.balance;
+    }
+    debt = {
+      interest: roundPence(interest),
+      reduction: roundPence(reduction),
+      balanceAfter: payment.debt.balance,
+    };
+  }
+  return handle(payment, PaymentRecordKind.PAID, dates, session, { balanceChange: 0, debt, open });
 };
 
 // Paying payments from the dashboard, as the bank balance sees it. A recurring payment has its

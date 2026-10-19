@@ -88,7 +88,7 @@ describe('budgets', () => {
     const { token, budgetId } = await createUserWithBudget();
     const body = await gql(
       `mutation ($input: StartPaydayCycleInput!) { startPaydayCycle(input: $input) { success } }`,
-      { input: { budgetId, payday: '2030-02-30', bankBalance: 1, recurringPaymentIds: [] } },
+      { input: { budgetId, payday: '2030-02-30', bankBalance: 1, leftOver: [] } },
       token
     );
     expect(errorCode(body)).toBe('BAD_USER_INPUT');

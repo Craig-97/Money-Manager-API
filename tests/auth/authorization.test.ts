@@ -62,7 +62,7 @@ describe('budgets', () => {
   it("can't run payday or change payments on another user's budget", async () => {
     const payday = await asOther(
       `mutation ($input: StartPaydayCycleInput!) { startPaydayCycle(input: $input) { success } }`,
-      { input: { budgetId: owner.budgetId, payday: '2030-01-01', bankBalance: 0, recurringPaymentIds: [] } }
+      { input: { budgetId: owner.budgetId, payday: '2030-01-01', bankBalance: 0, leftOver: [] } }
     );
     expect(errorCode(payday)).toBe('FORBIDDEN');
     const paid = await asOther(
