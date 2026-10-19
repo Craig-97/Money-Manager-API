@@ -1,3 +1,5 @@
+import type { AccountKind } from '../../constants/account/accountKind';
+
 export interface AccountBalanceInput {
   accountId: string;
   balance: number;
@@ -6,6 +8,7 @@ export interface AccountBalanceInput {
 export interface CreateAccountInput {
   budgetId: string;
   name: string;
+  kind?: AccountKind | null;
   balance: number;
   counts?: boolean | null;
   interestRate?: number | null;
@@ -14,8 +17,11 @@ export interface CreateAccountInput {
 
 export interface UpdateAccountInput {
   name?: string;
+  kind?: AccountKind;
   balance?: number;
   counts?: boolean;
+  // Only ever true: pay moves here from the account it landed in
+  paidInto?: boolean;
   interestRate?: number | null;
   purpose?: string | null;
 }
@@ -23,4 +29,15 @@ export interface UpdateAccountInput {
 export interface UpdateAccountBalancesInput {
   budgetId: string;
   balances: AccountBalanceInput[];
+}
+
+export interface PaymentAccountInput {
+  recurringPaymentId: string;
+  // None goes back to the account pay lands in
+  accountId?: string | null;
+}
+
+export interface AssignPaymentAccountsInput {
+  budgetId: string;
+  payments: PaymentAccountInput[];
 }

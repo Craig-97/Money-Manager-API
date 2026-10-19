@@ -5,9 +5,8 @@ import { PaymentType } from '../../constants/payment/paymentType';
 import { enumValues } from '../../utils/helpers/enumHelpers';
 import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
-import { Account } from '../../models/account/Account';
-import { AccountKind } from '../../constants/account/accountKind';
-import type { ClientSession, Types } from 'mongoose';
+import type { Types } from 'mongoose';
+import { accountFields, checkPaymentAccounts } from '../account/accountResolvers';
 import { PaymentRecord } from '../../models/payment/PaymentRecord';
 import { Note } from '../../models/note/Note';
 import { NoteRepeat } from '../../constants/note/noteRepeat';
@@ -19,8 +18,6 @@ import {
   RECURRING_PAYMENT_UPDATE_FAILED,
   RECURRING_PAYMENT_DELETE_FAILED,
   INVALID_RECURRING_PAYMENT_TYPE,
-  NOT_A_SAVINGS_ACCOUNT,
-  PAYS_INTO_NOT_ALLOWED,
   withTransaction,
   validateUniqueName,
   parseInput,
@@ -29,23 +26,6 @@ import {
   updatedRecurring,
   withBalanceDate
 } from '../../utils';
-
-/*
- * A payment paying into savings: an expense that isn't a debt, into one of the budget's own savings
- * accounts
- */
-const checkPaysInto = async (
-  payment: { paysInto?: unknown; type?: string; debt?: unknown },
-  { budget, session }: { budget: Types.ObjectId | string; session?: ClientSession }
-) => {
-  if (!payment.paysInto) return;
-  if (payment.type !== PaymentType.EXPENSE || payment.debt) throw PAYS_INTO_NOT_ALLOWED();
-  const id = String(payment.paysInto);
-  const savings = isValidObjectId(id)
-    ? await Account.exists({ _id: id, budget, kind: AccountKind.SAVINGS }).session(session ?? null)
-    : null;
-  if (!savings) throw NOT_A_SAVINGS_ACCOUNT(id);
-};
 
 const findRecurringPayment = async (_: unknown, { id }: { id: string }, req: Request) => {
   checkAuth(req);
@@ -70,7 +50,7 @@ const createRecurringPayment = async (_: unknown, { input }: { input: CreateRecu
   return withTransaction(async session => {
     // Check if payment with same name exists
     await validateUniqueName(payment.name, budgetId, session);
-    await checkPaysInto(payment, { budget: budgetId, session });
+    await checkPaymentAccounts(payment, { budget: budgetId, session });
 
     const createdPayment = await new RecurringPayment({
       ...payment,
@@ -117,13 +97,15 @@ const updateRecurringPayment = async (
 
   // The renewal rules span fields the update may leave alone, so they're checked on the result
   parseInput(updatedRecurring, { ...payment.toObject(), ...input });
-  // As do the rules for paying into savings: becoming income or a debt stops it, and an account
-  // it's newly given is checked
+  // As do the rules for its accounts: becoming income or a debt stops it moving money to another
+  // account, and accounts it's newly given are checked
   const after = { ...payment.toObject(), ...input };
   if (input.paysInto === undefined && after.paysInto && (after.type !== PaymentType.EXPENSE || after.debt)) {
     input.paysInto = null;
-  } else if (input.paysInto) {
-    await checkPaysInto(after, { budget: payment.budget });
+    after.paysInto = null;
+  }
+  if (input.account !== undefined || input.paysInto || input.type !== undefined) {
+    await checkPaymentAccounts(after, { budget: payment.budget });
   }
 
   // An ended payment whose end moves carries on after the latest date it had dealt with
@@ -193,6 +175,7 @@ export const recurringPaymentResolvers = {
     recurringPayment: findRecurringPayment
   },
   RecurringPayment: {
+    ...accountFields,
     paysInto: (payment: { paysInto?: Types.ObjectId | null }) =>
       payment.paysInto ? String(payment.paysInto) : null
   },

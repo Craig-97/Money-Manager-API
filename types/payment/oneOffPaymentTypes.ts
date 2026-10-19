@@ -9,6 +9,7 @@ export interface OneOffPaymentFields {
   type: PaymentType;
   category: OneOffPaymentCategory;
   dueReminder?: ReminderTimingInput;
+  account?: string | null;
 }
 
 export interface CreateOneOffPaymentInput extends OneOffPaymentFields {

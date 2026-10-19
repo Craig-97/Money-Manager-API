@@ -36,8 +36,10 @@ export const recurringPaymentTypeDefs = `
     renewalReminder: ReminderTiming!
     # Set when it's paying off a loan or card; only ever on an expense
     debt: Debt
-    # The savings account it moves money into, like a standing order: marking it paid adds the
-    # amount there. Only ever on an expense, and never on a debt.
+    # The account it goes out of, or an income goes into. Null: the one pay lands in.
+    account: ID
+    # Another of the budget's accounts it moves money into, like a standing order: marking it paid
+    # adds the amount there. Only ever on an expense, and never on a debt.
     paysInto: ID
   }
 
@@ -108,7 +110,9 @@ export const recurringPaymentTypeDefs = `
     dueReminder: ReminderTimingInput
     renewalReminder: ReminderTimingInput
     debt: DebtInput
-    # A savings account in the same budget; on an update, null stops it
+    # An account in the same budget: a spending one for an expense. Null: the one pay lands in.
+    account: ID
+    # Another account in the same budget; on an update, null stops it
     paysInto: ID
   }
 
@@ -125,7 +129,9 @@ export const recurringPaymentTypeDefs = `
     dueReminder: ReminderTimingInput
     renewalReminder: ReminderTimingInput
     debt: DebtInput
-    # A savings account in the same budget; on an update, null stops it
+    # An account in the same budget: a spending one for an expense. Null: the one pay lands in.
+    account: ID
+    # Another account in the same budget; on an update, null stops it
     paysInto: ID
   }
 
@@ -141,7 +147,9 @@ export const recurringPaymentTypeDefs = `
     dueReminder: ReminderTimingInput
     renewalReminder: ReminderTimingInput
     debt: DebtInput
-    # A savings account in the same budget; on an update, null stops it
+    # An account in the same budget: a spending one for an expense. Null: the one pay lands in.
+    account: ID
+    # Another account in the same budget; on an update, null stops it
     paysInto: ID
   }
 

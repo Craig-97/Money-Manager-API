@@ -42,6 +42,9 @@ export interface PaymentRecord {
   dates: Date[];
   // What it did to the bank balance: negative for money out, 0 when it left it alone
   balanceChange: number;
+  // The account balanceChange went on, so undoing puts it back there even if the payment has moved
+  // accounts since. None on records from before accounts: those went on the one pay lands in.
+  account?: Types.ObjectId | null;
   debt?: RecordDebt | null;
   // What it added to the account the payment pays into, so undoing takes exactly that back off
   transfer?: RecordTransfer | null;
@@ -86,6 +89,7 @@ const paymentRecordSchema = new Schema<PaymentRecord>(
     kind: { type: String, enum: enumValues(PaymentRecordKind), required: true },
     dates: { type: [Date], required: true },
     balanceChange: { type: Number, required: true },
+    account: { type: Schema.Types.ObjectId, ref: 'Account', default: null },
     debt: { type: recordDebtSchema, default: undefined },
     transfer: { type: recordTransferSchema, default: undefined },
     open: { type: Boolean, default: true }

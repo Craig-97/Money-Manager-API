@@ -19,7 +19,7 @@ export const budgetInput = z.looseObject({ monthlyIncome: money.optional() });
 
 export const paydayCycle = z.looseObject({
   payday: isoDay,
-  currentBalance: money,
+  paidIntoBalance: money,
   accountBalances: z.array(z.looseObject({ balance: money })).nullish(),
   leftOver: z.array(z.looseObject({ outcome: z.enum(LeftOverOutcome) }))
 });

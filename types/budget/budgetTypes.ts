@@ -48,7 +48,7 @@ export interface LogDebtOverpaymentInput {
 export interface StartPaydayCycleInput {
   budgetId: string;
   payday: string;
-  currentBalance: number;
+  paidIntoBalance: number;
   accountBalances?: AccountBalanceInput[] | null;
   leftOver: { recurringPaymentId: string; outcome: LeftOverOutcome }[];
   alreadyPaid?: { recurringPaymentIds: string[]; oneOffPaymentIds: string[] } | null;

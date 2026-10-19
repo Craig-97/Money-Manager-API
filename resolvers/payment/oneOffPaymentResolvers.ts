@@ -5,6 +5,7 @@ import { enumValues } from '../../utils/helpers/enumHelpers';
 import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
 import { OneOffPayment } from '../../models/payment/OneOffPayment';
 import { PaymentRecord } from '../../models/payment/PaymentRecord';
+import { accountFields, checkPaymentAccounts } from '../account/accountResolvers';
 import {
   PAYMENT_NOT_FOUND,
   PAYMENTS_NOT_FOUND,
@@ -31,6 +32,7 @@ const createOneOffPayment = async (_: unknown, { input }: { input: CreateOneOffP
 
   return withTransaction(async session => {
     await validateUniqueName(payment.name, budgetId, session);
+    await checkPaymentAccounts(payment, { budget: budgetId, session });
 
     const createdPayment = await new OneOffPayment({ ...payment, budget: budgetId }).save({ session });
 
@@ -50,6 +52,13 @@ const updateOneOffPayment = async (
   }
   await checkBudgetAccess(currentPayment.budget, req);
   input = parseInput(oneOffInput, input);
+  // The account rules span the type too, so they're checked on the result
+  if (input.account !== undefined || input.type !== undefined) {
+    await checkPaymentAccounts(
+      { ...currentPayment.toObject(), ...input },
+      { budget: currentPayment.budget }
+    );
+  }
 
   const mergedPayment = incrementVersion(Object.assign(currentPayment, input));
 
@@ -89,6 +98,7 @@ const batchDeleteOneOffPayments = async (_: unknown, { ids }: { ids: string[] },
 };
 
 export const oneOffPaymentResolvers = {
+  OneOffPayment: accountFields,
   Mutation: {
     createOneOffPayment,
     updateOneOffPayment,

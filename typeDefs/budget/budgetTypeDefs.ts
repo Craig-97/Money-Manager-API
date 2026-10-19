@@ -14,7 +14,7 @@ export const budgetTypeDefs = `
     user: User
     # The bank balance on the dashboard: the accounts that count in free to spend, added up
     bankBalance: Float!
-    # The current account first, then savings, oldest first
+    # Where pay lands first, then the other spending accounts, then savings, each oldest first
     accounts: [Account!]!
     monthlyIncome: Float!
     oneOffPayments: [OneOffPayment]
@@ -27,7 +27,7 @@ export const budgetTypeDefs = `
 
   # A new budget for the signed-in user, with the payments and payday set up alongside it
   input CreateBudgetInput {
-    # The opening balance of the current account, which is made with the budget
+    # The opening balance of the account pay lands in, which is made with the budget
     bankBalance: Float!
     monthlyIncome: Float!
     oneOffPayments: [OneOffPaymentInput!]
@@ -94,8 +94,8 @@ export const budgetTypeDefs = `
     budgetId: ID!
     # The payday being started, as YYYY-MM-DD
     payday: String!
-    # The current account's balance, as the user confirmed it
-    currentBalance: Float!
+    # The balance of the account pay lands in, as the user confirmed it
+    paidIntoBalance: Float!
     # Savings balances the user checked at the same time
     accountBalances: [AccountBalanceInput!]
     # PAID and SKIPPED are recorded and move the payment on; DUE leaves it overdue. One that isn't

@@ -1,8 +1,8 @@
 // What a bank account is for
 export const AccountKind = {
-  // Where pay lands and payments go out. Phase 1 has one per budget, and it always counts in free to
-  // spend.
-  CURRENT: 'CURRENT',
+  // Money to spend: payments go out of it, and it always counts in free to spend. One of them is
+  // where pay lands.
+  SPENDING: 'SPENDING',
   // Money put aside, a cash ISA included. Kept out of free to spend unless switched on.
   SAVINGS: 'SAVINGS'
 } as const;

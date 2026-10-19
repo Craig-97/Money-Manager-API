@@ -113,7 +113,7 @@ const startCycle = (
       input: {
         budgetId,
         payday,
-        currentBalance: 0,
+        paidIntoBalance: 0,
         leftOver: skippedIds.map((recurringPaymentId) => ({ recurringPaymentId, outcome: "SKIPPED" })),
       },
     },
@@ -326,7 +326,7 @@ describe("startPaydayCycle", () => {
         input: {
           budgetId,
           payday: "2030-02-01",
-          currentBalance: 2500.5,
+          paidIntoBalance: 2500.5,
           leftOver: [{ recurringPaymentId: netflix.id, outcome: "SKIPPED" }],
         },
       },
@@ -457,7 +457,7 @@ describe("startPaydayCycle", () => {
     // A day relative to today, as YYYY-MM-DD, for payments that have to be due before today
     const day = (offset: number) => new Date(ukDay().getTime() + offset * DAY).toISOString().slice(0, 10);
     const start = (token: string, input: Record<string, unknown>) =>
-      gql(HISTORY, { input: { currentBalance: 500, alreadyPaid: null, ...input } }, token);
+      gql(HISTORY, { input: { paidIntoBalance: 500, alreadyPaid: null, ...input } }, token);
 
     it("records a left-over payment as paid without changing the confirmed balance, but pays down a debt", async () => {
       const { token, budgetId } = await createUserWithBudget();

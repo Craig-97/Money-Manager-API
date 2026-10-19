@@ -1,4 +1,4 @@
-import type { ClientSession } from "mongoose";
+import type { ClientSession, Types } from "mongoose";
 import type { Request } from "express";
 import type {
   CreateBudgetInput,
@@ -16,10 +16,11 @@ import { LeftOverOutcome } from "../../constants/payday/leftOverOutcome";
 import { AccountKind } from "../../constants/account/accountKind";
 import { Account } from "../../models/account/Account";
 import {
+  accountFor,
   accountsOf,
   countedBalance,
-  currentAccountOf,
   moveMoney,
+  paidIntoAccountOf,
   setBalance,
   setBalances,
 } from "../account/accountResolvers";
@@ -145,7 +146,8 @@ const createBudget = async (
     await new Account({
       budget: budget._id,
       name: "Current account",
-      kind: AccountKind.CURRENT,
+      kind: AccountKind.SPENDING,
+      paidInto: true,
       balance: bankBalance,
       counts: true,
       balanceUpdatedAt: new Date(),
@@ -236,7 +238,7 @@ const startPaydayCycle = async (
   req: Request,
 ) => {
   checkAuth(req);
-  const { budgetId, payday, currentBalance, accountBalances, leftOver, alreadyPaid } = parseInput(
+  const { budgetId, payday, paidIntoBalance, accountBalances, leftOver, alreadyPaid } = parseInput(
     paydayCycle,
     input,
   );
@@ -324,10 +326,10 @@ const startPaydayCycle = async (
       await payment.save({ session });
     }
 
-    // The balances the user confirmed go on last, over anything moved into savings above
-    const current = await currentAccountOf(budgetId, session);
-    setBalance(current, currentBalance);
-    await current.save({ session });
+    // The balances the user confirmed go on last, over anything moved into accounts above
+    const paidInto = await paidIntoAccountOf(budgetId, session);
+    setBalance(paidInto, paidIntoBalance);
+    await paidInto.save({ session });
     await setBalances(budgetId, { balances: accountBalances ?? [], session });
 
     budget.cycleStartedOn = cycleStart;
@@ -343,6 +345,20 @@ const balanceChange = (payment: { amount: number; type: string }) =>
   payment.type === PaymentType.INCOME ? payment.amount : -payment.amount;
 
 type RecurringPaymentDocument = InstanceType<typeof RecurringPayment>;
+type AccountId = Types.ObjectId | null | undefined;
+
+// What a change does to a balance: on the payment's own account, or on the one a record says it
+// went on (none: the one pay lands in)
+type BalanceEffect = number | { amount: number; account: AccountId };
+
+/* Moves an account's balance; none means the one pay lands in */
+const moveOn = async (
+  budgetId: string,
+  { account, amount, session }: { account: AccountId; amount: number; session: ClientSession },
+) => {
+  if (!amount) return;
+  await moveMoney(await accountFor(budgetId, { account, session }), { amount, session });
+};
 
 /*
  * Pays, skips or undoes some of a budget's recurring payments in one transaction. `change`
@@ -355,9 +371,9 @@ const changeRecurringPayments = (
   change: (
     payment: RecurringPaymentDocument,
     session: ClientSession,
-  ) => Promise<number | null>,
-  // Further work in the same transaction, returning its own effect on the balance
-  more?: (session: ClientSession) => Promise<number>,
+  ) => Promise<BalanceEffect | null>,
+  // Further work in the same transaction, moving balances itself
+  more?: (session: ClientSession) => Promise<void>,
 ) =>
   withTransaction(async (session) => {
     const budget = await Budget.findById(budgetId).session(session);
@@ -365,7 +381,6 @@ const changeRecurringPayments = (
       throw BUDGET_NOT_FOUND(budgetId);
     }
 
-    let balance = 0;
     // Sequential: operations within a transaction session can't run in parallel
     for (const id of recurringPaymentIds) {
       const payment = await RecurringPayment.findOne({
@@ -377,15 +392,15 @@ const changeRecurringPayments = (
       }
       const effect = await change(payment, session);
       if (effect === null) continue;
-      balance += effect;
+      const { amount, account } =
+        typeof effect === "number" ? { amount: effect, account: payment.account } : effect;
+      await moveOn(budgetId, { account, amount, session });
       payment.increment();
       await payment.save({ session });
     }
 
-    if (more) balance += await more(session);
+    if (more) await more(session);
 
-    const current = await currentAccountOf(budgetId, session);
-    await moveMoney(current._id, { amount: balance, session });
     incrementVersion(budget);
     await budget.save({ session });
 
@@ -403,6 +418,8 @@ const handle = async (
   session: ClientSession,
   paid: {
     balanceChange: number;
+    // The account balanceChange went on
+    account?: Types.ObjectId;
     debt?: RecordDebt;
     transfer?: RecordTransfer;
     open?: boolean;
@@ -499,16 +516,17 @@ const markPaymentsPaid = async (
         };
       }
       const change = balanceChange(payment);
+      const account = await accountFor(budgetId, { account: payment.account, session });
       const transfer = await payInto(payment, { times: 1, session });
       await handle(payment, PaymentRecordKind.PAID, [payment.nextDueDate], session, {
         balanceChange: change,
+        account,
         debt,
         transfer,
       });
-      return change;
+      return { amount: change, account };
     },
     async (session) => {
-      let balance = 0;
       for (const id of oneOffPaymentIds) {
         const payment = await OneOffPayment.findOne({
           _id: id,
@@ -520,6 +538,7 @@ const markPaymentsPaid = async (
         // Already paid: nothing more comes off
         if (payment.paidAt) continue;
         const change = balanceChange(payment);
+        const account = await accountFor(budgetId, { account: payment.account, session });
         await new PaymentRecord({
           budget: payment.budget,
           oneOffPayment: payment._id,
@@ -527,13 +546,13 @@ const markPaymentsPaid = async (
           kind: PaymentRecordKind.PAID,
           dates: [payment.dueDate ?? ukDay()],
           balanceChange: change,
+          account,
         }).save({ session });
         payment.paidAt = new Date();
         incrementVersion(payment);
         await payment.save({ session });
-        balance += change;
+        await moveOn(budgetId, { account, amount: change, session });
       }
-      return balance;
     },
   );
 };
@@ -564,10 +583,9 @@ const markPaymentsUnpaid = async (
       if (latest.transfer) {
         await moveMoney(latest.transfer.account, { amount: -latest.transfer.amount, session });
       }
-      return -latest.balanceChange;
+      return { amount: -latest.balanceChange, account: latest.account };
     },
     async (session) => {
-      let balance = 0;
       for (const id of oneOffPaymentIds ?? []) {
         const payment = await OneOffPayment.findOne({
           _id: id,
@@ -586,9 +604,12 @@ const markPaymentsUnpaid = async (
         payment.paidAt = null;
         incrementVersion(payment);
         await payment.save({ session });
-        balance -= record.balanceChange;
+        await moveOn(budgetId, {
+          account: record.account,
+          amount: -record.balanceChange,
+          session,
+        });
       }
-      return balance;
     },
   );
 };
@@ -648,6 +669,7 @@ const logDebtOverpayment = async (
         throw OVERPAYMENT_TOO_LARGE();
       }
       payment.debt.balance = roundPence(payment.debt.balance - amount);
+      const account = await accountFor(budgetId, { account: payment.account, session });
       await new PaymentRecord({
         budget: payment.budget,
         recurringPayment: payment._id,
@@ -655,9 +677,10 @@ const logDebtOverpayment = async (
         kind: PaymentRecordKind.OVERPAYMENT,
         dates: [ukDay()],
         balanceChange: -amount,
+        account,
         debt: { interest: 0, reduction: amount, balanceAfter: payment.debt.balance },
       }).save({ session });
-      return -amount;
+      return { amount: -amount, account };
     },
   );
 };
@@ -699,7 +722,7 @@ const undoDebtOverpayment = async (
       if (payment.debt && record.debt) {
         payment.debt.balance = roundPence(payment.debt.balance + record.debt.reduction);
       }
-      return -record.balanceChange;
+      return { amount: -record.balanceChange, account: record.account };
     },
   );
 };

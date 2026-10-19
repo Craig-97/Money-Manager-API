@@ -6,7 +6,7 @@ beforeAll(setupTestApp);
 afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
-const ACCOUNT = 'id name kind balance counts interestRate purpose balanceUpdatedAt';
+const ACCOUNT = 'id name kind balance counts paidInto interestRate purpose balanceUpdatedAt';
 const BUDGET = `budget { bankBalance accounts { ${ACCOUNT} } }`;
 const QUERY = `query { ${BUDGET} }`;
 const CREATE = `mutation ($input: CreateAccountInput!) {
@@ -19,7 +19,7 @@ const DELETE = `mutation ($id: ID!) { deleteAccount(id: $id) { success ${BUDGET}
 const BALANCES = `mutation ($input: UpdateAccountBalancesInput!) {
   updateAccountBalances(input: $input) { success ${BUDGET} }
 }`;
-const PAYMENT = 'id name paysInto history { kind balanceChange transfer { account amount } }';
+const PAYMENT = 'id name account paysInto history { kind balanceChange transfer { account amount } }';
 const CREATE_PAYMENT = `mutation ($input: CreateRecurringPaymentInput!) {
   createRecurringPayment(input: $input) { recurringPayment { ${PAYMENT} } }
 }`;
@@ -34,6 +34,15 @@ const UNPAID = `mutation ($input: MarkPaymentsUnpaidInput!) {
 }`;
 const START = `mutation ($input: StartPaydayCycleInput!) {
   startPaydayCycle(input: $input) { ${BUDGET} }
+}`;
+const ASSIGN = `mutation ($input: AssignPaymentAccountsInput!) {
+  assignPaymentAccounts(input: $input) { success ${BUDGET} }
+}`;
+const CREATE_ONE_OFF = `mutation ($input: CreateOneOffPaymentInput!) {
+  createOneOffPayment(input: $input) { oneOffPayment { id account } }
+}`;
+const OVERPAY = `mutation ($input: LogDebtOverpaymentInput!) {
+  logDebtOverpayment(input: $input) { ${BUDGET} }
 }`;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,13 +67,19 @@ const payment = (budgetId: string, extra: Record<string, unknown> = {}) => ({
 });
 
 describe('accounts', () => {
-  it('gives a new budget a current account holding its opening balance, which counts', async () => {
+  it('gives a new budget a spending account that pay lands in, holding its opening balance', async () => {
     const { token } = await createUserWithBudget();
     const body = await gql(QUERY, undefined, token);
     expect(body.errors).toBeUndefined();
     expect(body.data.budget.bankBalance).toBe(1000);
     expect(body.data.budget.accounts).toEqual([
-      expect.objectContaining({ name: 'Current account', kind: 'CURRENT', balance: 1000, counts: true })
+      expect.objectContaining({
+        name: 'Current account',
+        kind: 'SPENDING',
+        paidInto: true,
+        balance: 1000,
+        counts: true
+      })
     ]);
   });
 
@@ -83,7 +98,7 @@ describe('accounts', () => {
 
     const easy = await gql(CREATE, { input: { budgetId, name: 'Easy access', balance: 4200, counts: true } }, token);
     expect(easy.data.createAccount.budget.bankBalance).toBe(5200);
-    // The current account first, then savings, oldest first
+    // Where pay lands first, then savings, oldest first
     expect(easy.data.createAccount.budget.accounts.map((a: { name: string }) => a.name)).toEqual([
       'Current account',
       'Cash ISA',
@@ -102,12 +117,13 @@ describe('accounts', () => {
     expect(body.data.updateAccount.budget.bankBalance).toBe(9900);
   });
 
-  it("keeps the current account counting, and won't delete it", async () => {
+  it("keeps where pay lands counting, and won't delete it or make it savings", async () => {
     const { token } = await createUserWithBudget();
     const current = (await gql(QUERY, undefined, token)).data.budget.accounts[0];
 
-    expect(errorCode(await gql(UPDATE, { id: current.id, input: { counts: false } }, token))).toBe('CURRENT_ACCOUNT_FIXED');
-    expect(errorCode(await gql(DELETE, { id: current.id }, token))).toBe('CURRENT_ACCOUNT_FIXED');
+    expect(errorCode(await gql(UPDATE, { id: current.id, input: { counts: false } }, token))).toBe('SPENDING_ALWAYS_COUNTS');
+    expect(errorCode(await gql(UPDATE, { id: current.id, input: { kind: 'SAVINGS' } }, token))).toBe('PAID_INTO_ACCOUNT_FIXED');
+    expect(errorCode(await gql(DELETE, { id: current.id }, token))).toBe('PAID_INTO_ACCOUNT_FIXED');
   });
 
   it('deletes savings, and payments into it carry on as plain expenses', async () => {
@@ -180,7 +196,7 @@ describe('paying into savings', () => {
     });
   });
 
-  it('only lets an expense that isn’t a debt pay into one of the budget’s own savings', async () => {
+  it('only lets an expense that isn’t a debt move money into another of the budget’s accounts', async () => {
     const owner = await createUserWithBudget();
     const other = await createUserWithBudget();
     const theirs = await addSavings(other.token, other.budgetId);
@@ -193,8 +209,9 @@ describe('paying into savings', () => {
     expect(
       errorCode(await create({ paysInto: isa.id, category: 'LOAN', debt: { balance: 100, apr: 5 } }))
     ).toBe('PAYS_INTO_NOT_ALLOWED');
-    expect(errorCode(await create({ paysInto: current.id }))).toBe('NOT_A_SAVINGS_ACCOUNT');
-    expect(errorCode(await create({ paysInto: theirs.id }))).toBe('NOT_A_SAVINGS_ACCOUNT');
+    // It goes out of the account pay lands in, so it can't go back into it
+    expect(errorCode(await create({ paysInto: current.id }))).toBe('PAYS_INTO_SAME_ACCOUNT');
+    expect(errorCode(await create({ paysInto: theirs.id }))).toBe('ACCOUNT_NOT_ALLOWED');
   });
 
   it('stops paying into savings once the payment becomes income', async () => {
@@ -225,7 +242,7 @@ describe('paying into savings', () => {
         input: {
           budgetId,
           payday: '2030-02-01',
-          currentBalance: 3200,
+          paidIntoBalance: 3200,
           accountBalances: [{ accountId: easy.id, balance: 4250 }],
           leftOver: [{ recurringPaymentId: topUp.id, outcome: 'PAID' }]
         }
@@ -245,25 +262,206 @@ describe('paying into savings', () => {
 describe('balancesToAccounts', () => {
   const db = () => mongoose.connection.db as NonNullable<typeof mongoose.connection.db>;
 
-  it('gives a budget saved before accounts a current account holding its balance', async () => {
+  it('gives a budget saved before accounts a spending account that pay lands in, holding its balance', async () => {
     const { token, budgetId } = await createUserWithBudget();
     // As older versions stored it: the balance on the budget, and no accounts
     await db().collection('accounts').deleteMany({});
     await db().collection('budgets').updateOne({}, { $set: { bankBalance: 1234.5 } });
 
-    expect(await balancesToAccounts({ apply: false })).toEqual({ budgets: 1, created: 1, cleared: 1 });
+    expect(await balancesToAccounts({ apply: false })).toEqual({ budgets: 1, created: 1, cleared: 1, converted: 0 });
     expect(await db().collection('accounts').countDocuments()).toBe(0);
 
     await balancesToAccounts({ apply: true });
     const body = await gql(QUERY, undefined, token);
     expect(body.data.budget).toMatchObject({
       bankBalance: 1234.5,
-      accounts: [{ kind: 'CURRENT', balance: 1234.5, counts: true }]
+      accounts: [{ kind: 'SPENDING', paidInto: true, balance: 1234.5, counts: true }]
     });
     const stored = await db().collection('budgets').findOne({ _id: new mongoose.Types.ObjectId(budgetId) });
     expect(stored).not.toHaveProperty('bankBalance');
 
     // Run again, there's nothing left to do
-    expect(await balancesToAccounts({ apply: true })).toEqual({ budgets: 1, created: 0, cleared: 0 });
+    expect(await balancesToAccounts({ apply: true })).toEqual({ budgets: 1, created: 0, cleared: 0, converted: 0 });
+  });
+
+  it('makes a current account from before spending accounts the one pay lands in', async () => {
+    const { token } = await createUserWithBudget();
+    // As the first version of accounts stored it
+    await db().collection('accounts').updateMany({}, { $set: { kind: 'CURRENT' }, $unset: { paidInto: '' } });
+
+    expect(await balancesToAccounts({ apply: true })).toMatchObject({ created: 0, converted: 1 });
+    const body = await gql(QUERY, undefined, token);
+    expect(body.data.budget.accounts).toEqual([
+      expect.objectContaining({ kind: 'SPENDING', paidInto: true, balance: 1000 })
+    ]);
+  });
+});
+
+describe('spending accounts', () => {
+  const addSpending = (token: string, budgetId: string) =>
+    addSavings(token, budgetId, { name: 'Joint bills', kind: 'SPENDING', balance: 2105 });
+  const currentOf = async (token: string) =>
+    (await gql(QUERY, undefined, token)).data.budget.accounts[0];
+
+  it('adds one that always counts, listed after where pay lands and before savings', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    await addSavings(token, budgetId);
+    const joint = await addSpending(token, budgetId);
+    expect(joint).toMatchObject({ kind: 'SPENDING', counts: true, paidInto: false });
+
+    const body = await gql(QUERY, undefined, token);
+    expect(body.data.budget.bankBalance).toBe(3105);
+    expect(body.data.budget.accounts.map((a: { name: string }) => a.name)).toEqual([
+      'Current account',
+      'Joint bills',
+      'Cash ISA'
+    ]);
+    expect(
+      errorCode(await gql(CREATE, { input: { budgetId, name: 'Pot', kind: 'SPENDING', balance: 1, counts: false } }, token))
+    ).toBe('SPENDING_ALWAYS_COUNTS');
+  });
+
+  it('moves where pay lands, only ever to a spending account', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const isa = await addSavings(token, budgetId);
+    const joint = await addSpending(token, budgetId);
+
+    const body = await gql(UPDATE, { id: joint.id, input: { paidInto: true } }, token);
+    expect(body.errors).toBeUndefined();
+    expect(byName(body.data.updateAccount.budget.accounts)).toMatchObject({
+      'Current account': { paidInto: false },
+      'Joint bills': { paidInto: true }
+    });
+    // Where pay lands is listed first
+    expect(body.data.updateAccount.budget.accounts[0].name).toBe('Joint bills');
+    expect(errorCode(await gql(UPDATE, { id: isa.id, input: { paidInto: true } }, token))).toBe('PAID_INTO_NOT_SPENDING');
+  });
+
+  it('pays from the account a payment names, and undoes onto that account even once it has moved', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const joint = await addSpending(token, budgetId);
+    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { name: 'Energy', category: 'UTILITIES', account: joint.id }) }, token);
+    const energy = created.data.createRecurringPayment.recurringPayment;
+    expect(energy.account).toBe(joint.id);
+
+    const paid = await gql(PAID, { input: { budgetId, recurringPaymentIds: [energy.id], oneOffPaymentIds: [] } }, token);
+    expect(byName(paid.data.markPaymentsPaid.budget.accounts)).toMatchObject({
+      'Current account': { balance: 1000 },
+      'Joint bills': { balance: 1855 }
+    });
+
+    // Moved back to where pay lands, then undone: the money goes back where it came from
+    const moved = await gql(ASSIGN, { input: { budgetId, payments: [{ recurringPaymentId: energy.id, accountId: null }] } }, token);
+    expect(moved.errors).toBeUndefined();
+    const undone = await gql(UNPAID, { input: { budgetId, recurringPaymentIds: [energy.id] } }, token);
+    expect(byName(undone.data.markPaymentsUnpaid.budget.accounts)).toMatchObject({
+      'Current account': { balance: 1000 },
+      'Joint bills': { balance: 2105 }
+    });
+  });
+
+  it('lands income in any account, but takes expenses only out of spending accounts', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const isa = await addSavings(token, budgetId);
+    const income = await gql(
+      CREATE_PAYMENT,
+      { input: payment(budgetId, { name: 'Interest', type: 'INCOME', category: 'OTHER', account: isa.id }) },
+      token
+    );
+    const interest = income.data.createRecurringPayment.recurringPayment;
+
+    const paid = await gql(PAID, { input: { budgetId, recurringPaymentIds: [interest.id], oneOffPaymentIds: [] } }, token);
+    expect(byName(paid.data.markPaymentsPaid.budget.accounts)).toMatchObject({
+      'Current account': { balance: 1000 },
+      'Cash ISA': { balance: 8900 }
+    });
+    expect(errorCode(await gql(CREATE_PAYMENT, { input: payment(budgetId, { account: isa.id }) }, token))).toBe('ACCOUNT_NOT_ALLOWED');
+  });
+
+  it('moves money between spending accounts', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const joint = await addSpending(token, budgetId);
+    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { name: 'Joint bills top-up', category: 'UTILITIES', paysInto: joint.id }) }, token);
+    const topUp = created.data.createRecurringPayment.recurringPayment;
+
+    const paid = await gql(PAID, { input: { budgetId, recurringPaymentIds: [topUp.id], oneOffPaymentIds: [] } }, token);
+    expect(byName(paid.data.markPaymentsPaid.budget.accounts)).toMatchObject({
+      'Current account': { balance: 750 },
+      'Joint bills': { balance: 2355 }
+    });
+    // The free to spend total is the same: the money only moved
+    expect(paid.data.markPaymentsPaid.budget.bankBalance).toBe(3105);
+  });
+
+  it('sets several payments’ accounts at once, checking each', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const joint = await addSpending(token, budgetId);
+    const isa = await addSavings(token, budgetId);
+    const make = async (name: string, extra: Record<string, unknown> = {}) =>
+      (await gql(CREATE_PAYMENT, { input: payment(budgetId, { name, category: 'UTILITIES', ...extra }) }, token)).data
+        .createRecurringPayment.recurringPayment;
+    const energy = await make('Energy');
+    const water = await make('Water');
+    const topUp = await make('Joint bills top-up', { paysInto: joint.id });
+
+    const body = await gql(
+      ASSIGN,
+      { input: { budgetId, payments: [{ recurringPaymentId: energy.id, accountId: joint.id }, { recurringPaymentId: water.id, accountId: joint.id }] } },
+      token
+    );
+    expect(body.errors).toBeUndefined();
+    const stored = await mongoose.model('RecurringPayment').find({ _id: { $in: [energy.id, water.id] } });
+    expect(stored.map(p => String(p.account))).toEqual([joint.id, joint.id]);
+
+    const assign = (recurringPaymentId: string, accountId: string) =>
+      gql(ASSIGN, { input: { budgetId, payments: [{ recurringPaymentId, accountId }] } }, token);
+    expect(errorCode(await assign(energy.id, isa.id))).toBe('ACCOUNT_NOT_ALLOWED');
+    expect(errorCode(await assign(topUp.id, joint.id))).toBe('PAYS_INTO_SAME_ACCOUNT');
+  });
+
+  it('sends expenses back to where pay lands when their account becomes savings or is deleted', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const joint = await addSpending(token, budgetId);
+    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { name: 'Energy', category: 'UTILITIES', account: joint.id }) }, token);
+    const energy = created.data.createRecurringPayment.recurringPayment;
+
+    const savings = await gql(UPDATE, { id: joint.id, input: { kind: 'SAVINGS' } }, token);
+    expect(savings.data.updateAccount.account).toMatchObject({ kind: 'SAVINGS', counts: false });
+    expect((await mongoose.model('RecurringPayment').findById(energy.id)).account).toBeNull();
+
+    await gql(UPDATE, { id: joint.id, input: { kind: 'SPENDING' } }, token);
+    await gql(ASSIGN, { input: { budgetId, payments: [{ recurringPaymentId: energy.id, accountId: joint.id }] } }, token);
+    await gql(DELETE, { id: joint.id }, token);
+    expect((await mongoose.model('RecurringPayment').findById(energy.id)).account).toBeNull();
+    expect((await currentOf(token)).name).toBe('Current account');
+  });
+
+  it('pays one-offs and overpayments from the account they name', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const joint = await addSpending(token, budgetId);
+    const oneOff = await gql(
+      CREATE_ONE_OFF,
+      { input: { budgetId, name: 'Hotel deposit', amount: 220, dueDate: '2030-01-23', type: 'EXPENSE', category: 'TRAVEL', account: joint.id } },
+      token
+    );
+    const hotel = oneOff.data.createOneOffPayment.oneOffPayment;
+    expect(hotel.account).toBe(joint.id);
+    const paid = await gql(PAID, { input: { budgetId, recurringPaymentIds: [], oneOffPaymentIds: [hotel.id] } }, token);
+    expect(byName(paid.data.markPaymentsPaid.budget.accounts)['Joint bills'].balance).toBe(1885);
+    const undone = await gql(UNPAID, { input: { budgetId, recurringPaymentIds: [], oneOffPaymentIds: [hotel.id] } }, token);
+    expect(byName(undone.data.markPaymentsUnpaid.budget.accounts)['Joint bills'].balance).toBe(2105);
+
+    const loan = await gql(
+      CREATE_PAYMENT,
+      { input: payment(budgetId, { name: 'Car finance', category: 'LOAN', account: joint.id, debt: { balance: 5000, apr: 7 } }) },
+      token
+    );
+    const car = loan.data.createRecurringPayment.recurringPayment;
+    const over = await gql(OVERPAY, { input: { budgetId, recurringPaymentId: car.id, amount: 100 } }, token);
+    expect(over.errors).toBeUndefined();
+    expect(byName(over.data.logDebtOverpayment.budget.accounts)).toMatchObject({
+      'Current account': { balance: 1000 },
+      'Joint bills': { balance: 2005 }
+    });
   });
 });

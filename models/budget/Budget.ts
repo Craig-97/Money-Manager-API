@@ -1,7 +1,7 @@
 import mongoose, { Schema, Types } from 'mongoose';
 
 // The bank balance lives on the budget's accounts. Budgets saved before them carry a bankBalance
-// until npm run migrate:accounts moves it to a current account.
+// until npm run migrate:accounts moves it to the account pay lands in.
 export interface Budget {
   monthlyIncome?: number;
   user?: Types.ObjectId;

@@ -19,6 +19,8 @@ export const oneOffPaymentTypeDefs = `
     paidAt: String
     # When the reminder before it's due goes off
     dueReminder: ReminderTiming!
+    # The account it goes out of, or comes into. Null: the one pay lands in.
+    account: ID
   }
 
   input CreateOneOffPaymentInput {
@@ -29,6 +31,8 @@ export const oneOffPaymentTypeDefs = `
     type: PaymentType!
     category: OneOffPaymentCategory!
     dueReminder: ReminderTimingInput
+    # An account in the same budget: a spending one for an expense. Null: the one pay lands in.
+    account: ID
   }
 
   # A one-off payment created alongside its budget, so it has no budgetId yet
@@ -39,6 +43,8 @@ export const oneOffPaymentTypeDefs = `
     type: PaymentType!
     category: OneOffPaymentCategory!
     dueReminder: ReminderTimingInput
+    # An account in the same budget: a spending one for an expense. Null: the one pay lands in.
+    account: ID
   }
 
   input UpdateOneOffPaymentInput {
@@ -48,6 +54,8 @@ export const oneOffPaymentTypeDefs = `
     type: PaymentType
     category: OneOffPaymentCategory
     dueReminder: ReminderTimingInput
+    # An account in the same budget: a spending one for an expense. Null: the one pay lands in.
+    account: ID
   }
 
   type OneOffPaymentResponse {

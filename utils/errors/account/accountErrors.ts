@@ -6,25 +6,45 @@ export const ACCOUNT_NOT_FOUND = (id: unknown) =>
   });
 
 // A budget saved before accounts existed, until npm run migrate:accounts gives it one
-export const CURRENT_ACCOUNT_MISSING = () =>
-  new GraphQLError('This budget has no current account yet', {
-    extensions: { code: 'CURRENT_ACCOUNT_MISSING' }
+export const PAID_INTO_ACCOUNT_MISSING = () =>
+  new GraphQLError('This budget has no account for pay to land in yet', {
+    extensions: { code: 'PAID_INTO_ACCOUNT_MISSING' }
   });
 
-// The current account always counts and can't be deleted: pay lands there
-export const CURRENT_ACCOUNT_FIXED = (what: string) =>
-  new GraphQLError(`The current account can't be ${what}`, {
-    extensions: { code: 'CURRENT_ACCOUNT_FIXED' }
+// Pay has to land somewhere: the account it lands in can't be deleted, kept out of free to spend
+// or made savings. Making another account where pay lands moves it.
+export const PAID_INTO_ACCOUNT_FIXED = (what: string) =>
+  new GraphQLError(`The account you're paid into can't be ${what}`, {
+    extensions: { code: 'PAID_INTO_ACCOUNT_FIXED' }
   });
 
-// Paying into savings is for money moved out of the current account: an expense, and not a debt
+// Only an account to spend from can be where pay lands
+export const PAID_INTO_NOT_SPENDING = () =>
+  new GraphQLError('Only a spending account can be where you get paid', {
+    extensions: { code: 'PAID_INTO_NOT_SPENDING', field: 'paidInto' }
+  });
+
+// Money to spend always counts in free to spend
+export const SPENDING_ALWAYS_COUNTS = () =>
+  new GraphQLError('A spending account always counts in free to spend', {
+    extensions: { code: 'SPENDING_ALWAYS_COUNTS', field: 'counts' }
+  });
+
+// Moving money to another account is for an expense that isn't a debt
 export const PAYS_INTO_NOT_ALLOWED = () =>
-  new GraphQLError('Only an expense that isn’t a debt can pay into savings', {
+  new GraphQLError('Only an expense that isn’t a debt can move money to another account', {
     extensions: { code: 'PAYS_INTO_NOT_ALLOWED', field: 'paysInto' }
   });
 
-// Payments can only pay into a savings account in the same budget
-export const NOT_A_SAVINGS_ACCOUNT = (id: unknown) =>
-  new GraphQLError(`Account with id '${id}' isn't a savings account in this budget`, {
-    extensions: { code: 'NOT_A_SAVINGS_ACCOUNT', field: 'paysInto' }
+// Money moves to a different account from the one it comes out of
+export const PAYS_INTO_SAME_ACCOUNT = () =>
+  new GraphQLError('A payment can’t move money into the account it comes out of', {
+    extensions: { code: 'PAYS_INTO_SAME_ACCOUNT', field: 'paysInto' }
+  });
+
+// An account a payment names has to be in its budget, and an expense comes out of a spending
+// account
+export const ACCOUNT_NOT_ALLOWED = (id: unknown, field: 'account' | 'paysInto') =>
+  new GraphQLError(`Account with id '${id}' can't be used here`, {
+    extensions: { code: 'ACCOUNT_NOT_ALLOWED', field }
   });

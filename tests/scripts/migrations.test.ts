@@ -92,7 +92,7 @@ describe('accountsToBudgets', () => {
     await createUserWithBudget();
     const result = await accountsToBudgets({ apply: true });
     expect(result).toMatchObject({ renamesCollection: false, budgets: 0 });
-    expect(await db().collection('accounts').countDocuments({ kind: 'CURRENT' })).toBe(1);
+    expect(await db().collection('accounts').countDocuments({ kind: 'SPENDING' })).toBe(1);
   });
 
   it('stops when the accounts collection holds old budgets and bank accounts', async () => {

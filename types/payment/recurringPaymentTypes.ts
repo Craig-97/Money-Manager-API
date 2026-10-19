@@ -27,6 +27,7 @@ export interface RecurringPaymentFields {
   // null stops tracking it as a debt
   debt?: DebtFields | null;
   // A savings account it pays into; null stops it
+  account?: string | null;
   paysInto?: string | null;
 }
 

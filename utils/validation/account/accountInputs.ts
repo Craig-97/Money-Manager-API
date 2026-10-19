@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AccountKind } from '../../../constants/account/accountKind';
 import { money } from '../common';
 
 // Loose, so fields without rules here (the budget, the account ids) come through parsing untouched
@@ -24,8 +25,11 @@ const purpose = z
   .transform(value => value || null)
   .nullish();
 
+const kind = z.enum(Object.values(AccountKind) as [AccountKind, ...AccountKind[]]);
+
 export const newAccount = z.looseObject({
   name: accountName,
+  kind: kind.nullish(),
   balance: money,
   counts: z.boolean().nullish(),
   interestRate,
@@ -34,8 +38,11 @@ export const newAccount = z.looseObject({
 
 export const accountInput = z.looseObject({
   name: accountName.optional(),
+  kind: kind.optional(),
   balance: money.optional(),
   counts: z.boolean().optional(),
+  // Pay moves to an account by making it where pay lands, never by turning this off
+  paidInto: z.literal(true, 'Make another account where you get paid instead').optional(),
   interestRate,
   purpose
 });
