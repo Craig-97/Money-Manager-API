@@ -465,3 +465,58 @@ describe('spending accounts', () => {
     });
   });
 });
+
+describe('setting up accounts with the budget', () => {
+  const CREATE_BUDGET = `mutation ($input: CreateBudgetInput!) {
+    createBudget(input: $input) { budget { id ${BUDGET.replace('budget {', '').slice(0, -1)} recurringPayments { name account paysInto } } }
+  }`;
+  const setUp = async (input: Record<string, unknown>) => {
+    const { token } = await createUserWithBudget({ withBudget: false });
+    return gql(CREATE_BUDGET, { input: { bankBalance: 7895, monthlyIncome: 3600, ...input } }, token);
+  };
+  const topUp = (extra: Record<string, unknown>) => ({
+    name: 'Joint bills top-up',
+    amount: 600,
+    category: 'UTILITIES',
+    frequency: 'MONTHLY',
+    type: 'EXPENSE',
+    firstPaymentDate: '2030-01-30',
+    ...extra
+  });
+
+  it('makes the accounts, and payments that name them by key', async () => {
+    const body = await setUp({
+      paidIntoName: 'Everyday',
+      accounts: [
+        { key: 'joint', name: 'Joint bills', kind: 'SPENDING', balance: 2105 },
+        { key: 'isa', name: 'Cash ISA', balance: 8650, interestRate: 4.5 }
+      ],
+      recurringPayments: [
+        topUp({ paysInto: 'joint' }),
+        topUp({ name: 'Energy', amount: 120, account: 'joint' })
+      ]
+    });
+    expect(body.errors).toBeUndefined();
+    const budget = body.data.createBudget.budget;
+    expect(budget.bankBalance).toBe(10000);
+    const accounts = byName(budget.accounts);
+    expect(accounts).toMatchObject({
+      Everyday: { kind: 'SPENDING', paidInto: true, balance: 7895 },
+      'Joint bills': { kind: 'SPENDING', counts: true },
+      'Cash ISA': { kind: 'SAVINGS', counts: false, interestRate: 4.5 }
+    });
+    expect(byName(budget.recurringPayments)).toMatchObject({
+      'Joint bills top-up': { account: null, paysInto: accounts['Joint bills'].id },
+      Energy: { account: accounts['Joint bills'].id, paysInto: null }
+    });
+  });
+
+  it('refuses a key that isn’t one of its accounts, or money moving into where it comes from', async () => {
+    expect(errorCode(await setUp({ recurringPayments: [topUp({ paysInto: 'nope' })] }))).toBe(
+      'ACCOUNT_NOT_ALLOWED'
+    );
+    expect(errorCode(await setUp({ recurringPayments: [topUp({ paysInto: 'paid-into' })] }))).toBe(
+      'PAYS_INTO_SAME_ACCOUNT'
+    );
+  });
+});

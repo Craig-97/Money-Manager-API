@@ -25,10 +25,27 @@ export const budgetTypeDefs = `
     cycleStartedOn: String
   }
 
-  # A new budget for the signed-in user, with the payments and payday set up alongside it
+  # An account made with the budget. Payments set up alongside it name it by its key.
+  input BudgetAccountInput {
+    key: String!
+    name: String!
+    kind: AccountKind
+    balance: Float!
+    counts: Boolean
+    interestRate: Float
+    purpose: String
+  }
+
+  # A new budget for the signed-in user, with its accounts, payments and payday set up alongside
+  # it. In its payments, account and paysInto are account keys, "paid-into" being the account pay
+  # lands in.
   input CreateBudgetInput {
     # The opening balance of the account pay lands in, which is made with the budget
     bankBalance: Float!
+    # Its name; "Current account" when left out
+    paidIntoName: String
+    # The budget's other accounts
+    accounts: [BudgetAccountInput!]
     monthlyIncome: Float!
     oneOffPayments: [OneOffPaymentInput!]
     recurringPayments: [RecurringPaymentInput!]

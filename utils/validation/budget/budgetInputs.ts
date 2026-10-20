@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { LeftOverOutcome } from '../../../constants/payday/leftOverOutcome';
+import { accountName, newAccount } from '../account';
 import { isoDay, money } from '../common';
 import { newOneOff, newRecurring } from '../payment';
 import { paydayInput } from '../payday';
@@ -9,6 +10,14 @@ import { paydayInput } from '../payday';
 // A budget, with the payments and payday set up alongside it
 export const newBudget = z.looseObject({
   bankBalance: money,
+  paidIntoName: accountName.nullish(),
+  accounts: z
+    .array(newAccount.extend({ key: z.string().trim().min(1, 'Accounts need a key') }))
+    .refine(
+      accounts => new Set(accounts.map(account => account.key)).size === accounts.length,
+      'Each account needs its own key'
+    )
+    .nullish(),
   monthlyIncome: money,
   oneOffPayments: z.array(newOneOff).nullish(),
   recurringPayments: z.array(newRecurring).nullish(),

@@ -13,11 +13,12 @@ import type {
 import { PaymentType } from "../../constants/payment/paymentType";
 import { PaymentRecordKind } from "../../constants/payment/paymentRecordKind";
 import { LeftOverOutcome } from "../../constants/payday/leftOverOutcome";
-import { AccountKind } from "../../constants/account/accountKind";
+import { AccountKind, PAID_INTO_KEY } from "../../constants/account/accountKind";
 import { Account } from "../../models/account/Account";
 import {
   accountFor,
   accountsOf,
+  checkPaymentAccounts,
   countedBalance,
   moveMoney,
   paidIntoAccountOf,
@@ -54,6 +55,8 @@ import {
   OVERPAYMENT_TOO_LARGE,
   PAYMENT_RECORD_NOT_FOUND,
   PAYMENT_RECORD_CLOSED,
+  ACCOUNT_NOT_ALLOWED,
+  SPENDING_ALWAYS_COUNTS,
   incrementVersion,
   roundPence,
   payTowardsDebt,
@@ -115,6 +118,8 @@ const createBudget = async (
   checkAuth(req);
   const {
     bankBalance,
+    paidIntoName,
+    accounts = [],
     monthlyIncome,
     oneOffPayments = [],
     recurringPayments = [],
@@ -142,16 +147,38 @@ const createBudget = async (
       cycleStartedOn: ukDay(),
     }).save({ session });
 
-    // Where pay lands, holding the balance the user started with
-    await new Account({
+    // Where pay lands, holding the balance the user started with, then the other accounts. Payments
+    // set up alongside them name them by key.
+    const paidInto = await new Account({
       budget: budget._id,
-      name: "Current account",
+      name: paidIntoName ?? "Current account",
       kind: AccountKind.SPENDING,
       paidInto: true,
       balance: bankBalance,
       counts: true,
       balanceUpdatedAt: new Date(),
     }).save({ session });
+    const keys = new Map<string, Types.ObjectId>([[PAID_INTO_KEY, paidInto._id]]);
+    for (const { key, kind, counts, interestRate, purpose, ...account } of accounts ?? []) {
+      const spending = kind === AccountKind.SPENDING;
+      if (spending && counts === false) throw SPENDING_ALWAYS_COUNTS();
+      const saved = await new Account({
+        ...account,
+        budget: budget._id,
+        kind: kind ?? AccountKind.SAVINGS,
+        counts: spending || (counts ?? false),
+        interestRate: interestRate ?? null,
+        purpose: purpose ?? null,
+        balanceUpdatedAt: new Date(),
+      }).save({ session });
+      keys.set(key, saved._id);
+    }
+    const idOf = (key: string | null | undefined, field: "account" | "paysInto") => {
+      if (!key) return null;
+      const id = keys.get(key);
+      if (!id) throw ACCOUNT_NOT_ALLOWED(key, field);
+      return id;
+    };
 
     // The budget the app opens when it isn't given one
     user.budget = budget._id;
@@ -164,26 +191,28 @@ const createBudget = async (
       ),
     );
 
-    const [, saved] = await Promise.all([
-      Promise.all(
-        oneOffPayments.map((payment) =>
-          new OneOffPayment({ ...payment, budget: budget._id }).save({
-            session,
-          }),
-        ),
-      ),
-      Promise.all(
-        recurringPayments.map((payment) =>
-          new RecurringPayment({
-            ...payment,
-            // There are no savings yet to pay into
-            paysInto: null,
-            debt: withBalanceDate(payment.debt),
-            budget: budget._id,
-          }).save({ session }),
-        ),
-      ),
-    ]);
+    // Sequential: operations within a transaction session can't run in parallel
+    for (const payment of oneOffPayments ?? []) {
+      const mapped = { ...payment, account: idOf(payment.account, "account") };
+      await checkPaymentAccounts(mapped, { budget: budget._id, session });
+      await new OneOffPayment({ ...mapped, budget: budget._id }).save({ session });
+    }
+    const saved = [];
+    for (const payment of recurringPayments ?? []) {
+      const mapped = {
+        ...payment,
+        account: idOf(payment.account, "account"),
+        paysInto: idOf(payment.paysInto, "paysInto"),
+      };
+      await checkPaymentAccounts(mapped, { budget: budget._id, session });
+      saved.push(
+        await new RecurringPayment({
+          ...mapped,
+          debt: withBalanceDate(payment.debt),
+          budget: budget._id,
+        }).save({ session }),
+      );
+    }
     // Each debt's starting balance goes in its history
     for (const payment of saved) {
       if (payment.debt) await recordBalanceSet(payment, null, session);

@@ -1,11 +1,18 @@
 import type { LeftOverOutcome } from '../../constants/payday/leftOverOutcome';
-import type { AccountBalanceInput } from '../account/accountTypes';
+import type { AccountBalanceInput, CreateAccountInput } from '../account/accountTypes';
 import type { OneOffPaymentFields } from '../payment/oneOffPaymentTypes';
 import type { PaydayInput } from '../payday/paydayTypes';
 import type { RecurringPaymentFields } from '../payment/recurringPaymentTypes';
 
+// An account made with the budget; payments set up alongside it name it by key
+export interface BudgetAccountInput extends Omit<CreateAccountInput, 'budgetId'> {
+  key: string;
+}
+
 export interface CreateBudgetInput {
   bankBalance: number;
+  paidIntoName?: string | null;
+  accounts?: BudgetAccountInput[] | null;
   monthlyIncome: number;
   oneOffPayments?: OneOffPaymentFields[];
   recurringPayments?: RecurringPaymentFields[];

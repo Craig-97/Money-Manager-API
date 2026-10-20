@@ -8,3 +8,6 @@ export const AccountKind = {
 } as const;
 
 export type AccountKind = (typeof AccountKind)[keyof typeof AccountKind];
+
+// In setup, the key payments use for the account pay lands in, made with the budget
+export const PAID_INTO_KEY = 'paid-into';

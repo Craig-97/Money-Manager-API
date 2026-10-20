@@ -4,7 +4,7 @@ import { money } from '../common';
 
 // Loose, so fields without rules here (the budget, the account ids) come through parsing untouched
 
-const accountName = z
+export const accountName = z
   .string()
   .trim()
   .min(1, 'Names cannot be empty')
