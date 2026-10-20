@@ -147,31 +147,47 @@ const withBudget = async (account: AccountDocument | null, budgetId: BudgetId) =
 };
 
 // A new account, savings unless it says otherwise. Spending money counts in free to spend and money
-// put aside doesn't, unless the user says otherwise.
+// put aside doesn't, unless the user says otherwise. A spending account can be made where pay lands,
+// moving that from the account it was, and then it always counts.
 const createAccount = async (
   _: unknown,
   { input }: { input: CreateAccountInput },
   req: Request
 ) => {
   checkAuth(req);
-  const { budgetId, name, kind, balance, counts, interestRate, purpose } = parseInput(
+  const { budgetId, name, kind, balance, counts, paidInto, interestRate, purpose } = parseInput(
     newAccount,
     input
   );
   await checkBudgetAccess(budgetId, req);
   const spending = kind === AccountKind.SPENDING;
+  if (paidInto && !spending) throw PAID_INTO_NOT_SPENDING();
+  if (paidInto && counts === false) throw PAID_INTO_ACCOUNT_FIXED('kept out of free to spend');
 
-  const account = await new Account({
+  const account = new Account({
     budget: budgetId,
     name,
     kind: kind ?? AccountKind.SAVINGS,
     balance,
-    counts: counts ?? spending,
+    counts: paidInto ? true : (counts ?? spending),
     interestRate: interestRate ?? null,
     purpose: purpose ?? null,
     balanceUpdatedAt: new Date()
-  }).save();
-  return withBudget(account, budgetId);
+  });
+  if (!paidInto) return withBudget(await account.save(), budgetId);
+
+  return withTransaction(async session => {
+    // Off the old one first: one account per budget is where pay lands
+    await Account.updateMany(
+      { budget: budgetId, paidInto: true },
+      { $set: { paidInto: false } }
+    ).session(session);
+    account.paidInto = true;
+    await account.save({ session });
+    const budget = await Budget.findById(budgetId).session(session);
+    if (!budget) throw BUDGET_NOT_FOUND(budgetId);
+    return { account, budget, success: true };
+  });
 };
 
 /*

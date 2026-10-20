@@ -27,11 +27,15 @@ const purpose = z
 
 const kind = z.enum(Object.values(AccountKind) as [AccountKind, ...AccountKind[]]);
 
+// Pay moves to an account by making it where pay lands, never by turning this off
+const paidInto = z.literal(true, 'Make another account where you get paid instead');
+
 export const newAccount = z.looseObject({
   name: accountName,
   kind: kind.nullish(),
   balance: money,
   counts: z.boolean().nullish(),
+  paidInto: paidInto.nullish(),
   interestRate,
   purpose
 });
@@ -41,8 +45,7 @@ export const accountInput = z.looseObject({
   kind: kind.optional(),
   balance: money.optional(),
   counts: z.boolean().optional(),
-  // Pay moves to an account by making it where pay lands, never by turning this off
-  paidInto: z.literal(true, 'Make another account where you get paid instead').optional(),
+  paidInto: paidInto.optional(),
   interestRate,
   purpose
 });

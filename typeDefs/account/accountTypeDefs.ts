@@ -24,13 +24,15 @@ export const accountTypeDefs = `
   }
 
   # A new account, SAVINGS unless kind is given. A spending account counts in free to spend and
-  # savings are kept out, unless counts says otherwise.
+  # savings are kept out, unless counts says otherwise. paidInto can only be true, on a spending
+  # account: pay lands in it from now on, instead of the account it did, and it always counts.
   input CreateAccountInput {
     budgetId: ID!
     name: String!
     kind: AccountKind
     balance: Float!
     counts: Boolean
+    paidInto: Boolean
     interestRate: Float
     purpose: String
   }

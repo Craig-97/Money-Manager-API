@@ -11,6 +11,8 @@ export interface CreateAccountInput {
   kind?: AccountKind | null;
   balance: number;
   counts?: boolean | null;
+  // Only ever true: pay lands here instead of the account it did
+  paidInto?: boolean | null;
   interestRate?: number | null;
   purpose?: string | null;
 }

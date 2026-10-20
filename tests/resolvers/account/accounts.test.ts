@@ -353,6 +353,24 @@ describe('spending accounts', () => {
     expect(errorCode(await gql(UPDATE, { id: isa.id, input: { paidInto: true } }, token))).toBe('PAID_INTO_NOT_SPENDING');
   });
 
+  it('adds one that pay lands in from then on, only ever a spending account that counts', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const input = { budgetId, name: 'New current', kind: 'SPENDING', balance: 400, paidInto: true };
+
+    expect(errorCode(await gql(CREATE, { input: { ...input, kind: 'SAVINGS' } }, token))).toBe('PAID_INTO_NOT_SPENDING');
+    expect(errorCode(await gql(CREATE, { input: { ...input, counts: false } }, token))).toBe('PAID_INTO_ACCOUNT_FIXED');
+    expect(errorCode(await gql(CREATE, { input: { ...input, paidInto: false } }, token))).toBe('BAD_USER_INPUT');
+
+    const body = await gql(CREATE, { input }, token);
+    expect(body.errors).toBeUndefined();
+    expect(body.data.createAccount.account).toMatchObject({ paidInto: true, counts: true });
+    expect(byName(body.data.createAccount.budget.accounts)).toMatchObject({
+      'Current account': { paidInto: false },
+      'New current': { paidInto: true }
+    });
+    expect(body.data.createAccount.budget.accounts[0].name).toBe('New current');
+  });
+
   it('pays from the account a payment names, and undoes onto that account even once it has moved', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const joint = await addSpending(token, budgetId);
