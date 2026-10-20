@@ -11,7 +11,7 @@ export const accountTypeDefs = `
     name: String!
     kind: AccountKind!
     balance: Float!
-    # Part of free to spend. A spending account always counts; savings only when switched on.
+    # Part of free to spend. Where pay lands always counts; other accounts can be switched in or out.
     counts: Boolean!
     # Where pay lands: one spending account per budget. Payments that don't name an account use it.
     paidInto: Boolean!
@@ -23,8 +23,8 @@ export const accountTypeDefs = `
     balanceUpdatedAt: String!
   }
 
-  # A new account, SAVINGS unless kind is given. Savings are kept out of free to spend unless
-  # counts is given; a spending account always counts.
+  # A new account, SAVINGS unless kind is given. A spending account counts in free to spend and
+  # savings are kept out, unless counts says otherwise.
   input CreateAccountInput {
     budgetId: ID!
     name: String!
@@ -36,7 +36,7 @@ export const accountTypeDefs = `
   }
 
   # Only what's given changes. A balance that's given is dated now. paidInto can only be true: it
-  # moves where pay lands to this account.
+  # moves where pay lands to this account, which then always counts.
   input UpdateAccountInput {
     name: String
     kind: AccountKind

@@ -56,7 +56,6 @@ import {
   PAYMENT_RECORD_NOT_FOUND,
   PAYMENT_RECORD_CLOSED,
   ACCOUNT_NOT_ALLOWED,
-  SPENDING_ALWAYS_COUNTS,
   incrementVersion,
   roundPence,
   payTowardsDebt,
@@ -161,12 +160,11 @@ const createBudget = async (
     const keys = new Map<string, Types.ObjectId>([[PAID_INTO_KEY, paidInto._id]]);
     for (const { key, kind, counts, interestRate, purpose, ...account } of accounts ?? []) {
       const spending = kind === AccountKind.SPENDING;
-      if (spending && counts === false) throw SPENDING_ALWAYS_COUNTS();
       const saved = await new Account({
         ...account,
         budget: budget._id,
         kind: kind ?? AccountKind.SAVINGS,
-        counts: spending || (counts ?? false),
+        counts: counts ?? spending,
         interestRate: interestRate ?? null,
         purpose: purpose ?? null,
         balanceUpdatedAt: new Date(),

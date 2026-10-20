@@ -24,12 +24,6 @@ export const PAID_INTO_NOT_SPENDING = () =>
     extensions: { code: 'PAID_INTO_NOT_SPENDING', field: 'paidInto' }
   });
 
-// Money to spend always counts in free to spend
-export const SPENDING_ALWAYS_COUNTS = () =>
-  new GraphQLError('A spending account always counts in free to spend', {
-    extensions: { code: 'SPENDING_ALWAYS_COUNTS', field: 'counts' }
-  });
-
 // Moving money to another account is for an expense that isn't a debt
 export const PAYS_INTO_NOT_ALLOWED = () =>
   new GraphQLError('Only an expense that isn’t a debt can move money to another account', {

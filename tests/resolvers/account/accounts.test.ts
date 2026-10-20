@@ -121,7 +121,7 @@ describe('accounts', () => {
     const { token } = await createUserWithBudget();
     const current = (await gql(QUERY, undefined, token)).data.budget.accounts[0];
 
-    expect(errorCode(await gql(UPDATE, { id: current.id, input: { counts: false } }, token))).toBe('SPENDING_ALWAYS_COUNTS');
+    expect(errorCode(await gql(UPDATE, { id: current.id, input: { counts: false } }, token))).toBe('PAID_INTO_ACCOUNT_FIXED');
     expect(errorCode(await gql(UPDATE, { id: current.id, input: { kind: 'SAVINGS' } }, token))).toBe('PAID_INTO_ACCOUNT_FIXED');
     expect(errorCode(await gql(DELETE, { id: current.id }, token))).toBe('PAID_INTO_ACCOUNT_FIXED');
   });
@@ -303,7 +303,7 @@ describe('spending accounts', () => {
   const currentOf = async (token: string) =>
     (await gql(QUERY, undefined, token)).data.budget.accounts[0];
 
-  it('adds one that always counts, listed after where pay lands and before savings', async () => {
+  it('adds one that counts, listed after where pay lands and before savings', async () => {
     const { token, budgetId } = await createUserWithBudget();
     await addSavings(token, budgetId);
     const joint = await addSpending(token, budgetId);
@@ -316,9 +316,25 @@ describe('spending accounts', () => {
       'Joint bills',
       'Cash ISA'
     ]);
-    expect(
-      errorCode(await gql(CREATE, { input: { budgetId, name: 'Pot', kind: 'SPENDING', balance: 1, counts: false } }, token))
-    ).toBe('SPENDING_ALWAYS_COUNTS');
+  });
+
+  it('keeps one out of free to spend when asked, unless pay lands in it', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const pot = await gql(CREATE, { input: { budgetId, name: 'Holiday pot', kind: 'SPENDING', balance: 300, counts: false } }, token);
+    expect(pot.data.createAccount.account).toMatchObject({ kind: 'SPENDING', counts: false });
+    expect(pot.data.createAccount.budget.bankBalance).toBe(1000);
+
+    const joint = await addSpending(token, budgetId);
+    const out = await gql(UPDATE, { id: joint.id, input: { counts: false } }, token);
+    expect(out.data.updateAccount.account.counts).toBe(false);
+    expect(out.data.updateAccount.budget.bankBalance).toBe(1000);
+
+    // Pay landing in it brings it back into free to spend, and it can't be kept out
+    expect(errorCode(await gql(UPDATE, { id: joint.id, input: { paidInto: true, counts: false } }, token))).toBe(
+      'PAID_INTO_ACCOUNT_FIXED'
+    );
+    const paid = await gql(UPDATE, { id: joint.id, input: { paidInto: true } }, token);
+    expect(paid.data.updateAccount.account).toMatchObject({ paidInto: true, counts: true });
   });
 
   it('moves where pay lands, only ever to a spending account', async () => {

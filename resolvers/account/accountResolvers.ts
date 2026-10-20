@@ -23,7 +23,6 @@ import {
   PAYS_INTO_NOT_ALLOWED,
   PAYS_INTO_SAME_ACCOUNT,
   RECURRING_PAYMENT_NOT_FOUND,
-  SPENDING_ALWAYS_COUNTS,
   accountBalances,
   accountInput,
   newAccount,
@@ -147,8 +146,8 @@ const withBudget = async (account: AccountDocument | null, budgetId: BudgetId) =
   return { account, budget, success: true };
 };
 
-// A new account, savings unless it says otherwise. Spending money always counts in free to spend;
-// money put aside doesn't, unless the user says it does.
+// A new account, savings unless it says otherwise. Spending money counts in free to spend and money
+// put aside doesn't, unless the user says otherwise.
 const createAccount = async (
   _: unknown,
   { input }: { input: CreateAccountInput },
@@ -161,14 +160,13 @@ const createAccount = async (
   );
   await checkBudgetAccess(budgetId, req);
   const spending = kind === AccountKind.SPENDING;
-  if (spending && counts === false) throw SPENDING_ALWAYS_COUNTS();
 
   const account = await new Account({
     budget: budgetId,
     name,
     kind: kind ?? AccountKind.SAVINGS,
     balance,
-    counts: spending || (counts ?? false),
+    counts: counts ?? spending,
     interestRate: interestRate ?? null,
     purpose: purpose ?? null,
     balanceUpdatedAt: new Date()
@@ -178,8 +176,9 @@ const createAccount = async (
 
 /*
  * Only what's given changes. A balance that's set is dated now, even if it's the same figure: the
- * user has checked it. Making an account where pay lands moves that from the account it was. An
- * account that becomes savings stops paying for expenses: they go out of where pay lands instead.
+ * user has checked it. Making an account where pay lands moves that from the account it was, and it
+ * always counts in free to spend. An account that becomes savings stops paying for expenses: they
+ * go out of where pay lands instead.
  */
 const updateAccount = async (
   _: unknown,
@@ -197,17 +196,21 @@ const updateAccount = async (
   const spending = nextKind === AccountKind.SPENDING;
   if (account.paidInto && !spending) throw PAID_INTO_ACCOUNT_FIXED('made savings');
   if (paidInto && !spending) throw PAID_INTO_NOT_SPENDING();
-  if (spending && counts === false) throw SPENDING_ALWAYS_COUNTS();
+  const paidIntoNext = account.paidInto || paidInto === true;
+  if (paidIntoNext && counts === false) throw PAID_INTO_ACCOUNT_FIXED('kept out of free to spend');
   const becameSavings = account.kind === AccountKind.SPENDING && !spending;
+  const becameSpending = account.kind !== AccountKind.SPENDING && spending;
 
   return withTransaction(async session => {
     if (name !== undefined) account.name = name;
     if (balance !== undefined) setBalance(account, balance);
     if (kind !== undefined) account.kind = kind;
-    if (spending) account.counts = true;
+    if (paidIntoNext) account.counts = true;
     else if (counts !== undefined) account.counts = counts;
-    // Money put aside is kept out of free to spend unless the user says otherwise
+    // Money to spend counts in free to spend and money put aside doesn't, unless the user says
+    // otherwise
     else if (becameSavings) account.counts = false;
+    else if (becameSpending) account.counts = true;
     if (interestRate !== undefined) account.interestRate = interestRate;
     if (purpose !== undefined) account.purpose = purpose;
 
