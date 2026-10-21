@@ -175,7 +175,7 @@ describe('note dates', () => {
           budgetId,
           name: 'Car insurance',
           amount: 612,
-          category: 'INSURANCE',
+          category: 'FINANCES',
           frequency: 'ANNUALLY',
           type: 'EXPENSE',
           firstPaymentDate: '2030-11-07'

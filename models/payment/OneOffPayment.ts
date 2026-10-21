@@ -1,5 +1,5 @@
 import mongoose, { Schema, Types } from 'mongoose';
-import { OneOffPaymentCategory } from '../../constants/payment';
+import { PaymentCategory } from '../../constants/payment';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { enumValues } from '../../utils/helpers/enumHelpers';
 import { reminderTimingSchema, USUAL_TIMING, type ReminderTiming } from '../reminder/reminderTiming';
@@ -10,7 +10,7 @@ export interface OneOffPayment {
   budget: Types.ObjectId;
   dueDate?: Date;
   type: PaymentType;
-  category: OneOffPaymentCategory;
+  category: PaymentCategory;
   // When it was marked paid. A paid one-off stays until the next payday, so it can still be undone,
   // then payday clears it away; its record stays as history.
   paidAt?: Date | null;
@@ -42,7 +42,7 @@ const OneOffPaymentSchema = new Schema<OneOffPayment>({
   },
   category: {
     type: String,
-    enum: enumValues(OneOffPaymentCategory),
+    enum: enumValues(PaymentCategory),
     required: true
   },
   paidAt: {

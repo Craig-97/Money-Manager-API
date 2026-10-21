@@ -43,7 +43,7 @@ const addPayment = (token: string, budgetId: string, extra: Variables) =>
       input: {
         budgetId,
         amount: 120,
-        category: 'UTILITIES',
+        category: 'BILLS',
         frequency: 'MONTHLY',
         type: 'EXPENSE',
         ...extra
@@ -151,7 +151,7 @@ describe('GET /cal/:token.ics', () => {
           amount: 75,
           dueDate: day(9),
           type: 'EXPENSE',
-          category: 'GIFT',
+          category: 'GIFTS',
           dueReminder: { off: false, days: 7 }
         }
       },

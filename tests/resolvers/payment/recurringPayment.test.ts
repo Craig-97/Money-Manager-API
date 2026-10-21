@@ -29,7 +29,7 @@ const makePayment = (token: string | undefined, budgetId: string, name: string, 
         budgetId,
         name,
         amount: 10,
-        category: 'SUBSCRIPTION',
+        category: 'SUBSCRIPTIONS',
         frequency: 'MONTHLY',
         type: 'EXPENSE',
         firstPaymentDate: '2030-01-01',
@@ -51,7 +51,7 @@ describe('createRecurringPayment', () => {
     expect(recurringPayment).toMatchObject({
       name: 'Netflix',
       amount: 9.99,
-      category: 'SUBSCRIPTION',
+      category: 'SUBSCRIPTIONS',
       frequency: 'MONTHLY',
       type: 'EXPENSE',
       budget: budgetId,
@@ -121,7 +121,7 @@ describe('createRecurringPayment', () => {
     await gql(
       `mutation ($input: CreateOneOffPaymentInput!) { createOneOffPayment(input: $input) { success } }`,
       {
-        input: { budgetId, name: 'Shared', amount: 1, dueDate: '2030-06-15', type: 'EXPENSE', category: 'FOOD' }
+        input: { budgetId, name: 'Shared', amount: 1, dueDate: '2030-06-15', type: 'EXPENSE', category: 'GROCERIES' }
       },
       token
     );

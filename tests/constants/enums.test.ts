@@ -1,8 +1,7 @@
 import { parse, buildASTSchema, GraphQLEnumType } from 'graphql';
 import { PaymentType } from '../../constants/payment/paymentType';
-import { OneOffPaymentCategory } from '../../constants/payment';
+import { PaymentCategory } from '../../constants/payment';
 import { BankHolidayRegion, Weekday } from '../../constants/payday';
-import { RecurringPaymentCategory } from '../../constants/payment';
 import { enumValues, gqlEnum } from '../../utils/helpers/enumHelpers';
 import { typeDefs } from '../../typeDefs';
 
@@ -26,19 +25,13 @@ describe('enums', () => {
     expect(schemaValues('Weekday')).toEqual(enumValues(Weekday));
     expect(schemaValues('BankHolidayRegion')).toEqual(enumValues(BankHolidayRegion));
     expect(schemaValues('PaymentType')).toEqual(enumValues(PaymentType));
-    expect(schemaValues('OneOffPaymentCategory')).toEqual(enumValues(OneOffPaymentCategory));
-    expect(schemaValues('RecurringPaymentCategory')).toEqual(
-      enumValues(RecurringPaymentCategory)
-    );
+    expect(schemaValues('PaymentCategory')).toEqual(enumValues(PaymentCategory));
   });
 
-  it('does not accept a category from the other payment type', () => {
+  it('shares one category list between one-off and recurring payments', () => {
     const schema = buildASTSchema(typeDefs as ReturnType<typeof parse>);
-    const names = (name: string) =>
-      (schema.getType(name) as GraphQLEnumType).getValues().map(value => value.name);
 
-    expect(names('OneOffPaymentCategory')).not.toContain('RENT');
-    expect(names('RecurringPaymentCategory')).not.toContain('SHOPPING');
-    expect(schema.getType('PaymentCategory')).toBeUndefined();
+    expect(schema.getType('OneOffPaymentCategory')).toBeUndefined();
+    expect(schema.getType('RecurringPaymentCategory')).toBeUndefined();
   });
 });

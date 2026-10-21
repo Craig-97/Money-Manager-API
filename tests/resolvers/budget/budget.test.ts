@@ -53,7 +53,7 @@ describe('createBudget', () => {
               amount: 400,
               dueDate: '2030-01-01',
               type: 'EXPENSE',
-              category: 'TRAVEL'
+              category: 'HOLIDAYS'
             }
           ],
           payday: { frequency: 'MONTHLY', type: 'LAST_DAY' }
@@ -68,7 +68,7 @@ describe('createBudget', () => {
       bankBalance: 1500.5,
       monthlyIncome: 3000,
       user: { id: user.id },
-      oneOffPayments: [{ name: 'Holiday', amount: 400, type: 'EXPENSE', category: 'TRAVEL' }],
+      oneOffPayments: [{ name: 'Holiday', amount: 400, type: 'EXPENSE', category: 'HOLIDAYS' }],
       payday: { frequency: 'MONTHLY', type: 'LAST_DAY' }
     });
   });
@@ -80,7 +80,7 @@ describe('createBudget', () => {
       amount: 1,
       dueDate: '2030-01-01',
       type: 'EXPENSE',
-      category: 'FOOD'
+      category: 'GROCERIES'
     });
     const body = await gql(
       CREATE,
@@ -92,7 +92,7 @@ describe('createBudget', () => {
           recurringPayments: ['R1', 'R2', 'R3'].map(name => ({
             name,
             amount: 1,
-            category: 'OTHER',
+            category: 'GENERAL',
             frequency: 'MONTHLY',
             type: 'EXPENSE',
             firstPaymentDate: '2030-01-01'
@@ -127,7 +127,7 @@ describe('createBudget', () => {
         input: {
           bankBalance: 1,
           monthlyIncome: 1,
-          recurringPayments: [recurring('Mortgage', 'MORTGAGE', 750), recurring('Council tax', 'TAX', 160)]
+          recurringPayments: [recurring('Mortgage', 'BILLS', 750), recurring('Council tax', 'BILLS', 160)]
         }
       },
       token
@@ -141,7 +141,7 @@ describe('createBudget', () => {
     expect(recurringPayments).toContainEqual({
       name: 'Council tax',
       amount: 160,
-      category: 'TAX',
+      category: 'BILLS',
       frequency: 'MONTHLY',
       type: 'EXPENSE'
     });
@@ -184,8 +184,8 @@ describe('budget queries', () => {
     const { token, user, budgetId } = await createUserWithBudget({
       budget: {
         oneOffPayments: [
-          { name: 'Big', amount: 900, dueDate: '2030-01-01', type: 'EXPENSE', category: 'FOOD' },
-          { name: 'Small', amount: 10, dueDate: '2030-01-01', type: 'EXPENSE', category: 'FOOD' }
+          { name: 'Big', amount: 900, dueDate: '2030-01-01', type: 'EXPENSE', category: 'GROCERIES' },
+          { name: 'Small', amount: 10, dueDate: '2030-01-01', type: 'EXPENSE', category: 'GROCERIES' }
         ]
       }
     });

@@ -6,6 +6,7 @@ import { removeBudgetIdLists } from '../../scripts/migrations/removeBudgetIdList
 import { fromIsoDay } from '../../utils/payday/paydays';
 import { moveHandledToRecords } from '../../scripts/migrations/handledToRecords';
 import { migrateRenewalReminders } from '../../scripts/migrations/renewalReminders';
+import { migratePaymentCategories, newCategory } from '../../scripts/migrations/paymentCategories';
 
 beforeAll(setupTestApp);
 afterAll(teardownTestApp);
@@ -149,7 +150,7 @@ describe('migrateBills', () => {
     );
     expect(body.errors).toBeUndefined();
     const firstPaymentDate = String(new Date('2030-01-15').getTime());
-    const common = { type: 'EXPENSE', category: 'OTHER', frequency: 'MONTHLY', thisCycle: [], firstPaymentDate };
+    const common = { type: 'EXPENSE', category: 'GENERAL', frequency: 'MONTHLY', thisCycle: [], firstPaymentDate };
     expect(body.data.budget.recurringPayments).toEqual([
       { name: 'Phone', amount: 20, ...common },
       { name: 'Rent', amount: 800, ...common }
@@ -170,7 +171,7 @@ describe('migrateBills', () => {
   it('renames a bill whose name a one-off payment already uses', async () => {
     const { budgetId } = await createUserWithBudget({
       budget: {
-        oneOffPayments: [{ name: 'Gym', amount: 5, dueDate: '2030-02-01', type: 'EXPENSE', category: 'FOOD' }]
+        oneOffPayments: [{ name: 'Gym', amount: 5, dueDate: '2030-02-01', type: 'EXPENSE', category: 'GROCERIES' }]
       }
     });
     await addBills(budgetId, { name: 'Gym', amount: 30 });
@@ -230,7 +231,7 @@ describe('moveHandledToRecords', () => {
           budgetId,
           name: 'Cleaner',
           amount: 50,
-          category: 'OTHER',
+          category: 'GENERAL',
           frequency: 'WEEKLY',
           type: 'EXPENSE',
           firstPaymentDate: '2030-01-07'
@@ -319,5 +320,77 @@ describe('migrateRenewalReminders', () => {
 
     // Run again, there's nothing left to do
     expect(await migrateRenewalReminders({ apply: true })).toEqual({ found: 0, kept: 0, off: 0, usual: 0, changed: 0 });
+  });
+});
+
+describe('migratePaymentCategories', () => {
+  const collection = (name: string) => mongoose.connection.collection(name);
+
+  it('moves each old category to the shared list, splitting food by name', () => {
+    expect(newCategory('RENT', 'Rent')).toBe('BILLS');
+    expect(newCategory('CREDIT_CARD', 'Amex')).toBe('FINANCES');
+    expect(newCategory('SUBSCRIPTION', 'Netflix')).toBe('SUBSCRIPTIONS');
+    expect(newCategory('TRAVEL', 'Flights to Rome')).toBe('HOLIDAYS');
+    expect(newCategory('OTHER', 'Something')).toBe('GENERAL');
+    expect(newCategory('FOOD', 'Deliveroo')).toBe('EATING_OUT');
+    expect(newCategory('FOOD', 'Pub with Sam')).toBe('EATING_OUT');
+    expect(newCategory('FOOD', 'Tesco')).toBe('GROCERIES');
+    // Whole words only
+    expect(newCategory('FOOD', 'Barclays card shop')).toBe('GROCERIES');
+    // Already in the new list
+    expect(newCategory('SHOPPING', 'Sofa')).toBeNull();
+  });
+
+  it('changes payments and the copies their records keep, once', async () => {
+    const { budgetId } = await createUserWithBudget();
+    const budget = oid(budgetId);
+    const base = { budget, amount: 10, type: 'EXPENSE' };
+    const rent = (
+      await collection('recurringpayments').insertOne({
+        ...base,
+        name: 'Rent',
+        category: 'RENT',
+        frequency: 'MONTHLY',
+        firstPaymentDate: new Date('2030-01-01')
+      })
+    ).insertedId;
+    const takeaway = (
+      await collection('oneoffpayments').insertOne({
+        ...base,
+        name: 'Just Eat',
+        category: 'FOOD',
+        dueDate: new Date('2030-01-05')
+      })
+    ).insertedId;
+    const record = (
+      await collection('paymentrecords').insertOne({
+        budget,
+        oneOffPayment: takeaway,
+        payment: { name: 'Just Eat', category: 'FOOD', type: 'EXPENSE', amount: 10 },
+        kind: 'PAID',
+        dates: [new Date('2030-01-05')],
+        balanceChange: 0
+      })
+    ).insertedId;
+
+    const found = { recurring: 1, oneOff: 1, records: 1 };
+    expect(await migratePaymentCategories({ apply: false })).toEqual({ ...found, changed: 0 });
+    expect(await collection('recurringpayments').findOne({ _id: rent })).toHaveProperty('category', 'RENT');
+
+    expect(await migratePaymentCategories({ apply: true })).toEqual({ ...found, changed: 3 });
+    expect(await collection('recurringpayments').findOne({ _id: rent })).toHaveProperty('category', 'BILLS');
+    expect(await collection('oneoffpayments').findOne({ _id: takeaway })).toHaveProperty('category', 'EATING_OUT');
+    expect(await collection('paymentrecords').findOne({ _id: record })).toHaveProperty(
+      'payment.category',
+      'EATING_OUT'
+    );
+
+    // Run again, there's nothing left to do
+    expect(await migratePaymentCategories({ apply: true })).toEqual({
+      recurring: 0,
+      oneOff: 0,
+      records: 0,
+      changed: 0
+    });
   });
 });

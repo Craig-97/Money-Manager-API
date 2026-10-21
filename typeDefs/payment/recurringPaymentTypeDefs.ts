@@ -1,10 +1,10 @@
 import { PaymentRecordKind } from '../../constants/payment/paymentRecordKind';
 import { PaymentType } from '../../constants/payment/paymentType';
-import { PaymentFrequency, RecurringPaymentCategory } from '../../constants/payment';
+import { PaymentFrequency, PaymentCategory } from '../../constants/payment';
 import { gqlEnum } from '../../utils/helpers/enumHelpers';
 
 export const recurringPaymentTypeDefs = `
-  ${gqlEnum('RecurringPaymentCategory', RecurringPaymentCategory)}
+  ${gqlEnum('PaymentCategory', PaymentCategory)}
   ${gqlEnum('PaymentFrequency', PaymentFrequency)}
   ${gqlEnum('PaymentType', PaymentType)}
   ${gqlEnum('PaymentRecordKind', PaymentRecordKind)}
@@ -14,7 +14,7 @@ export const recurringPaymentTypeDefs = `
     budget: ID!
     name: String!
     amount: Float!
-    category: RecurringPaymentCategory!
+    category: PaymentCategory!
     frequency: PaymentFrequency!
     type: PaymentType!
     firstPaymentDate: String!
@@ -101,7 +101,7 @@ export const recurringPaymentTypeDefs = `
     budgetId: ID!
     name: String!
     amount: Float!
-    category: RecurringPaymentCategory!
+    category: PaymentCategory!
     frequency: PaymentFrequency!
     type: PaymentType!
     firstPaymentDate: String!
@@ -120,7 +120,7 @@ export const recurringPaymentTypeDefs = `
   input RecurringPaymentInput {
     name: String!
     amount: Float!
-    category: RecurringPaymentCategory!
+    category: PaymentCategory!
     frequency: PaymentFrequency!
     type: PaymentType!
     firstPaymentDate: String!
@@ -138,7 +138,7 @@ export const recurringPaymentTypeDefs = `
   input UpdateRecurringPaymentInput {
     name: String
     amount: Float
-    category: RecurringPaymentCategory
+    category: PaymentCategory
     frequency: PaymentFrequency
     type: PaymentType
     firstPaymentDate: String

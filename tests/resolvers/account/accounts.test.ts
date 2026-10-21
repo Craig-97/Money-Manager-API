@@ -207,7 +207,7 @@ describe('paying into savings', () => {
 
     expect(errorCode(await create({ paysInto: isa.id, type: 'INCOME' }))).toBe('PAYS_INTO_NOT_ALLOWED');
     expect(
-      errorCode(await create({ paysInto: isa.id, category: 'LOAN', debt: { balance: 100, apr: 5 } }))
+      errorCode(await create({ paysInto: isa.id, category: 'FINANCES', debt: { balance: 100, apr: 5 } }))
     ).toBe('PAYS_INTO_NOT_ALLOWED');
     // It goes out of the account pay lands in, so it can't go back into it
     expect(errorCode(await create({ paysInto: current.id }))).toBe('PAYS_INTO_SAME_ACCOUNT');
@@ -374,7 +374,7 @@ describe('spending accounts', () => {
   it('pays from the account a payment names, and undoes onto that account even once it has moved', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const joint = await addSpending(token, budgetId);
-    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { name: 'Energy', category: 'UTILITIES', account: joint.id }) }, token);
+    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { name: 'Energy', category: 'BILLS', account: joint.id }) }, token);
     const energy = created.data.createRecurringPayment.recurringPayment;
     expect(energy.account).toBe(joint.id);
 
@@ -399,7 +399,7 @@ describe('spending accounts', () => {
     const isa = await addSavings(token, budgetId);
     const income = await gql(
       CREATE_PAYMENT,
-      { input: payment(budgetId, { name: 'Interest', type: 'INCOME', category: 'OTHER', account: isa.id }) },
+      { input: payment(budgetId, { name: 'Interest', type: 'INCOME', category: 'GENERAL', account: isa.id }) },
       token
     );
     const interest = income.data.createRecurringPayment.recurringPayment;
@@ -415,7 +415,7 @@ describe('spending accounts', () => {
   it('moves money between spending accounts', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const joint = await addSpending(token, budgetId);
-    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { name: 'Joint bills top-up', category: 'UTILITIES', paysInto: joint.id }) }, token);
+    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { name: 'Joint bills top-up', category: 'BILLS', paysInto: joint.id }) }, token);
     const topUp = created.data.createRecurringPayment.recurringPayment;
 
     const paid = await gql(PAID, { input: { budgetId, recurringPaymentIds: [topUp.id], oneOffPaymentIds: [] } }, token);
@@ -432,7 +432,7 @@ describe('spending accounts', () => {
     const joint = await addSpending(token, budgetId);
     const isa = await addSavings(token, budgetId);
     const make = async (name: string, extra: Record<string, unknown> = {}) =>
-      (await gql(CREATE_PAYMENT, { input: payment(budgetId, { name, category: 'UTILITIES', ...extra }) }, token)).data
+      (await gql(CREATE_PAYMENT, { input: payment(budgetId, { name, category: 'BILLS', ...extra }) }, token)).data
         .createRecurringPayment.recurringPayment;
     const energy = await make('Energy');
     const water = await make('Water');
@@ -456,7 +456,7 @@ describe('spending accounts', () => {
   it('sends expenses back to where pay lands when their account becomes savings or is deleted', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const joint = await addSpending(token, budgetId);
-    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { name: 'Energy', category: 'UTILITIES', account: joint.id }) }, token);
+    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { name: 'Energy', category: 'BILLS', account: joint.id }) }, token);
     const energy = created.data.createRecurringPayment.recurringPayment;
 
     const savings = await gql(UPDATE, { id: joint.id, input: { kind: 'SAVINGS' } }, token);
@@ -475,7 +475,7 @@ describe('spending accounts', () => {
     const joint = await addSpending(token, budgetId);
     const oneOff = await gql(
       CREATE_ONE_OFF,
-      { input: { budgetId, name: 'Hotel deposit', amount: 220, dueDate: '2030-01-23', type: 'EXPENSE', category: 'TRAVEL', account: joint.id } },
+      { input: { budgetId, name: 'Hotel deposit', amount: 220, dueDate: '2030-01-23', type: 'EXPENSE', category: 'HOLIDAYS', account: joint.id } },
       token
     );
     const hotel = oneOff.data.createOneOffPayment.oneOffPayment;
@@ -487,7 +487,7 @@ describe('spending accounts', () => {
 
     const loan = await gql(
       CREATE_PAYMENT,
-      { input: payment(budgetId, { name: 'Car finance', category: 'LOAN', account: joint.id, debt: { balance: 5000, apr: 7 } }) },
+      { input: payment(budgetId, { name: 'Car finance', category: 'FINANCES', account: joint.id, debt: { balance: 5000, apr: 7 } }) },
       token
     );
     const car = loan.data.createRecurringPayment.recurringPayment;
@@ -511,7 +511,7 @@ describe('setting up accounts with the budget', () => {
   const topUp = (extra: Record<string, unknown>) => ({
     name: 'Joint bills top-up',
     amount: 600,
-    category: 'UTILITIES',
+    category: 'BILLS',
     frequency: 'MONTHLY',
     type: 'EXPENSE',
     firstPaymentDate: '2030-01-30',

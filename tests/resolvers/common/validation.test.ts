@@ -75,7 +75,7 @@ describe('budgets', () => {
         input: {
           bankBalance: 1,
           monthlyIncome: 1,
-          oneOffPayments: [{ name: 'Gift', amount: -5, dueDate: '2030-01-01', type: 'EXPENSE', category: 'OTHER' }]
+          oneOffPayments: [{ name: 'Gift', amount: -5, dueDate: '2030-01-01', type: 'EXPENSE', category: 'GENERAL' }]
         }
       },
       token
@@ -100,7 +100,7 @@ describe('payments and notes', () => {
     const { token, budgetId } = await createUserWithBudget();
     const body = await gql(
       `mutation ($input: CreateOneOffPaymentInput!) { createOneOffPayment(input: $input) { success } }`,
-      { input: { budgetId, name: 'Trip', amount: 1, dueDate: '2030-13-01', type: 'EXPENSE', category: 'OTHER' } },
+      { input: { budgetId, name: 'Trip', amount: 1, dueDate: '2030-13-01', type: 'EXPENSE', category: 'GENERAL' } },
       token
     );
     expect(errorCode(body)).toBe('BAD_USER_INPUT');
@@ -114,7 +114,7 @@ describe('payments and notes', () => {
     const input = {
       budgetId,
       amount: 10,
-      category: 'RENT',
+      category: 'BILLS',
       frequency: 'MONTHLY',
       type: 'EXPENSE',
       firstPaymentDate: '2030-01-01'

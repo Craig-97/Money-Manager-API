@@ -126,12 +126,12 @@ describe('deleteCurrentUser', () => {
   it('deletes the budget and everything on it', async () => {
     const { token, user, budgetId } = await createUserWithBudget({
       budget: {
-        oneOffPayments: [{ name: 'Gift', amount: 20, dueDate: '2030-01-01', type: 'EXPENSE', category: 'OTHER' }],
+        oneOffPayments: [{ name: 'Gift', amount: 20, dueDate: '2030-01-01', type: 'EXPENSE', category: 'GENERAL' }],
         recurringPayments: [
           {
             name: 'Rent',
             amount: 500,
-            category: 'RENT',
+            category: 'BILLS',
             frequency: 'MONTHLY',
             type: 'EXPENSE',
             firstPaymentDate: '2030-01-01'

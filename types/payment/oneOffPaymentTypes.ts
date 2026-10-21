@@ -1,5 +1,5 @@
 import type { PaymentType } from '../../constants/payment/paymentType';
-import type { OneOffPaymentCategory } from '../../constants/payment';
+import type { PaymentCategory } from '../../constants/payment';
 import type { ReminderTimingInput } from './recurringPaymentTypes';
 
 export interface OneOffPaymentFields {
@@ -7,7 +7,7 @@ export interface OneOffPaymentFields {
   amount: number;
   dueDate: string;
   type: PaymentType;
-  category: OneOffPaymentCategory;
+  category: PaymentCategory;
   dueReminder?: ReminderTimingInput;
   account?: string | null;
 }

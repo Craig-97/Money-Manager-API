@@ -30,7 +30,7 @@ const makePayment = (token: string | undefined, budgetId: string, name: string, 
         amount: 10,
         dueDate: '2030-06-15',
         type: 'EXPENSE',
-        category: 'FOOD',
+        category: 'GROCERIES',
         ...extra
       }
     },
@@ -51,7 +51,7 @@ describe('createOneOffPayment', () => {
       name: 'Holiday',
       amount: 250.75,
       type: 'EXPENSE',
-      category: 'FOOD'
+      category: 'GROCERIES'
     });
     // Date fields are exposed through GraphQL String, which serializes as epoch milliseconds
     expect(oneOffPayment.dueDate).toBe(String(new Date('2030-06-15').getTime()));
@@ -108,14 +108,14 @@ describe('updateOneOffPayment', () => {
     const created = await makePayment(token, budgetId, 'Edit me', { amount: 10 });
     const body = await gql(
       UPDATE,
-      { id: idOf(created), input: { amount: 99, category: 'GIFT' } },
+      { id: idOf(created), input: { amount: 99, category: 'GIFTS' } },
       token
     );
     expect(body.errors).toBeUndefined();
     expect(body.data.updateOneOffPayment.oneOffPayment).toMatchObject({
       name: 'Edit me',
       amount: 99,
-      category: 'GIFT',
+      category: 'GIFTS',
       type: 'EXPENSE'
     });
   });
@@ -184,7 +184,7 @@ describe('one-off reminders', () => {
     updateOneOffPayment(id: $id, input: $input) { oneOffPayment { dueReminder { off days } } }
   }`;
   const input = (budgetId: string, extra: Variables = {}) => ({
-    input: { budgetId, name: 'Birthday', amount: 75, dueDate: '2030-06-15', type: 'EXPENSE', category: 'GIFT', ...extra }
+    input: { budgetId, name: 'Birthday', amount: 75, dueDate: '2030-06-15', type: 'EXPENSE', category: 'GIFTS', ...extra }
   });
 
   it('follows the usual timing unless given its own, which can change', async () => {

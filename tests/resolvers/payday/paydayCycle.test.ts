@@ -70,7 +70,7 @@ const createPayment = async (
         budgetId,
         name,
         amount: 20,
-        category: "SUBSCRIPTION",
+        category: "SUBSCRIPTIONS",
         frequency: "MONTHLY",
         type: "EXPENSE",
         firstPaymentDate,
@@ -158,7 +158,7 @@ describe("recurring payment due dates", () => {
           {
             name: "Rent",
             amount: 500,
-            category: "RENT",
+            category: "BILLS",
             frequency: "MONTHLY",
             type: "EXPENSE",
             firstPaymentDate: "2030-02-01",
@@ -462,7 +462,7 @@ describe("startPaydayCycle", () => {
     it("records a left-over payment as paid without changing the confirmed balance, but pays down a debt", async () => {
       const { token, budgetId } = await createUserWithBudget();
       const card = await createPayment(token, budgetId, "Card", "2030-01-10", {
-        category: "CREDIT_CARD",
+        category: "FINANCES",
         debt: { balance: 1000, apr: 12, startingBalance: 1000 },
       });
 
@@ -559,7 +559,7 @@ describe("startPaydayCycle", () => {
       const { token, budgetId } = await createUserWithBudget();
       const created = await gql(
         `mutation ($input: CreateOneOffPaymentInput!) { createOneOffPayment(input: $input) { oneOffPayment { id } } }`,
-        { input: { budgetId, name: "Gift", amount: 30, dueDate: day(-1), type: "EXPENSE", category: "OTHER" } },
+        { input: { budgetId, name: "Gift", amount: 30, dueDate: day(-1), type: "EXPENSE", category: "GENERAL" } },
         token,
       );
       const gift = created.data.createOneOffPayment.oneOffPayment.id;
@@ -613,7 +613,7 @@ describe("marking payments paid", () => {
             amount,
             dueDate: "2030-01-01",
             type,
-            category: "OTHER",
+            category: "GENERAL",
           },
         },
         token,

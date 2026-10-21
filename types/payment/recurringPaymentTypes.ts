@@ -1,5 +1,5 @@
 import type { PaymentType } from '../../constants/payment/paymentType';
-import type { PaymentFrequency, RecurringPaymentCategory } from '../../constants/payment';
+import type { PaymentFrequency, PaymentCategory } from '../../constants/payment';
 
 // Days left out (null) follow the budget's usual timing
 export interface ReminderTimingInput {
@@ -16,7 +16,7 @@ export interface DebtFields {
 export interface RecurringPaymentFields {
   name: string;
   amount: number;
-  category: RecurringPaymentCategory;
+  category: PaymentCategory;
   frequency: PaymentFrequency;
   type: PaymentType;
   firstPaymentDate: string;

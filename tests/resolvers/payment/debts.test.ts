@@ -40,7 +40,7 @@ const makePayment = (token: string, budgetId: string, extra: Variables = {}) =>
         budgetId,
         name: 'Credit card',
         amount: 100,
-        category: 'CREDIT_CARD',
+        category: 'FINANCES',
         frequency: 'MONTHLY',
         type: 'EXPENSE',
         firstPaymentDate: '2030-01-31',
@@ -119,7 +119,7 @@ describe('tracking a payment as a debt', () => {
             {
               name: 'Car finance',
               amount: 245,
-              category: 'LOAN',
+              category: 'FINANCES',
               frequency: 'MONTHLY',
               type: 'EXPENSE',
               firstPaymentDate: '2030-01-26',

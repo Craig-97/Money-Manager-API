@@ -103,7 +103,7 @@ describe("records can't be added to another user's budget", () => {
           amount: 10,
           dueDate: '2030-06-15',
           type: 'EXPENSE',
-          category: 'FOOD'
+          category: 'GROCERIES'
         }
       }
     );
@@ -119,7 +119,7 @@ describe("records can't be added to another user's budget", () => {
           budgetId: owner.budgetId,
           name: 'Planted',
           amount: 10,
-          category: 'SUBSCRIPTION',
+          category: 'SUBSCRIPTIONS',
           frequency: 'MONTHLY',
           type: 'EXPENSE',
           firstPaymentDate: '2030-01-01'

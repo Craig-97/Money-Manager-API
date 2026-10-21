@@ -50,7 +50,7 @@ const recurring = async (token: string, budgetId: string, extra: Variables = {})
           budgetId,
           name: 'Credit card',
           amount: 100,
-          category: 'CREDIT_CARD',
+          category: 'FINANCES',
           frequency: 'MONTHLY',
           type: 'EXPENSE',
           firstPaymentDate: '2030-01-31',
@@ -65,7 +65,7 @@ const oneOff = async (token: string, budgetId: string, name: string, dueDate = '
   (
     await gql(
       ONE_OFF,
-      { input: { budgetId, name, amount: 40, dueDate, type: 'EXPENSE', category: 'OTHER' } },
+      { input: { budgetId, name, amount: 40, dueDate, type: 'EXPENSE', category: 'GENERAL' } },
       token
     )
   ).data.createOneOffPayment.oneOffPayment.id as string;

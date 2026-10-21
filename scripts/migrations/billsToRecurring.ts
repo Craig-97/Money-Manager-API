@@ -1,6 +1,6 @@
 import mongoose, { type Types } from 'mongoose';
 import type { BankHolidayRegion } from '../../constants/payday';
-import { RecurringPaymentCategory, PaymentFrequency } from '../../constants/payment';
+import { PaymentCategory, PaymentFrequency } from '../../constants/payment';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { Budget } from '../../models/budget/Budget';
 import { OneOffPayment } from '../../models/payment/OneOffPayment';
@@ -100,7 +100,7 @@ const migrateBudget = async (
           name,
           amount,
           type: PaymentType.EXPENSE,
-          category: RecurringPaymentCategory.OTHER,
+          category: PaymentCategory.GENERAL,
           frequency: PaymentFrequency.MONTHLY,
           firstPaymentDate
         }).save({ session });

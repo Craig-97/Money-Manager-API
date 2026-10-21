@@ -1,5 +1,5 @@
 import mongoose, { Schema, Types } from 'mongoose';
-import { PaymentFrequency, RecurringPaymentCategory } from '../../constants/payment';
+import { PaymentFrequency, PaymentCategory } from '../../constants/payment';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { addDays, nextOccurrence, ukDay } from '../../utils/dates';
 import { enumValues } from '../../utils/helpers/enumHelpers';
@@ -22,7 +22,7 @@ export interface RecurringPayment {
   name: string;
   amount: number;
   budget: Types.ObjectId;
-  category: RecurringPaymentCategory;
+  category: PaymentCategory;
   frequency: PaymentFrequency;
   type: PaymentType;
   firstPaymentDate: Date;
@@ -74,7 +74,7 @@ const recurringPaymentSchema = new Schema<RecurringPayment>({
   category: {
     type: String,
     required: true,
-    enum: enumValues(RecurringPaymentCategory)
+    enum: enumValues(PaymentCategory)
   },
   frequency: {
     type: String,
