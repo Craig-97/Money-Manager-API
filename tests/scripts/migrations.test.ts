@@ -327,18 +327,22 @@ describe('migratePaymentCategories', () => {
   const collection = (name: string) => mongoose.connection.collection(name);
 
   it('moves each old category to the shared list, splitting food by name', () => {
-    expect(newCategory('RENT', 'Rent')).toBe('BILLS');
-    expect(newCategory('CREDIT_CARD', 'Amex')).toBe('FINANCES');
-    expect(newCategory('SUBSCRIPTION', 'Netflix')).toBe('SUBSCRIPTIONS');
-    expect(newCategory('TRAVEL', 'Flights to Rome')).toBe('HOLIDAYS');
-    expect(newCategory('OTHER', 'Something')).toBe('GENERAL');
-    expect(newCategory('FOOD', 'Deliveroo')).toBe('EATING_OUT');
-    expect(newCategory('FOOD', 'Pub with Sam')).toBe('EATING_OUT');
-    expect(newCategory('FOOD', 'Tesco')).toBe('GROCERIES');
+    expect(newCategory('RENT', { name: 'Rent' })).toBe('BILLS');
+    expect(newCategory('CREDIT_CARD', { name: 'Amex' })).toBe('FINANCES');
+    expect(newCategory('SUBSCRIPTION', { name: 'Netflix' })).toBe('SUBSCRIPTIONS');
+    expect(newCategory('TRAVEL', { name: 'Flights to Rome' })).toBe('HOLIDAYS');
+    expect(newCategory('OTHER', { name: 'Something' })).toBe('GENERAL');
+    expect(newCategory('FOOD', { name: 'Deliveroo' })).toBe('EATING_OUT');
+    expect(newCategory('FOOD', { name: 'Pub with Sam' })).toBe('EATING_OUT');
+    expect(newCategory('FOOD', { name: 'Tesco' })).toBe('GROCERIES');
     // Whole words only
-    expect(newCategory('FOOD', 'Barclays card shop')).toBe('GROCERIES');
+    expect(newCategory('FOOD', { name: 'Barclays card shop' })).toBe('GROCERIES');
+    // Income goes where money in can go
+    expect(newCategory('OTHER', { name: 'Interest', type: 'INCOME' })).toBe('INCOME');
+    expect(newCategory('GIFT', { name: 'From Gran', type: 'INCOME' })).toBe('GIFTS');
+    expect(newCategory('TRAVEL', { name: 'Refund', type: 'INCOME' })).toBe('INCOME');
     // Already in the new list
-    expect(newCategory('SHOPPING', 'Sofa')).toBeNull();
+    expect(newCategory('SHOPPING', { name: 'Sofa' })).toBeNull();
   });
 
   it('changes payments and the copies their records keep, once', async () => {

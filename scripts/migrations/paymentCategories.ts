@@ -7,7 +7,8 @@ import { PaymentCategory } from '../../constants/payment';
  * them, are both changed, so history adds up under the new categories.
  *
  * Food is split by the payment's name: takeaways, restaurants, pubs and cafés go to Eating out,
- * and everything else to Groceries.
+ * and everything else to Groceries. Money coming in only offers the income categories, so income
+ * that would land anywhere else (most often Other) goes to Income.
  *
  * Only categories that aren't in the new list are changed, so running it again does nothing.
  */
@@ -46,9 +47,22 @@ const MOVES: Record<string, PaymentCategory> = {
 const EATING_OUT =
   /\b(deliveroo|just ?eat|uber ?eats|take ?away|restaurant|pub|bar|cafe|coffee|starbucks|costa|pret|greggs|pizza|nando'?s|mcdonald'?s|kfc|burger|dinner|lunch|breakfast|brunch|meal out|curry|chinese|indian|thai|sushi|kebab|chippy|chip shop)s?\b|café/i;
 
-export const newCategory = (category: string, name: string): PaymentCategory | null => {
-  if (category === 'FOOD') return EATING_OUT.test(name) ? 'EATING_OUT' : 'GROCERIES';
-  return MOVES[category] ?? null;
+// What money in can be: the frontend offers only these for income
+const INCOME_CATEGORIES: PaymentCategory[] = ['INCOME', 'TRANSFERS', 'GIFTS', 'EXPENSES', 'GENERAL'];
+
+interface Moving {
+  name: string;
+  type?: string;
+}
+
+export const newCategory = (category: string, { name, type }: Moving): PaymentCategory | null => {
+  const moved =
+    category === 'FOOD' ? (EATING_OUT.test(name) ? 'EATING_OUT' : 'GROCERIES') : MOVES[category];
+  if (!moved) return null;
+  if (type === 'INCOME' && (moved === 'GENERAL' || !INCOME_CATEGORIES.includes(moved))) {
+    return 'INCOME';
+  }
+  return moved;
 };
 
 export interface PaymentCategoriesResult {
@@ -63,14 +77,16 @@ interface StoredPayment {
   _id: mongoose.Types.ObjectId;
   name: string;
   category: string;
+  type?: string;
 }
 
 interface StoredRecord {
   _id: mongoose.Types.ObjectId;
-  payment: { name: string; category: string };
+  payment: { name: string; category: string; type?: string };
 }
 
-const OLD = { $nin: Object.values(PaymentCategory) };
+// Very old payments have no category at all; those are left as they are
+const OLD = { $exists: true, $nin: Object.values(PaymentCategory) };
 
 export const migratePaymentCategories = async ({ apply }: { apply: boolean }) => {
   const db = mongoose.connection;
@@ -80,7 +96,7 @@ export const migratePaymentCategories = async ({ apply }: { apply: boolean }) =>
     const payments = db.collection<StoredPayment>(name);
     const found = await payments.find({ category: OLD }).toArray();
     const writes = found.flatMap(payment => {
-      const category = newCategory(payment.category, payment.name);
+      const category = newCategory(payment.category, payment);
       return category
         ? [{ updateOne: { filter: { _id: payment._id }, update: { $set: { category } } } }]
         : [];
@@ -96,7 +112,7 @@ export const migratePaymentCategories = async ({ apply }: { apply: boolean }) =>
   const found = await records.find({ 'payment.category': OLD }).toArray();
   result.records = found.length;
   const writes = found.flatMap(record => {
-    const category = newCategory(record.payment.category, record.payment.name);
+    const category = newCategory(record.payment.category, record.payment);
     return category
       ? [
           {
