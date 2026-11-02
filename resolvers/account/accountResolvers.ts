@@ -1,6 +1,7 @@
 import type { Request } from 'express';
 import { isValidObjectId, type ClientSession, type Types } from 'mongoose';
 import { AccountKind } from '../../constants/account/accountKind';
+import { InterestFrequency } from '../../constants/account/interestFrequency';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
 import { Account } from '../../models/account/Account';
@@ -8,15 +9,21 @@ import { Budget } from '../../models/budget/Budget';
 import { OneOffPayment } from '../../models/payment/OneOffPayment';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
 import type {
+  AccountInterestInput,
   AssignPaymentAccountsInput,
+  ConfirmInterestInput,
   CreateAccountInput,
   UpdateAccountBalancesInput,
   UpdateAccountInput
 } from '../../types/account/accountTypes';
+import { followingInterestDate, nextMonthlyDate } from '../../utils/dates/interest';
+import { ukDay } from '../../utils/dates/recurrence';
 import {
   ACCOUNT_NOT_ALLOWED,
   ACCOUNT_NOT_FOUND,
   BUDGET_NOT_FOUND,
+  INTEREST_DATE_PASSED,
+  INTEREST_NOT_SCHEDULED,
   PAID_INTO_ACCOUNT_FIXED,
   PAID_INTO_ACCOUNT_MISSING,
   PAID_INTO_NOT_SPENDING,
@@ -25,6 +32,7 @@ import {
   RECURRING_PAYMENT_NOT_FOUND,
   accountBalances,
   accountInput,
+  interestCheck,
   newAccount,
   parseInput,
   roundPence,
@@ -140,6 +148,27 @@ const findOwnAccount = async (id: string, req: Request) => {
   return account;
 };
 
+/*
+ * Interest as it's kept: a monthly payment's next date from its day, the others' from the date
+ * given, which has to be after today. Only savings earn it.
+ */
+export const interestOf = (
+  input: AccountInterestInput | null | undefined,
+  { savings }: { savings: boolean }
+) => {
+  if (!input || !savings) return null;
+  const { rate, frequency } = input;
+  if (!frequency) return { rate, frequency: null, day: null, nextDate: null };
+  const today = ukDay();
+  if (frequency === InterestFrequency.MONTHLY) {
+    const day = input.day!;
+    return { rate, frequency, day, nextDate: nextMonthlyDate(day, today) };
+  }
+  const nextDate = new Date(`${input.nextDate!.slice(0, 10)}T00:00:00Z`);
+  if (nextDate <= today) throw INTEREST_DATE_PASSED();
+  return { rate, frequency, day: nextDate.getUTCDate(), nextDate };
+};
+
 const withBudget = async (account: AccountDocument | null, budgetId: BudgetId) => {
   const budget = await Budget.findById(budgetId);
   if (!budget) throw BUDGET_NOT_FOUND(budgetId);
@@ -155,7 +184,7 @@ const createAccount = async (
   req: Request
 ) => {
   checkAuth(req);
-  const { budgetId, name, kind, balance, counts, paidInto, interestRate, purpose } = parseInput(
+  const { budgetId, name, kind, balance, counts, paidInto, interest, purpose } = parseInput(
     newAccount,
     input
   );
@@ -170,7 +199,7 @@ const createAccount = async (
     kind: kind ?? AccountKind.SAVINGS,
     balance,
     counts: paidInto ? true : (counts ?? spending),
-    interestRate: interestRate ?? null,
+    interest: interestOf(interest, { savings: (kind ?? AccountKind.SAVINGS) === AccountKind.SAVINGS }),
     purpose: purpose ?? null,
     balanceUpdatedAt: new Date()
   });
@@ -203,7 +232,7 @@ const updateAccount = async (
 ) => {
   checkAuth(req);
   const account = await findOwnAccount(id, req);
-  const { name, kind, balance, counts, paidInto, interestRate, purpose } = parseInput(
+  const { name, kind, balance, counts, paidInto, interest, purpose } = parseInput(
     accountInput,
     input
   );
@@ -227,7 +256,9 @@ const updateAccount = async (
     // otherwise
     else if (becameSavings) account.counts = false;
     else if (becameSpending) account.counts = true;
-    if (interestRate !== undefined) account.interestRate = interestRate;
+    // Only savings earn interest, so an account that becomes one to spend from stops
+    if (interest !== undefined) account.interest = interestOf(interest, { savings: !spending });
+    else if (becameSpending) account.interest = null;
     if (purpose !== undefined) account.purpose = purpose;
 
     if (becameSavings) {
@@ -360,12 +391,43 @@ export const accountFields = {
     payment.account ? String(payment.account) : null
 };
 
+/*
+ * A savings account's interest payment, once the user has checked it: what the bank paid goes on
+ * the balance, which is dated now as they've just looked. No amount means none was paid this time.
+ * Either way it moves on to the next payment, or a fixed-term account has matured and stops.
+ */
+const confirmInterest = async (
+  _: unknown,
+  { input }: { input: ConfirmInterestInput },
+  req: Request
+) => {
+  checkAuth(req);
+  const account = await findOwnAccount(input.accountId, req);
+  const { amount } = parseInput(interestCheck, input);
+  const interest = account.interest;
+  if (!interest?.frequency || !interest.nextDate) throw INTEREST_NOT_SCHEDULED();
+
+  if (amount) setBalance(account, roundPence(account.balance + amount));
+  account.interest = {
+    rate: interest.rate,
+    frequency: interest.frequency,
+    day: interest.day,
+    nextDate: followingInterestDate(
+      { frequency: interest.frequency, day: interest.day ?? interest.nextDate.getUTCDate() },
+      interest.nextDate
+    )
+  };
+  await account.save();
+  return withBudget(account, account.budget);
+};
+
 export const accountResolvers = {
   Mutation: {
     createAccount,
     updateAccount,
     deleteAccount,
     updateAccountBalances,
-    assignPaymentAccounts
+    assignPaymentAccounts,
+    confirmInterest
   }
 };

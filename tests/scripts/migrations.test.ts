@@ -7,6 +7,7 @@ import { fromIsoDay } from '../../utils/payday/paydays';
 import { moveHandledToRecords } from '../../scripts/migrations/handledToRecords';
 import { migrateRenewalReminders } from '../../scripts/migrations/renewalReminders';
 import { migratePaymentCategories, newCategory } from '../../scripts/migrations/paymentCategories';
+import { migrateAccountInterest } from '../../scripts/migrations/accountInterest';
 
 beforeAll(setupTestApp);
 afterAll(teardownTestApp);
@@ -396,5 +397,30 @@ describe('migratePaymentCategories', () => {
       records: 0,
       changed: 0
     });
+  });
+});
+
+describe('migrateAccountInterest', () => {
+  const accounts = () => mongoose.connection.collection('accounts');
+
+  it('carries a rate over as interest with no schedule, and leaves none as none', async () => {
+    const budget = oid('64b000000000000000000001');
+    const { insertedIds } = await accounts().insertMany([
+        { budget, name: 'Cash ISA', kind: 'SAVINGS', balance: 8650, counts: false, interestRate: 4.5 },
+        { budget, name: 'Pot', kind: 'SAVINGS', balance: 100, counts: false, interestRate: null }
+    ]);
+    const [rated, none] = [insertedIds[0], insertedIds[1]];
+
+    expect(await migrateAccountInterest({ apply: false })).toEqual({ found: 2, withRate: 1, changed: 0 });
+    expect((await accounts().findOne({ _id: rated }))?.interestRate).toBe(4.5);
+
+    expect(await migrateAccountInterest({ apply: true })).toEqual({ found: 2, withRate: 1, changed: 2 });
+    const after = await accounts().findOne({ _id: rated });
+    expect(after?.interest).toEqual({ rate: 4.5, frequency: null, day: null, nextDate: null });
+    expect(after).not.toHaveProperty('interestRate');
+    expect((await accounts().findOne({ _id: none }))?.interest).toBeNull();
+
+    // Again, it has nothing left to do
+    expect(await migrateAccountInterest({ apply: true })).toEqual({ found: 0, withRate: 0, changed: 0 });
   });
 });

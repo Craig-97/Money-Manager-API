@@ -24,6 +24,7 @@ import {
   paidIntoAccountOf,
   setBalance,
   setBalances,
+  interestOf,
 } from "../account/accountResolvers";
 import { checkBudgetAccess, checkAuth } from "../../middleware/isAuth";
 import { Budget } from "../../models/budget/Budget";
@@ -158,14 +159,14 @@ const createBudget = async (
       balanceUpdatedAt: new Date(),
     }).save({ session });
     const keys = new Map<string, Types.ObjectId>([[PAID_INTO_KEY, paidInto._id]]);
-    for (const { key, kind, counts, interestRate, purpose, ...account } of accounts ?? []) {
+    for (const { key, kind, counts, interest, purpose, ...account } of accounts ?? []) {
       const spending = kind === AccountKind.SPENDING;
       const saved = await new Account({
         ...account,
         budget: budget._id,
         kind: kind ?? AccountKind.SAVINGS,
         counts: counts ?? spending,
-        interestRate: interestRate ?? null,
+        interest: interestOf(interest, { savings: (kind ?? AccountKind.SAVINGS) === AccountKind.SAVINGS }),
         purpose: purpose ?? null,
         balanceUpdatedAt: new Date(),
       }).save({ session });

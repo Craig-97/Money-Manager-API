@@ -1,8 +1,38 @@
 import { AccountKind } from '../../constants/account/accountKind';
+import { InterestFrequency } from '../../constants/account/interestFrequency';
 import { gqlEnum } from '../../utils/helpers/enumHelpers';
 
 export const accountTypeDefs = `
   ${gqlEnum('AccountKind', AccountKind)}
+  ${gqlEnum('InterestFrequency', InterestFrequency)}
+
+  # A savings account's interest. With a frequency it's worked out each day and each payment is
+  # checked before it's added; without one the rate is shown only.
+  type AccountInterest {
+    # AER, as a percentage
+    rate: Float!
+    frequency: InterestFrequency
+    # The day of the month a monthly payment lands on
+    day: Int
+    # When it's next paid. None once a fixed-term account has matured.
+    nextDate: String
+  }
+
+  # MONTHLY needs day (1 to 31); the others need nextDate, after today. A monthly payment's
+  # nextDate is worked out from its day.
+  input AccountInterestInput {
+    rate: Float!
+    frequency: InterestFrequency
+    day: Int
+    nextDate: String
+  }
+
+  # amount is what the bank paid. Without one there was no interest this time, so nothing's added.
+  # Either way it moves on to the next payment, or ends once a fixed-term account has matured.
+  input ConfirmInterestInput {
+    accountId: ID!
+    amount: Float
+  }
 
   # A bank account in a budget: one to spend from, or savings. Balances are typed in, never linked
   # to a bank.
@@ -15,8 +45,8 @@ export const accountTypeDefs = `
     counts: Boolean!
     # Where pay lands: one spending account per budget. Payments that don't name an account use it.
     paidInto: Boolean!
-    # Shown only, never added to the balance
-    interestRate: Float
+    # Savings only. None for an account that isn't savings or has no rate.
+    interest: AccountInterest
     # What it's for, e.g. "Holiday fund"
     purpose: String
     # When the balance was last typed in
@@ -33,7 +63,7 @@ export const accountTypeDefs = `
     balance: Float!
     counts: Boolean
     paidInto: Boolean
-    interestRate: Float
+    interest: AccountInterestInput
     purpose: String
   }
 
@@ -45,7 +75,8 @@ export const accountTypeDefs = `
     balance: Float
     counts: Boolean
     paidInto: Boolean
-    interestRate: Float
+    # Null stops it
+    interest: AccountInterestInput
     purpose: String
   }
 
@@ -84,6 +115,8 @@ export const accountTypeDefs = `
     deleteAccount(id: ID!): AccountResponse!
     # Balances typed in together, e.g. the dashboard's bank balance across several accounts
     updateAccountBalances(input: UpdateAccountBalancesInput!): BudgetResponse!
+    # A savings account's interest payment, checked: added to the balance, which is dated now
+    confirmInterest(input: ConfirmInterestInput!): AccountResponse!
     # Which account each of several recurring payments goes out of or into
     assignPaymentAccounts(input: AssignPaymentAccountsInput!): BudgetResponse!
   }

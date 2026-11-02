@@ -45,7 +45,7 @@ export const balancesToAccounts = async ({ apply }: { apply: boolean }) => {
           paidInto: true,
           balance: typeof budget.bankBalance === 'number' ? budget.bankBalance : 0,
           counts: true,
-          interestRate: null,
+          interest: null,
           purpose: null,
           balanceUpdatedAt: now,
           createdAt: now,

@@ -32,7 +32,7 @@ export const budgetTypeDefs = `
     kind: AccountKind
     balance: Float!
     counts: Boolean
-    interestRate: Float
+    interest: AccountInterestInput
     purpose: String
   }
 

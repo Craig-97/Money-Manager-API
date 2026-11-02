@@ -6,7 +6,8 @@ beforeAll(setupTestApp);
 afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
-const ACCOUNT = 'id name kind balance counts paidInto interestRate purpose balanceUpdatedAt';
+const ACCOUNT =
+  'id name kind balance counts paidInto interest { rate frequency day nextDate } purpose balanceUpdatedAt';
 const BUDGET = `budget { bankBalance accounts { ${ACCOUNT} } }`;
 const QUERY = `query { ${BUDGET} }`;
 const CREATE = `mutation ($input: CreateAccountInput!) {
@@ -85,13 +86,13 @@ describe('accounts', () => {
 
   it('adds savings kept out of free to spend, unless switched on', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const body = await gql(CREATE, { input: { budgetId, name: '  Cash ISA ', balance: 8650, interestRate: 4.5, purpose: ' ' } }, token);
+    const body = await gql(CREATE, { input: { budgetId, name: '  Cash ISA ', balance: 8650, interest: { rate: 4.5 }, purpose: ' ' } }, token);
     expect(body.errors).toBeUndefined();
     expect(body.data.createAccount.account).toMatchObject({
       name: 'Cash ISA',
       kind: 'SAVINGS',
       counts: false,
-      interestRate: 4.5,
+      interest: { rate: 4.5, frequency: null, day: null, nextDate: null },
       purpose: null
     });
     expect(body.data.createAccount.budget.bankBalance).toBe(1000);
@@ -523,7 +524,7 @@ describe('setting up accounts with the budget', () => {
       paidIntoName: 'Everyday',
       accounts: [
         { key: 'joint', name: 'Joint bills', kind: 'SPENDING', balance: 2105 },
-        { key: 'isa', name: 'Cash ISA', balance: 8650, interestRate: 4.5 }
+        { key: 'isa', name: 'Cash ISA', balance: 8650, interest: { rate: 4.5 } }
       ],
       recurringPayments: [
         topUp({ paysInto: 'joint' }),
@@ -537,7 +538,7 @@ describe('setting up accounts with the budget', () => {
     expect(accounts).toMatchObject({
       Everyday: { kind: 'SPENDING', paidInto: true, balance: 7895 },
       'Joint bills': { kind: 'SPENDING', counts: true },
-      'Cash ISA': { kind: 'SAVINGS', counts: false, interestRate: 4.5 }
+      'Cash ISA': { kind: 'SAVINGS', counts: false, interest: { rate: 4.5 } }
     });
     expect(byName(budget.recurringPayments)).toMatchObject({
       'Joint bills top-up': { account: null, paysInto: accounts['Joint bills'].id },
@@ -552,5 +553,110 @@ describe('setting up accounts with the budget', () => {
     expect(errorCode(await setUp({ recurringPayments: [topUp({ paysInto: 'paid-into' })] }))).toBe(
       'PAYS_INTO_SAME_ACCOUNT'
     );
+  });
+});
+
+describe('savings interest', () => {
+  const CONFIRM = `mutation ($input: ConfirmInterestInput!) {
+    confirmInterest(input: $input) { account { ${ACCOUNT} } ${BUDGET} }
+  }`;
+  const iso = (ms: string) => new Date(Number(ms)).toISOString().slice(0, 10);
+  // A date some days from today, as the API takes it
+  const fromToday = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+
+  it('works out a monthly payment’s next date from its day', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const isa = await addSavings(token, budgetId, {
+      interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 }
+    });
+
+    expect(isa.interest).toMatchObject({ rate: 4.5, frequency: 'MONTHLY', day: 3 });
+    const next = new Date(Number(isa.interest.nextDate));
+    expect(next.getUTCDate()).toBe(3);
+    expect(next.getTime()).toBeGreaterThan(Date.now() - 86_400_000);
+  });
+
+  it('needs a day for monthly, and a date after today for the others', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const noDay = await gql(
+      CREATE,
+      { input: { budgetId, name: 'ISA', balance: 1, interest: { rate: 4, frequency: 'MONTHLY' } } },
+      token
+    );
+    expect(noDay.errors?.[0].message).toMatch('Choose the day of the month');
+    const noDate = await gql(
+      CREATE,
+      { input: { budgetId, name: 'Bond', balance: 1, interest: { rate: 4, frequency: 'MATURITY' } } },
+      token
+    );
+    expect(noDate.errors?.[0].message).toMatch('Choose when it’s next paid');
+    const past = await gql(
+      CREATE,
+      {
+        input: {
+          budgetId,
+          name: 'Bond',
+          balance: 1,
+          interest: { rate: 4, frequency: 'YEARLY', nextDate: fromToday(-1) }
+        }
+      },
+      token
+    );
+    expect(errorCode(past)).toBe('INTEREST_DATE_PASSED');
+  });
+
+  it('adds checked interest to the balance, dates it now and moves on a quarter', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const next = fromToday(10);
+    const easy = await addSavings(token, budgetId, {
+      counts: true,
+      interest: { rate: 4.1, frequency: 'QUARTERLY', nextDate: next }
+    });
+
+    const body = await gql(CONFIRM, { input: { accountId: easy.id, amount: 42.4 } }, token);
+    expect(body.errors).toBeUndefined();
+    const { account, budget } = body.data.confirmInterest;
+    expect(account.balance).toBe(8692.4);
+    expect(Number(account.balanceUpdatedAt)).toBeGreaterThanOrEqual(Number(easy.balanceUpdatedAt));
+    // It counts in free to spend, so the bank balance goes up too
+    expect(budget.bankBalance).toBe(1000 + 8692.4);
+    const moved = new Date(`${next}T00:00:00Z`);
+    moved.setUTCMonth(moved.getUTCMonth() + 3);
+    expect(iso(account.interest.nextDate)).toBe(moved.toISOString().slice(0, 10));
+  });
+
+  it('skips a payment without touching the balance', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const isa = await addSavings(token, budgetId, {
+      interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 }
+    });
+
+    const body = await gql(CONFIRM, { input: { accountId: isa.id } }, token);
+    expect(body.errors).toBeUndefined();
+    const { account } = body.data.confirmInterest;
+    expect(account.balance).toBe(8650);
+    expect(account.balanceUpdatedAt).toBe(isa.balanceUpdatedAt);
+    expect(new Date(Number(account.interest.nextDate)).getUTCDate()).toBe(3);
+    expect(Number(account.interest.nextDate)).toBeGreaterThan(Number(isa.interest.nextDate));
+  });
+
+  it('stops once a fixed-term account has matured', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const bond = await addSavings(token, budgetId, {
+      interest: { rate: 5, frequency: 'MATURITY', nextDate: fromToday(30) }
+    });
+
+    const body = await gql(CONFIRM, { input: { accountId: bond.id, amount: 400 } }, token);
+    expect(body.data.confirmInterest.account.interest).toMatchObject({ frequency: 'MATURITY', nextDate: null });
+    const again = await gql(CONFIRM, { input: { accountId: bond.id, amount: 1 } }, token);
+    expect(errorCode(again)).toBe('INTEREST_NOT_SCHEDULED');
+  });
+
+  it('stops for an account that becomes one to spend from', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const isa = await addSavings(token, budgetId, { interest: { rate: 4.5 } });
+
+    const body = await gql(UPDATE, { id: isa.id, input: { kind: 'SPENDING' } }, token);
+    expect(body.data.updateAccount.account.interest).toBeNull();
   });
 });

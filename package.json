@@ -19,7 +19,8 @@
     "migrate:budget-ids": "tsx scripts/removeBudgetIdLists.ts",
     "migrate:payment-records": "tsx scripts/moveHandledToRecords.ts",
     "migrate:renewal-reminders": "tsx scripts/migrateRenewalReminders.ts",
-    "migrate:payment-categories": "tsx scripts/migratePaymentCategories.ts"
+    "migrate:payment-categories": "tsx scripts/migratePaymentCategories.ts",
+    "migrate:account-interest": "tsx scripts/migrateAccountInterest.ts"
   },
   "keywords": [],
   "author": "",
