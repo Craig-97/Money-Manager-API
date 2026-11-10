@@ -11,6 +11,8 @@ import type { ReminderTiming } from '../../models/reminder/reminderTiming';
 import { addDays, nextOccurrence, occurrencesBefore } from '../dates';
 import { payTowardsDebt } from '../helpers/moneyHelpers';
 import { DEFAULT_PAYDAY, paydaysBetween, toIsoDay, type BankHolidays } from '../payday/paydays';
+import { goesOutOn, moveOf } from '../payday/nonWorkingDays';
+import type { NonWorkingDay } from '../../constants/payment/nonWorkingDay';
 import type { CalendarEvent } from './ics';
 
 // How far ahead the feed goes, and how far back, so a calendar still shows the last few weeks
@@ -34,6 +36,8 @@ export interface FeedSource {
   notes: WithId<Note>[];
   payday: Payday | null;
   holidays: BankHolidays;
+  // When a payment on a weekend or bank holiday goes out, unless it has its own choice
+  nonWorkingDay: NonWorkingDay;
   // Midnight UTC on today's date in the UK
   today: Date;
 }
@@ -54,7 +58,17 @@ const noteTitle = (body = '') => {
   return line.length > 60 ? `${line.slice(0, 59).trimEnd()}…` : line;
 };
 
-const paymentEvents = ({ feed, settings, payments, today }: FeedSource): CalendarEvent[] => {
+// When a payment's date goes out, moved off weekends and bank holidays
+const goesOut = (
+  payment: RecurringPayment,
+  { holidays, nonWorkingDay }: Pick<FeedSource, 'holidays' | 'nonWorkingDay'>
+) => {
+  const move = moveOf(payment, { rule: nonWorkingDay, holidays });
+  return (date: Date) => goesOutOn(date, move);
+};
+
+const paymentEvents = (source: FeedSource): CalendarEvent[] => {
+  const { feed, settings, payments, today } = source;
   const until = addDays(today, DAYS_AHEAD);
   return payments.flatMap(payment => {
     // Dates before the next one have been paid or skipped
@@ -69,6 +83,7 @@ const paymentEvents = ({ feed, settings, payments, today }: FeedSource): Calenda
     return occurrencesBefore(payment, payment.nextDueDate, until)
       .slice(0, MAX_PER_PAYMENT)
       .map(date => {
+        // The uid keeps the schedule's day, so a moved date updates its event rather than adding one
         const day = toIsoDay(date);
         const alarms = [
           ...(feed.payments ? alarmsFor(payment.dueReminder, settings.paymentDays) : []),
@@ -77,7 +92,7 @@ const paymentEvents = ({ feed, settings, payments, today }: FeedSource): Calenda
         const what = asRenewal ? 'renews' : income ? 'comes in' : 'due';
         return {
           uid: `due-${id}-${day}@money-manager`,
-          date: day,
+          date: toIsoDay(goesOut(payment, source)(date)),
           title: titled(`${payment.name} ${what}`, payment.amount, feed),
           alarms
         };
@@ -149,13 +164,16 @@ const REPEAT_FREQUENCIES: Partial<Record<NoteRepeat, PaymentFrequency>> = {
 };
 
 // The note's dates inside the feed's: its own, each time it repeats, or its payment's dates
-const noteDates = (note: Note, { today, payments }: { today: Date; payments: FeedSource['payments'] }) => {
+const noteDates = (note: Note, source: FeedSource) => {
+  const { today, payments } = source;
   const from = addDays(today, -DAYS_BEHIND);
   const until = addDays(today, DAYS_AHEAD);
   if (note.repeat === NoteRepeat.WITH_PAYMENT) {
     const payment = payments.find(item => String(item._id) === String(note.payment));
     return payment?.nextDueDate
-      ? occurrencesBefore(payment, payment.nextDueDate, until).slice(0, MAX_PER_PAYMENT)
+      ? occurrencesBefore(payment, payment.nextDueDate, until)
+          .slice(0, MAX_PER_PAYMENT)
+          .map(goesOut(payment, source))
       : [];
   }
   if (!note.date) return [];
@@ -164,10 +182,11 @@ const noteDates = (note: Note, { today, payments }: { today: Date; payments: Fee
   return occurrencesBefore({ firstPaymentDate: note.date, frequency }, from, until);
 };
 
-const noteEvents = ({ feed, notes, payments, today }: FeedSource): CalendarEvent[] => {
+const noteEvents = (source: FeedSource): CalendarEvent[] => {
+  const { feed, notes } = source;
   if (!feed.notes) return [];
   return notes.flatMap(note =>
-    noteDates(note, { today, payments }).map(date => {
+    noteDates(note, source).map(date => {
       const day = toIsoDay(date);
       return {
         uid: `note-${note._id.toString()}-${day}@money-manager`,
@@ -193,12 +212,13 @@ const debtFreeDay = (payment: RecurringPayment) => {
   return null;
 };
 
-const debtFreeEvents = ({ feed, payments }: FeedSource): CalendarEvent[] => {
+const debtFreeEvents = (source: FeedSource): CalendarEvent[] => {
+  const { feed, payments } = source;
   if (!feed.debtFree) return [];
   return payments.flatMap(payment => {
     const date = debtFreeDay(payment);
     if (!date) return [];
-    const day = toIsoDay(date);
+    const day = toIsoDay(goesOut(payment, source)(date));
     return [
       {
         uid: `debt-free-${payment._id.toString()}@money-manager`,

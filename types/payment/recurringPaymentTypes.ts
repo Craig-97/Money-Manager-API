@@ -1,5 +1,5 @@
 import type { PaymentType } from '../../constants/payment/paymentType';
-import type { PaymentFrequency, PaymentCategory } from '../../constants/payment';
+import type { PaymentFrequency, PaymentCategory, NonWorkingDay } from '../../constants/payment';
 
 // Days left out (null) follow the budget's usual timing
 export interface ReminderTimingInput {
@@ -29,6 +29,7 @@ export interface RecurringPaymentFields {
   // A savings account it pays into; null stops it
   account?: string | null;
   paysInto?: string | null;
+  nonWorkingDay?: NonWorkingDay | null;
 }
 
 export interface CreateRecurringPaymentInput extends RecurringPaymentFields {

@@ -1,6 +1,7 @@
 import mongoose, { Schema, Types } from 'mongoose';
 import { PaymentFrequency, PaymentCategory } from '../../constants/payment';
 import { PaymentType } from '../../constants/payment/paymentType';
+import { NonWorkingDay } from '../../constants/payment/nonWorkingDay';
 import { addDays, nextOccurrence, ukDay } from '../../utils/dates';
 import { enumValues } from '../../utils/helpers/enumHelpers';
 import { PaymentRecord } from './PaymentRecord';
@@ -43,6 +44,9 @@ export interface RecurringPayment {
   // Another of the budget's accounts it moves money into, like a standing order: marking it paid
   // adds the amount there. Only ever on an expense, and never on a debt.
   paysInto?: Types.ObjectId | null;
+  // When a date on a weekend or bank holiday goes out; null follows the budget's choice. Its dates
+  // stay as the schedule gives them, and are moved wherever they're compared with a payday or today.
+  nonWorkingDay?: NonWorkingDay | null;
 }
 
 const debtSchema = new Schema<Debt>(
@@ -114,7 +118,8 @@ const recurringPaymentSchema = new Schema<RecurringPayment>({
     default: undefined
   },
   account: { type: Schema.Types.ObjectId, ref: 'Account', default: null },
-  paysInto: { type: Schema.Types.ObjectId, ref: 'Account', default: null }
+  paysInto: { type: Schema.Types.ObjectId, ref: 'Account', default: null },
+  nonWorkingDay: { type: String, enum: enumValues(NonWorkingDay), default: null }
 });
 
 /*

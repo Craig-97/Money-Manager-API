@@ -26,6 +26,12 @@ import {
   setBalances,
   interestOf,
 } from "../account/accountResolvers";
+import {
+  budgetMoves,
+  datesOutBefore,
+  goesOutOn,
+  moveOf,
+} from "../../utils/payday/nonWorkingDays";
 import { checkBudgetAccess, checkAuth } from "../../middleware/isAuth";
 import { Budget } from "../../models/budget/Budget";
 import { User } from "../../models/user/User";
@@ -233,8 +239,8 @@ const updateBudget = async (
   checkAuth(req);
   await checkBudgetAccess(id, req);
 
-  const { monthlyIncome } = parseInput(budgetInput, input);
-  if (monthlyIncome === undefined) {
+  const { monthlyIncome, nonWorkingDay } = parseInput(budgetInput, input);
+  if (monthlyIncome === undefined && !nonWorkingDay) {
     throw BUDGET_UPDATE_FAILED();
   }
 
@@ -243,7 +249,9 @@ const updateBudget = async (
     throw BUDGET_NOT_FOUND(id);
   }
 
-  budget.monthlyIncome = monthlyIncome;
+  if (monthlyIncome !== undefined) budget.monthlyIncome = monthlyIncome;
+  // Applies straight away: the dates still to go out move, while records keep the dates they had
+  if (nonWorkingDay) budget.nonWorkingDay = nonWorkingDay;
 
   incrementVersion(budget);
   await budget.save();
@@ -283,6 +291,11 @@ const startPaydayCycle = async (
     const payments = await RecurringPayment.find({ budget: budgetId }).session(
       session,
     );
+    // Whether a date fell before payday, or has gone out by today, is decided by when it goes out
+    const moves = await budgetMoves(
+      budget,
+      await Payday.findOne({ budget: budgetId }).session(session),
+    );
     const outcomes = new Map(
       leftOver.map(({ recurringPaymentId, outcome }) => [recurringPaymentId, outcome]),
     );
@@ -314,9 +327,15 @@ const startPaydayCycle = async (
     for (const payment of payments) {
       let changed = false;
       const outcome = outcomes.get(payment.id);
+      const move = moveOf(payment, moves);
       const next = payment.nextDueDate;
-      if (next && next < cycleStart && outcome && outcome !== LeftOverOutcome.DUE) {
-        const dates = occurrencesBefore(payment, next, cycleStart);
+      if (
+        next &&
+        goesOutOn(next, move) < cycleStart &&
+        outcome &&
+        outcome !== LeftOverOutcome.DUE
+      ) {
+        const dates = datesOutBefore(payment, { from: next, until: cycleStart, move });
         changed =
           outcome === LeftOverOutcome.PAID
             ? await recordAlreadyPaid(payment, { dates, session, open: false })
@@ -326,8 +345,9 @@ const startPaydayCycle = async (
               });
       }
       // Gone out since payday: its dates up to today, once it's in the new cycle
-      if (goneOut.has(payment.id) && payment.nextDueDate && payment.nextDueDate >= cycleStart) {
-        const dates = occurrencesBefore(payment, payment.nextDueDate, addDays(today, 1));
+      const after = payment.nextDueDate;
+      if (goneOut.has(payment.id) && after && goesOutOn(after, move) >= cycleStart) {
+        const dates = datesOutBefore(payment, { from: after, until: addDays(today, 1), move });
         if (await recordAlreadyPaid(payment, { dates, session, open: true })) changed = true;
       }
       if (!changed) continue;
@@ -380,6 +400,18 @@ type AccountId = Types.ObjectId | null | undefined;
 type BalanceEffect = number | { amount: number; account: AccountId };
 
 /* Moves an account's balance; none means the one pay lands in */
+/* What moves the budget's payments off weekends and bank holidays */
+const movesOf = async (budgetId: string) => {
+  const [budget, payday] = await Promise.all([
+    Budget.findById(budgetId),
+    Payday.findOne({ budget: budgetId }),
+  ]);
+  if (!budget) {
+    throw BUDGET_NOT_FOUND(budgetId);
+  }
+  return budgetMoves(budget, payday);
+};
+
 const moveOn = async (
   budgetId: string,
   { account, amount, session }: { account: AccountId; amount: number; session: ClientSession },
@@ -655,6 +687,8 @@ const skipRecurringPayments = async (
     input,
   );
   await checkBudgetAccess(budgetId, req);
+  // Skipping the rest of a cycle takes the dates that go out before payday
+  const moves = until ? await movesOf(budgetId) : null;
 
   return changeRecurringPayments(
     budgetId,
@@ -662,9 +696,14 @@ const skipRecurringPayments = async (
     async (payment, session) => {
       const next = payment.nextDueDate;
       if (!next) return null;
-      const dates = until
-        ? occurrencesBefore(payment, next, new Date(until))
-        : [next];
+      const dates =
+        until && moves
+          ? datesOutBefore(payment, {
+              from: next,
+              until: new Date(until),
+              move: moveOf(payment, moves),
+            })
+          : [next];
       return (await handle(payment, PaymentRecordKind.SKIPPED, dates, session))
         ? 0
         : null;

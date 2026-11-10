@@ -1,4 +1,6 @@
 import mongoose, { Schema, Types } from 'mongoose';
+import { NonWorkingDay } from '../../constants/payment/nonWorkingDay';
+import { enumValues } from '../../utils/helpers/enumHelpers';
 
 // The bank balance lives on the budget's accounts. Budgets saved before them carry a bankBalance
 // until npm run migrate:accounts moves it to the account pay lands in.
@@ -11,6 +13,8 @@ export interface Budget {
   reminderSettings: ReminderSettings;
   // The calendar feed: a private address a calendar app checks, with the dates it carries
   calendarFeed: CalendarFeed;
+  // When a payment that falls on a weekend or bank holiday goes out, unless it has its own choice
+  nonWorkingDay: NonWorkingDay;
 }
 
 export interface ReminderSettings {
@@ -63,7 +67,8 @@ const BudgetSchema = new Schema<Budget>({
   user: { type: Schema.Types.ObjectId, ref: 'User' },
   cycleStartedOn: Date,
   reminderSettings: { type: reminderSettingsSchema, default: () => ({}) },
-  calendarFeed: { type: calendarFeedSchema, default: () => ({}) }
+  calendarFeed: { type: calendarFeedSchema, default: () => ({}) },
+  nonWorkingDay: { type: String, enum: enumValues(NonWorkingDay), default: NonWorkingDay.NEXT }
 });
 
 // Used for ensuring one budget per user and quick user->budget lookups

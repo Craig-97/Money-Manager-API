@@ -42,7 +42,7 @@ const addDays = (date: Date, days: number) => new Date(date.getTime() + days * D
 export const toIsoDay = (date: Date) => date.toISOString().slice(0, 10);
 export const fromIsoDay = (value: string) => new Date(`${value}T00:00:00Z`);
 
-const isWorkingDay = (date: Date, holidays: BankHolidays) =>
+export const isWorkingDay = (date: Date, holidays: BankHolidays) =>
   date.getUTCDay() !== 0 && date.getUTCDay() !== 6 && !holidays.has(toIsoDay(date));
 
 // Pay that would land on a weekend or bank holiday arrives the working day before

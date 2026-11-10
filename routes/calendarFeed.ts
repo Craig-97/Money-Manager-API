@@ -51,6 +51,7 @@ export const calendarFeed = async (req: Request, res: Response) => {
       notes,
       payday,
       holidays: await bankHolidaysFor(payday?.bankHolidayRegion),
+      nonWorkingDay: budget.nonWorkingDay,
       today: ukDay()
     });
 

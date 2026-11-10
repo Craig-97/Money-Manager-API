@@ -283,6 +283,20 @@ describe('updateBudget', () => {
     });
   });
 
+  it('sets when weekend and bank holiday payments go out, the next working day to start with', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const SETTING = `mutation ($id: ID!, $input: UpdateBudgetInput!) {
+      updateBudget(id: $id, input: $input) { budget { monthlyIncome nonWorkingDay } }
+    }`;
+    const before = await gql(`query { budget { nonWorkingDay } }`, {}, token);
+    expect(before.data.budget.nonWorkingDay).toBe('NEXT');
+
+    const body = await gql(SETTING, { id: budgetId, input: { nonWorkingDay: 'BEFORE' } }, token);
+    expect(body.errors).toBeUndefined();
+    // The income is left as it was
+    expect(body.data.updateBudget.budget).toEqual({ monthlyIncome: 2000, nonWorkingDay: 'BEFORE' });
+  });
+
   it('returns whatever is selected on the budget', async () => {
     const { token, budgetId } = await createUserWithBudget();
     await gql(NOTE, { input: { budgetId, body: 'Kept' } }, token);

@@ -1,6 +1,6 @@
 import { PaymentRecordKind } from '../../constants/payment/paymentRecordKind';
 import { PaymentType } from '../../constants/payment/paymentType';
-import { PaymentFrequency, PaymentCategory } from '../../constants/payment';
+import { PaymentFrequency, PaymentCategory, NonWorkingDay } from '../../constants/payment';
 import { gqlEnum } from '../../utils/helpers/enumHelpers';
 
 export const recurringPaymentTypeDefs = `
@@ -8,6 +8,7 @@ export const recurringPaymentTypeDefs = `
   ${gqlEnum('PaymentFrequency', PaymentFrequency)}
   ${gqlEnum('PaymentType', PaymentType)}
   ${gqlEnum('PaymentRecordKind', PaymentRecordKind)}
+  ${gqlEnum('NonWorkingDay', NonWorkingDay)}
 
   type RecurringPayment {
     id: ID!
@@ -20,6 +21,7 @@ export const recurringPaymentTypeDefs = `
     firstPaymentDate: String!
     lastPaymentDate: String
     # The next date still to pay or skip, worked out from the schedule. Null once it has ended.
+    # Dates are as the schedule gives them, before moving off weekends and bank holidays.
     nextDueDate: String
     # Its pays and skips since the cycle started, oldest first: what the dashboard shows as paid or
     # skipped, and what markPaymentsUnpaid takes back (the latest first)
@@ -41,6 +43,8 @@ export const recurringPaymentTypeDefs = `
     # Another of the budget's accounts it moves money into, like a standing order: marking it paid
     # adds the amount there. Only ever on an expense, and never on a debt.
     paysInto: ID
+    # When a date on a weekend or bank holiday goes out. Null: the budget's nonWorkingDay.
+    nonWorkingDay: NonWorkingDay
   }
 
   # A loan or card a recurring payment pays off. Marking a payment paid takes the period's interest
@@ -114,6 +118,8 @@ export const recurringPaymentTypeDefs = `
     account: ID
     # Another account in the same budget; on an update, null stops it
     paysInto: ID
+    # Null follows the budget's nonWorkingDay
+    nonWorkingDay: NonWorkingDay
   }
 
   # A recurring payment created alongside its budget, so it has no budgetId yet
@@ -133,6 +139,8 @@ export const recurringPaymentTypeDefs = `
     account: ID
     # Another account in the same budget; on an update, null stops it
     paysInto: ID
+    # Null follows the budget's nonWorkingDay
+    nonWorkingDay: NonWorkingDay
   }
 
   input UpdateRecurringPaymentInput {
@@ -151,6 +159,8 @@ export const recurringPaymentTypeDefs = `
     account: ID
     # Another account in the same budget; on an update, null stops it
     paysInto: ID
+    # Null follows the budget's nonWorkingDay
+    nonWorkingDay: NonWorkingDay
   }
 
   type RecurringPaymentResponse {

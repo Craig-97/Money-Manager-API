@@ -531,7 +531,11 @@ describe("startPaydayCycle", () => {
     it("records payments that already went out since payday as paid in the new cycle, so they can be undone", async () => {
       const { token, budgetId } = await createUserWithBudget();
       // Due yesterday and not yet marked paid
-      const gym = await createPayment(token, budgetId, "Gym", day(-8), { frequency: "WEEKLY" });
+      // Days from today, so on the day it's due whatever day that is
+      const gym = await createPayment(token, budgetId, "Gym", day(-8), {
+        frequency: "WEEKLY",
+        nonWorkingDay: "ON_DAY",
+      });
       await mongoose.model("RecurringPayment").updateOne({ _id: gym.id }, { nextDueDate: new Date(day(-1)) });
 
       const body = await start(token, {
@@ -971,5 +975,80 @@ describe("skipRecurringPayments", () => {
       input: { budgetId, recurringPaymentIds: [] },
     });
     expect(errorCode(body)).toBe("UNAUTHENTICATED");
+  });
+});
+
+// 2030-01-26 and 2030-02-02 are Saturdays; the budget's choice starts as the next working day
+describe("dates on a weekend", () => {
+  it("skips the dates that go out before until, wherever their weekend moves them", async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    // Out on Monday 28 January, so not before it
+    const gym = await createPayment(token, budgetId, "Gym", "2030-01-26");
+    // Out on Friday 1 February
+    const rent = await createPayment(token, budgetId, "Rent", "2030-02-02", {
+      nonWorkingDay: "BEFORE",
+    });
+
+    const body = await skip(token, budgetId, [gym.id], "2030-01-28");
+    expect(byName(body.data.skipRecurringPayments.budget.recurringPayments).Gym).toMatchObject({
+      nextDueDate: apiDate("2030-01-26"),
+      thisCycle: [],
+    });
+
+    const rentBody = await skip(token, budgetId, [rent.id], "2030-02-02");
+    expect(byName(rentBody.data.skipRecurringPayments.budget.recurringPayments).Rent).toMatchObject({
+      nextDueDate: apiDate("2030-03-02"),
+      thisCycle: [skipped("2030-02-02")],
+    });
+  });
+
+  it("leaves a date that goes out on payday or after for the new cycle", async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    // Out on Monday 28 January, before payday
+    const gym = await createPayment(token, budgetId, "Gym", "2030-01-26");
+    // Out on payday itself
+    const rent = await createPayment(token, budgetId, "Rent", "2030-02-02", {
+      nonWorkingDay: "BEFORE",
+    });
+
+    const body = await gql(
+      START,
+      {
+        input: {
+          budgetId,
+          payday: "2030-02-01",
+          paidIntoBalance: 0,
+          leftOver: [
+            { recurringPaymentId: gym.id, outcome: "SKIPPED" },
+            { recurringPaymentId: rent.id, outcome: "SKIPPED" },
+          ],
+        },
+      },
+      token,
+    );
+
+    expect(body.errors).toBeUndefined();
+    const payments = byName(body.data.startPaydayCycle.budget.recurringPayments);
+    expect(payments.Gym.nextDueDate).toBe(apiDate("2030-02-26"));
+    expect(payments.Rent.nextDueDate).toBe(apiDate("2030-02-02"));
+  });
+
+  it("goes by the budget's choice, which can be changed, unless a payment has its own", async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const gym = await createPayment(token, budgetId, "Gym", "2030-01-26");
+    const changed = await gql(
+      `mutation ($id: ID!, $input: UpdateBudgetInput!) {
+        updateBudget(id: $id, input: $input) { budget { nonWorkingDay } }
+      }`,
+      { id: budgetId, input: { nonWorkingDay: "ON_DAY" } },
+      token,
+    );
+    expect(changed.data.updateBudget.budget.nonWorkingDay).toBe("ON_DAY");
+
+    // Out on the Saturday itself now, so it's skipped before Monday
+    const body = await skip(token, budgetId, [gym.id], "2030-01-28");
+    expect(byName(body.data.skipRecurringPayments.budget.recurringPayments).Gym).toMatchObject({
+      thisCycle: [skipped("2030-01-26")],
+    });
   });
 });

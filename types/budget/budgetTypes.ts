@@ -1,3 +1,4 @@
+import type { NonWorkingDay } from '../../constants/payment/nonWorkingDay';
 import type { LeftOverOutcome } from '../../constants/payday/leftOverOutcome';
 import type { AccountBalanceInput, CreateAccountInput } from '../account/accountTypes';
 import type { OneOffPaymentFields } from '../payment/oneOffPaymentTypes';
@@ -21,6 +22,7 @@ export interface CreateBudgetInput {
 
 export interface UpdateBudgetInput {
   monthlyIncome?: number;
+  nonWorkingDay?: NonWorkingDay;
 }
 
 export interface MarkPaymentsPaidInput {

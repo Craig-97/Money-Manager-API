@@ -46,11 +46,16 @@ const addPayment = (token: string, budgetId: string, extra: Variables) =>
         category: 'BILLS',
         frequency: 'MONTHLY',
         type: 'EXPENSE',
+        // Dates here are days from today, so they'd move whenever one fell on a weekend
+        nonWorkingDay: 'ON_DAY',
         ...extra
       }
     },
     token
   );
+
+// The next Saturday after today, as days from today
+const toSaturday = () => ((6 - ukDay().getUTCDay() + 7) % 7) || 7;
 
 // The VEVENT whose summary starts with the title, unfolded
 const eventFor = (calendar: string, title: string) => {
@@ -138,6 +143,26 @@ describe('GET /cal/:token.ics', () => {
     expect(energy).not.toContain('£');
     // A year of monthly payments
     expect(res.text.match(/SUMMARY:Energy due/g)).toHaveLength(12);
+  });
+
+  it('moves a date on a weekend to when it goes out, keeping its event', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const saturday = toSaturday();
+    await addPayment(token, budgetId, { name: 'Energy', firstPaymentDate: day(saturday), nonWorkingDay: null });
+    await addPayment(token, budgetId, {
+      name: 'Water',
+      firstPaymentDate: day(saturday),
+      nonWorkingDay: 'BEFORE'
+    });
+    const feedToken = await turnOn(token, budgetId);
+
+    const text = (await fetchFeed(feedToken)).text;
+    // The budget's choice is the next working day, the Monday; Water goes out the Friday before
+    const energy = eventFor(text, 'Energy due');
+    expect(energy).toContain(`DTSTART;VALUE=DATE:${compact(saturday + 2)}`);
+    expect(energy).toContain(`UID:due-`);
+    expect(energy).toContain(`-${day(saturday)}@money-manager`);
+    expect(eventFor(text, 'Water due')).toContain(`DTSTART;VALUE=DATE:${compact(saturday - 1)}`);
   });
 
   it('carries one-off payments still to pay, with their own timing', async () => {

@@ -23,6 +23,9 @@ export const budgetTypeDefs = `
     payday: Payday
     # The payday the current cycle was started on
     cycleStartedOn: String
+    # When a payment that falls on a weekend or bank holiday goes out, unless it has its own
+    # choice. Uses the bank holidays of the payday's region.
+    nonWorkingDay: NonWorkingDay!
   }
 
   # An account made with the budget. Payments set up alongside it name it by its key.
@@ -55,6 +58,7 @@ export const budgetTypeDefs = `
   # Balances are set on the accounts, with updateAccount
   input UpdateBudgetInput {
     monthlyIncome: Float
+    nonWorkingDay: NonWorkingDay
   }
 
   input MarkPaymentsPaidInput {

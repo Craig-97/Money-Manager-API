@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { LeftOverOutcome } from '../../../constants/payday/leftOverOutcome';
+import { NonWorkingDay } from '../../../constants/payment/nonWorkingDay';
 import { accountName, newAccount } from '../account';
 import { isoDay, money } from '../common';
 import { newOneOff, newRecurring } from '../payment';
@@ -24,7 +25,10 @@ export const newBudget = z.looseObject({
   payday: paydayInput.nullish()
 });
 
-export const budgetInput = z.looseObject({ monthlyIncome: money.optional() });
+export const budgetInput = z.looseObject({
+  monthlyIncome: money.optional(),
+  nonWorkingDay: z.enum(NonWorkingDay).nullish()
+});
 
 export const paydayCycle = z.looseObject({
   payday: isoDay,
