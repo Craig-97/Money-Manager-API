@@ -1,4 +1,4 @@
-import mongoose, { Schema, Types } from 'mongoose';
+import mongoose, { Schema, Types, type HydratedDocument } from 'mongoose';
 import { PaymentCategory } from '../../constants/payment';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { enumValues } from '../../utils/helpers/enumHelpers';
@@ -67,3 +67,5 @@ OneOffPaymentSchema.index({ budget: 1 });
 
 // Create and export the model using the schema
 export const OneOffPayment = mongoose.model<OneOffPayment>('OneOffPayment', OneOffPaymentSchema);
+
+export type OneOffPaymentDocument = HydratedDocument<OneOffPayment>;

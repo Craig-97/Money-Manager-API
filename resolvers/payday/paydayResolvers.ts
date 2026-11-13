@@ -1,24 +1,22 @@
 import type { Request } from 'express';
 import type { PaydayInput } from '../../types/payday/paydayTypes';
-import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
+import { checkAuth } from '../../middleware/isAuth';
 import { Payday } from '../../models/payday/Payday';
 import {
   PAYDAY_NOT_FOUND,
   PAYDAY_UPDATE_FAILED,
   PAYDAY_OVERRIDE_INVALID,
   incrementVersion,
+  ownDocumentOrThrow,
   parseInput,
   paydayInput,
   paydayOverride
 } from '../../utils';
+import { addDays, toIsoDay } from '../../utils/dates';
 
 const updatePayday = async (_: unknown, { id, input }: { id: string; input: PaydayInput }, req: Request) => {
   checkAuth(req);
-  const currentPayday = await Payday.findById(id);
-  if (!currentPayday) {
-    throw PAYDAY_NOT_FOUND(id);
-  }
-  await checkBudgetAccess(currentPayday.budget, req);
+  const currentPayday = await ownDocumentOrThrow(Payday, { id, req, notFound: PAYDAY_NOT_FOUND });
   input = parseInput(paydayInput, input);
 
   const mergedPayday = incrementVersion(Object.assign(currentPayday, input));
@@ -34,9 +32,6 @@ const updatePayday = async (_: unknown, { id, input }: { id: string; input: Payd
   return { payday: updatedPayday, success: true };
 };
 
-const isoDaysAgo = (days: number) =>
-  new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
-
 // Moves one payday to another date, or back to the usual date when `date` is left out. An override
 // belongs to the date the rule gave, so it stops mattering once that date has passed.
 const setPaydayOverride = async (
@@ -45,16 +40,12 @@ const setPaydayOverride = async (
   req: Request
 ) => {
   checkAuth(req);
-  const payday = await Payday.findById(id);
-  if (!payday) {
-    throw PAYDAY_NOT_FOUND(id);
-  }
-  await checkBudgetAccess(payday.budget, req);
+  const payday = await ownDocumentOrThrow(Payday, { id, req, notFound: PAYDAY_NOT_FOUND });
 
   parseInput(paydayOverride, { for: usual, date }, issue => PAYDAY_OVERRIDE_INVALID(issue.message));
 
   // A day's grace so someone just behind UTC doesn't lose an override still in force for them
-  const cutoff = isoDaysAgo(1);
+  const cutoff = toIsoDay(addDays(new Date(), -1));
   const kept = payday.overrides.filter(item => item.for !== usual && item.for >= cutoff);
   const overrides = date && date !== usual ? [...kept, { for: usual, date }] : kept;
   overrides.sort((a, b) => a.for.localeCompare(b.for));

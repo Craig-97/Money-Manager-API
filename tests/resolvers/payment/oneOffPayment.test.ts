@@ -120,6 +120,16 @@ describe('updateOneOffPayment', () => {
     });
   });
 
+  it('rejects renaming to an existing payment name, but keeps its own', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    await makePayment(token, budgetId, 'First');
+    const second = await makePayment(token, budgetId, 'Second');
+    const taken = await gql(UPDATE, { id: idOf(second), input: { name: 'First' } }, token);
+    expect(errorCode(taken)).toBe('PAYMENT_EXISTS');
+    const own = await gql(UPDATE, { id: idOf(second), input: { name: 'Second' } }, token);
+    expect(own.errors).toBeUndefined();
+  });
+
   it('returns PAYMENT_NOT_FOUND for an unknown id', async () => {
     const { token } = await createUserWithBudget();
     const body = await gql(UPDATE, { id: UNKNOWN, input: { amount: 1 } }, token);

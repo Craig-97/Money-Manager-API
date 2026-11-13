@@ -1,11 +1,5 @@
-import { PaymentType } from '../../constants/payment/paymentType';
-import { PaymentCategory } from '../../constants/payment';
-import { gqlEnum } from '../../utils/helpers/enumHelpers';
-
+// PaymentType and PaymentCategory are defined with the recurring payment types
 export const oneOffPaymentTypeDefs = `
-  ${gqlEnum('PaymentType', PaymentType)}
-  ${gqlEnum('PaymentCategory', PaymentCategory)}
-
   type OneOffPayment {
     id: ID!
     budget: ID!

@@ -1,6 +1,6 @@
 import type { PaymentFrequency } from '../../constants/payment';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+export const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Months between occurrences for the month-based frequencies
 const MONTH_STEPS: Partial<Record<PaymentFrequency, number>> = {
@@ -36,6 +36,16 @@ export const ukDay = (date: Date = new Date()) => {
 
 export const addDays = (date: Date, days: number) => new Date(date.getTime() + days * DAY_MS);
 
+/* A day as 'YYYY-MM-DD', and back to midnight UTC on it */
+export const toIsoDay = (date: Date) => date.toISOString().slice(0, 10);
+export const fromIsoDay = (value: string) => new Date(`${value}T00:00:00Z`);
+
+/* The given day in a month, or the month's last day when it's shorter: the 31st falls on 28 Feb */
+export const dayInMonth = ({ year, month, day }: { year: number; month: number; day: number }) => {
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month, Math.min(day, lastDay)));
+};
+
 /* Whole days from one day to another, negative when it's earlier */
 export const daysBetween = (from: Date, to: Date) =>
   Math.round((to.getTime() - from.getTime()) / DAY_MS);
@@ -49,10 +59,11 @@ export const occurrence = (first: Date, frequency: PaymentFrequency, k: number) 
   if (days) return addDays(first, days * k);
 
   const months = (MONTH_STEPS[frequency] ?? 1) * k;
-  const year = first.getUTCFullYear();
-  const month = first.getUTCMonth() + months;
-  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-  return new Date(Date.UTC(year, month, Math.min(first.getUTCDate(), lastDay)));
+  return dayInMonth({
+    year: first.getUTCFullYear(),
+    month: first.getUTCMonth() + months,
+    day: first.getUTCDate()
+  });
 };
 
 /* The first date the payment falls on that is on or after `from`, or null once it has ended */

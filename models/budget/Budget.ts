@@ -1,4 +1,4 @@
-import mongoose, { Schema, Types } from 'mongoose';
+import mongoose, { Schema, Types, type HydratedDocument } from 'mongoose';
 import { NonWorkingDay } from '../../constants/payment/nonWorkingDay';
 import { enumValues } from '../../utils/helpers/enumHelpers';
 
@@ -96,3 +96,5 @@ BudgetSchema.virtual('payday', onBudget('Payday', true));
 
 // Create and export the model using the schema
 export const Budget = mongoose.model<Budget>('Budget', BudgetSchema);
+
+export type BudgetDocument = HydratedDocument<Budget>;

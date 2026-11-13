@@ -3,7 +3,7 @@ import { setupTestApp, teardownTestApp, clearDatabase, gql, createUserWithBudget
 import { accountsToBudgets } from '../../scripts/migrations/accountsToBudgets';
 import { migrateBills } from '../../scripts/migrations/billsToRecurring';
 import { removeBudgetIdLists } from '../../scripts/migrations/removeBudgetIdLists';
-import { fromIsoDay } from '../../utils/payday/paydays';
+import { fromIsoDay } from '../../utils/dates';
 import { moveHandledToRecords } from '../../scripts/migrations/handledToRecords';
 import { migrateRenewalReminders } from '../../scripts/migrations/renewalReminders';
 import { migratePaymentCategories, newCategory } from '../../scripts/migrations/paymentCategories';

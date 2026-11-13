@@ -1,3 +1,5 @@
+import { addDays, fromIsoDay, toIsoDay } from '../dates/recurrence';
+
 /*
  * Writes an iCalendar (.ics) file of all-day events, the format calendar apps subscribe to. Each
  * event can carry alarms, which the calendar app sounds at 8:00 on the day.
@@ -43,12 +45,6 @@ const fold = (line: string) => {
 
 const compactDay = (date: string) => date.replace(/-/g, '');
 
-const nextDay = (date: string) => {
-  const next = new Date(`${date}T00:00:00Z`);
-  next.setUTCDate(next.getUTCDate() + 1);
-  return next.toISOString().slice(0, 10);
-};
-
 // 8:00 on the day, counted back from the start of an all-day event: -PT16H is 8:00 the day before
 const trigger = (daysBefore: number) => {
   const hours = daysBefore * 24 - ALARM_HOUR;
@@ -62,7 +58,7 @@ const eventLines = (event: CalendarEvent, now: Date) => [
   `UID:${event.uid}`,
   `DTSTAMP:${stamp(now)}`,
   `DTSTART;VALUE=DATE:${compactDay(event.date)}`,
-  `DTEND;VALUE=DATE:${compactDay(nextDay(event.date))}`,
+  `DTEND;VALUE=DATE:${compactDay(toIsoDay(addDays(fromIsoDay(event.date), 1)))}`,
   `SUMMARY:${escapeText(event.title)}`,
   ...(event.description ? [`DESCRIPTION:${escapeText(event.description)}`] : []),
   // Shows as free, so it doesn't block time

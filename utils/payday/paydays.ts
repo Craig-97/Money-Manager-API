@@ -1,5 +1,6 @@
 import type { Payday, PaydayOverride } from '../../models/payday/Payday';
 import { PayFrequency, PaydayType } from '../../constants/payday';
+import { DAY_MS, addDays, dayInMonth, fromIsoDay, toIsoDay } from '../dates/recurrence';
 
 /*
  * When a budget's paydays fall, ported from the front end's src/lib/payday so a migration and
@@ -20,8 +21,6 @@ export const DEFAULT_PAYDAY: PaydayRule = {
   type: PaydayType.LAST_DAY
 };
 
-const DAY_MS = 86_400_000;
-
 const MONTHS_BETWEEN: Partial<Record<PayFrequency, number>> = {
   MONTHLY: 1,
   QUARTERLY: 3,
@@ -37,10 +36,6 @@ const DAYS_BETWEEN: Partial<Record<PayFrequency, number>> = {
 
 const WEEKDAY_NUMBER = { MONDAY: 1, TUESDAY: 2, WEDNESDAY: 3, THURSDAY: 4, FRIDAY: 5 } as const;
 
-const day = (year: number, month: number, date: number) => new Date(Date.UTC(year, month, date));
-const addDays = (date: Date, days: number) => new Date(date.getTime() + days * DAY_MS);
-export const toIsoDay = (date: Date) => date.toISOString().slice(0, 10);
-export const fromIsoDay = (value: string) => new Date(`${value}T00:00:00Z`);
 
 export const isWorkingDay = (date: Date, holidays: BankHolidays) =>
   date.getUTCDay() !== 0 && date.getUTCDay() !== 6 && !holidays.has(toIsoDay(date));
@@ -53,14 +48,14 @@ const toWorkingDay = (date: Date, holidays: BankHolidays) => {
 };
 
 const paydayInMonth = (year: number, month: number, rule: PaydayRule) => {
-  const lastDay = day(year, month + 1, 0);
+  const lastDay = new Date(Date.UTC(year, month + 1, 0));
   switch (rule.type) {
     case PaydayType.LAST_WEEKDAY: {
       const weekday = WEEKDAY_NUMBER[rule.weekday ?? 'FRIDAY'];
       return addDays(lastDay, -((lastDay.getUTCDay() - weekday + 7) % 7));
     }
     case PaydayType.SET_DAY:
-      return day(year, month, Math.min(rule.dayOfMonth ?? 1, lastDay.getUTCDate()));
+      return dayInMonth({ year, month, day: rule.dayOfMonth ?? 1 });
     default:
       return lastDay;
   }

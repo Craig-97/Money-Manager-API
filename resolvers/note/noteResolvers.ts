@@ -13,6 +13,7 @@ import {
   NOTE_DELETE_FAILED,
   NOTE_EXISTS,
   incrementVersion,
+  ownDocumentOrThrow,
   parseInput,
   newNote,
   noteInput
@@ -51,11 +52,7 @@ const createNote = async (_: unknown, { input }: { input: CreateNoteInput }, req
 
 const updateNote = async (_: unknown, { id, input }: { id: string; input: UpdateNoteInput }, req: Request) => {
   checkAuth(req);
-  const currentNote = await Note.findById(id);
-  if (!currentNote) {
-    throw NOTE_NOT_FOUND(id);
-  }
-  await checkBudgetAccess(currentNote.budget, req);
+  const currentNote = await ownDocumentOrThrow(Note, { id, req, notFound: NOTE_NOT_FOUND });
   input = parseInput(noteInput, input);
   await checkNotePayment(input.payment, currentNote.budget);
   checkRepeat({
@@ -78,12 +75,7 @@ const updateNote = async (_: unknown, { id, input }: { id: string; input: Update
 
 const deleteNote = async (_: unknown, { id }: { id: string }, req: Request) => {
   checkAuth(req);
-  const note = await Note.findById(id);
-  if (!note) {
-    throw NOTE_NOT_FOUND(id);
-  }
-
-  await checkBudgetAccess(note.budget, req);
+  await ownDocumentOrThrow(Note, { id, req, notFound: NOTE_NOT_FOUND });
 
   const response = await Note.deleteOne({ _id: id });
   if (response.deletedCount !== 1) {

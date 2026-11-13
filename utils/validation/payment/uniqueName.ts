@@ -3,11 +3,19 @@ import { OneOffPayment } from '../../../models/payment/OneOffPayment';
 import { RecurringPayment } from '../../../models/payment/RecurringPayment';
 import { PAYMENT_EXISTS } from '../../errors';
 
+// No two payments in a budget, one-off or recurring, share a name. excludeId is the payment being
+// renamed, which can keep its own.
 export const validateUniqueName = async (
   name: string,
-  budgetId: Types.ObjectId | string,
-  session: ClientSession | null = null,
-  excludeId: Types.ObjectId | string | null = null
+  {
+    budgetId,
+    session = null,
+    excludeId = null
+  }: {
+    budgetId: Types.ObjectId | string;
+    session?: ClientSession | null;
+    excludeId?: Types.ObjectId | string | null;
+  }
 ) => {
   // Check for existing payment with same name
   const existingPayment = await OneOffPayment.findOne({

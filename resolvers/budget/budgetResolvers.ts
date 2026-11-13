@@ -25,7 +25,7 @@ import {
   paidIntoAccountOf,
   setBalance,
   setBalances,
-  interestOf,
+  newAccountFields,
 } from "../account/accountResolvers";
 import {
   budgetMoves,
@@ -34,12 +34,18 @@ import {
   moveOf,
 } from "../../utils/payday/nonWorkingDays";
 import { checkBudgetAccess, checkAuth } from "../../middleware/isAuth";
-import { Budget } from "../../models/budget/Budget";
+import { Budget, type BudgetDocument } from "../../models/budget/Budget";
 import { User } from "../../models/user/User";
 import { Note } from "../../models/note/Note";
-import { OneOffPayment } from "../../models/payment/OneOffPayment";
+import {
+  OneOffPayment,
+  type OneOffPaymentDocument,
+} from "../../models/payment/OneOffPayment";
 import { Payday } from "../../models/payday/Payday";
-import { RecurringPayment } from "../../models/payment/RecurringPayment";
+import {
+  RecurringPayment,
+  type RecurringPaymentDocument,
+} from "../../models/payment/RecurringPayment";
 import {
   PaymentRecord,
   type RecordDebt,
@@ -53,7 +59,6 @@ import {
 } from "../payment/paymentRecordResolvers";
 import {
   USER_NOT_FOUND,
-  BUDGET_NOT_FOUND,
   BUDGET_NOT_LINKED,
   BUDGET_EXISTS,
   BUDGET_UPDATE_FAILED,
@@ -64,6 +69,7 @@ import {
   PAYMENT_RECORD_NOT_FOUND,
   PAYMENT_RECORD_CLOSED,
   ACCOUNT_NOT_ALLOWED,
+  budgetOrThrow,
   incrementVersion,
   roundPence,
   withBalanceDate,
@@ -83,8 +89,6 @@ import {
   occurrencesBefore,
   ukDay,
 } from "../../utils/dates";
-
-type BudgetDocument = InstanceType<typeof Budget>;
 
 // One of the signed-in user's budgets, or their default budget when no id is given
 const findBudget = async (
@@ -109,11 +113,7 @@ const findBudget = async (
     budgetId = String(user.budget);
   }
 
-  const budget = await Budget.findById(budgetId);
-  if (!budget) {
-    throw BUDGET_NOT_FOUND(budgetId);
-  }
-  return budget;
+  return budgetOrThrow(budgetId);
 };
 
 // A new budget for the signed-in user, with any payments and payday set up alongside it
@@ -167,15 +167,10 @@ const createBudget = async (
     }).save({ session });
     const keys = new Map<string, Types.ObjectId>([[PAID_INTO_KEY, paidInto._id]]);
     for (const { key, kind, counts, interest, purpose, ...account } of accounts ?? []) {
-      const spending = kind === AccountKind.SPENDING;
       const saved = await new Account({
         ...account,
         budget: budget._id,
-        kind: kind ?? AccountKind.SAVINGS,
-        counts: counts ?? spending,
-        interest: interestOf(interest, { savings: (kind ?? AccountKind.SAVINGS) === AccountKind.SAVINGS }),
-        purpose: purpose ?? null,
-        balanceUpdatedAt: new Date(),
+        ...newAccountFields({ kind, counts, interest, purpose }),
       }).save({ session });
       keys.set(key, saved._id);
     }
@@ -193,7 +188,7 @@ const createBudget = async (
     // Check for name conflicts for all payments
     await Promise.all(
       [...oneOffPayments, ...recurringPayments].map((payment) =>
-        validateUniqueName(payment.name, budget._id, session),
+        validateUniqueName(payment.name, { budgetId: budget._id, session }),
       ),
     );
 
@@ -247,10 +242,7 @@ const updateBudget = async (
     throw BUDGET_UPDATE_FAILED();
   }
 
-  const budget = await Budget.findById(id);
-  if (!budget) {
-    throw BUDGET_NOT_FOUND(id);
-  }
+  const budget = await budgetOrThrow(id);
 
   if (monthlyIncome !== undefined) budget.monthlyIncome = monthlyIncome;
   // Applies straight away: the dates still to go out move, while records keep the dates they had
@@ -284,10 +276,7 @@ const startPaydayCycle = async (
   await checkBudgetAccess(budgetId, req);
 
   return withTransaction(async (session) => {
-    const budget = await Budget.findById(budgetId).session(session);
-    if (!budget) {
-      throw BUDGET_NOT_FOUND(budgetId);
-    }
+    const budget = await budgetOrThrow(budgetId, session);
 
     const cycleStart = new Date(payday);
     const today = ukDay();
@@ -359,22 +348,9 @@ const startPaydayCycle = async (
     }
 
     for (const id of alreadyPaid?.oneOffPaymentIds ?? []) {
-      const payment = await OneOffPayment.findOne({ _id: id, budget: budgetId }).session(session);
-      if (!payment) {
-        throw PAYMENT_NOT_FOUND(id);
-      }
+      const payment = await oneOffInBudget(id, { budgetId, session });
       if (payment.paidAt) continue;
-      await new PaymentRecord({
-        budget: payment.budget,
-        oneOffPayment: payment._id,
-        payment: snapshotOf(payment),
-        kind: PaymentRecordKind.PAID,
-        dates: [payment.dueDate ?? today],
-        balanceChange: 0,
-      }).save({ session });
-      payment.paidAt = new Date();
-      incrementVersion(payment);
-      await payment.save({ session });
+      await payOneOff(payment, { balanceChange: 0, session });
     }
 
     // The balances the user confirmed go on last, over anything moved into accounts above
@@ -395,26 +371,22 @@ const startPaydayCycle = async (
 const balanceChange = (payment: { amount: number; type: string }) =>
   payment.type === PaymentType.INCOME ? payment.amount : -payment.amount;
 
-type RecurringPaymentDocument = InstanceType<typeof RecurringPayment>;
 type AccountId = Types.ObjectId | null | undefined;
 
 // What a change does to a balance: on the payment's own account, or on the one a record says it
 // went on (none: the one pay lands in)
 type BalanceEffect = number | { amount: number; account: AccountId };
 
-/* Moves an account's balance; none means the one pay lands in */
 /* What moves the budget's payments off weekends and bank holidays */
 const movesOf = async (budgetId: string) => {
   const [budget, payday] = await Promise.all([
-    Budget.findById(budgetId),
+    budgetOrThrow(budgetId),
     Payday.findOne({ budget: budgetId }),
   ]);
-  if (!budget) {
-    throw BUDGET_NOT_FOUND(budgetId);
-  }
   return budgetMoves(budget, payday);
 };
 
+/* Moves an account's balance; none means the one pay lands in */
 const moveOn = async (
   budgetId: string,
   { account, amount, session }: { account: AccountId; amount: number; session: ClientSession },
@@ -439,10 +411,7 @@ const changeRecurringPayments = (
   more?: (session: ClientSession) => Promise<void>,
 ) =>
   withTransaction(async (session) => {
-    const budget = await Budget.findById(budgetId).session(session);
-    if (!budget) {
-      throw BUDGET_NOT_FOUND(budgetId);
-    }
+    const budget = await budgetOrThrow(budgetId, session);
 
     // Sequential: operations within a transaction session can't run in parallel
     for (const id of recurringPaymentIds) {
@@ -534,6 +503,44 @@ const payInto = async (
   return { account: payment.paysInto, amount };
 };
 
+/* A one-off in the budget, or not found */
+const oneOffInBudget = async (
+  id: string,
+  { budgetId, session }: { budgetId: string; session: ClientSession },
+) => {
+  const payment = await OneOffPayment.findOne({ _id: id, budget: budgetId }).session(session);
+  if (!payment) {
+    throw PAYMENT_NOT_FOUND(id);
+  }
+  return payment;
+};
+
+/*
+ * Marks a one-off paid on its due date, or today, and records what that did to the balance: on
+ * `account`, or none when nothing came off
+ */
+const payOneOff = async (
+  payment: OneOffPaymentDocument,
+  {
+    balanceChange,
+    account,
+    session,
+  }: { balanceChange: number; account?: Types.ObjectId; session: ClientSession },
+) => {
+  await new PaymentRecord({
+    budget: payment.budget,
+    oneOffPayment: payment._id,
+    payment: snapshotOf(payment),
+    kind: PaymentRecordKind.PAID,
+    dates: [payment.dueDate ?? ukDay()],
+    balanceChange,
+    account,
+  }).save({ session });
+  payment.paidAt = new Date();
+  incrementVersion(payment);
+  await payment.save({ session });
+};
+
 // Paying payments from the dashboard, as the bank balance sees it. A recurring payment has its
 // next date paid and moves on to the one after. A one-off is marked paid and stays until payday,
 // so paying it can be undone.
@@ -568,29 +575,12 @@ const markPaymentsPaid = async (
     },
     async (session) => {
       for (const id of oneOffPaymentIds) {
-        const payment = await OneOffPayment.findOne({
-          _id: id,
-          budget: budgetId,
-        }).session(session);
-        if (!payment) {
-          throw PAYMENT_NOT_FOUND(id);
-        }
+        const payment = await oneOffInBudget(id, { budgetId, session });
         // Already paid: nothing more comes off
         if (payment.paidAt) continue;
         const change = balanceChange(payment);
         const account = await accountFor(budgetId, { account: payment.account, session });
-        await new PaymentRecord({
-          budget: payment.budget,
-          oneOffPayment: payment._id,
-          payment: snapshotOf(payment),
-          kind: PaymentRecordKind.PAID,
-          dates: [payment.dueDate ?? ukDay()],
-          balanceChange: change,
-          account,
-        }).save({ session });
-        payment.paidAt = new Date();
-        incrementVersion(payment);
-        await payment.save({ session });
+        await payOneOff(payment, { balanceChange: change, account, session });
         await moveOn(budgetId, { account, amount: change, session });
       }
     },
@@ -633,13 +623,7 @@ const markPaymentsUnpaid = async (
     },
     async (session) => {
       for (const id of oneOffPaymentIds ?? []) {
-        const payment = await OneOffPayment.findOne({
-          _id: id,
-          budget: budgetId,
-        }).session(session);
-        if (!payment) {
-          throw PAYMENT_NOT_FOUND(id);
-        }
+        const payment = await oneOffInBudget(id, { budgetId, session });
         const record = await PaymentRecord.findOne({
           oneOffPayment: payment._id,
           open: true,

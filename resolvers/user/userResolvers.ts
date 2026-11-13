@@ -24,7 +24,7 @@ import {
   REFRESH_TOKEN_INVALID,
   MAX_REFRESH_TOKENS,
   createRefreshToken,
-  hashRefreshToken,
+  hashToken,
   readRefreshCookie,
   setRefreshCookie,
   clearRefreshCookie,
@@ -40,10 +40,6 @@ import {
 } from "../../utils";
 
 const PASSWORD_RESET_EXPIRY_MINUTES = 60;
-
-// Reset tokens are stored hashed, so lookups hash the token from the link the same way
-const hashResetToken = (token: string) =>
-  crypto.createHash("sha256").update(token).digest("hex");
 
 const createAccessToken = (user: UserDocument) =>
   jwt.sign(
@@ -153,7 +149,7 @@ const requestPasswordReset = async (
 
   // Requesting again replaces the previous token, so only the latest emailed link works
   const token = crypto.randomBytes(32).toString("hex");
-  user.passwordResetTokenHash = hashResetToken(token);
+  user.passwordResetTokenHash = hashToken(token);
   user.passwordResetExpires = new Date(
     Date.now() + PASSWORD_RESET_EXPIRY_MINUTES * 60 * 1000,
   );
@@ -172,7 +168,7 @@ const requestPasswordReset = async (
 
 const findUserByResetToken = (token: string) =>
   User.findOne({
-    passwordResetTokenHash: hashResetToken(token),
+    passwordResetTokenHash: hashToken(token),
     passwordResetExpires: { $gt: new Date() },
   });
 
@@ -272,7 +268,7 @@ const refreshSession = async (_: unknown, _1: unknown, req: Request) => {
     throw REFRESH_TOKEN_INVALID();
   }
 
-  const hash = hashRefreshToken(token);
+  const hash = hashToken(token);
   // Taking the token off the user is what claims it, so two requests can't both use it
   const user = await User.findOneAndUpdate(
     { refreshTokens: { $elemMatch: { hash, expires: { $gt: new Date() } } } },
@@ -291,7 +287,7 @@ const refreshSession = async (_: unknown, _1: unknown, req: Request) => {
 const logout = async (_: unknown, _1: unknown, req: Request) => {
   const token = readRefreshCookie(req);
   if (token) {
-    const hash = hashRefreshToken(token);
+    const hash = hashToken(token);
     await User.updateOne({ "refreshTokens.hash": hash }, { $pull: { refreshTokens: { hash } } });
   }
   clearRefreshCookie(req.res as Response);

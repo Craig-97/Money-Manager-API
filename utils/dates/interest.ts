@@ -1,4 +1,5 @@
-import { InterestFrequency } from '../../constants/account/interestFrequency';
+import type { InterestFrequency } from '../../constants/account/interestFrequency';
+import { dayInMonth } from './recurrence';
 
 // Months from one payment to the next
 export const INTEREST_MONTHS: Record<InterestFrequency, number | null> = {
@@ -7,12 +8,6 @@ export const INTEREST_MONTHS: Record<InterestFrequency, number | null> = {
   YEARLY: 12,
   // Paid once, at the end
   MATURITY: null
-};
-
-/* The given day in a month, or the month's last day when it's shorter: the 31st falls on 28 Feb */
-const dayInMonth = ({ year, month, day }: { year: number; month: number; day: number }) => {
-  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-  return new Date(Date.UTC(year, month, Math.min(day, lastDay)));
 };
 
 /* A monthly payment's next date after today, on its day of the month */

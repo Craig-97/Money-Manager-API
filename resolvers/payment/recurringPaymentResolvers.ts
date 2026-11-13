@@ -1,5 +1,4 @@
 import type { Request } from 'express';
-import { isValidObjectId } from 'mongoose';
 import type { CreateRecurringPaymentInput, UpdateRecurringPaymentInput } from '../../types/payment/recurringPaymentTypes';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { enumValues } from '../../utils/helpers/enumHelpers';
@@ -15,10 +14,10 @@ import { accrueDebt } from '../../utils/interest';
 import {
   RECURRING_PAYMENT_NOT_FOUND,
   RECURRING_PAYMENTS_NOT_FOUND,
-  RECURRING_PAYMENT_EXISTS,
   RECURRING_PAYMENT_UPDATE_FAILED,
   RECURRING_PAYMENT_DELETE_FAILED,
   INVALID_RECURRING_PAYMENT_TYPE,
+  ownDocumentOrThrow,
   withTransaction,
   validateUniqueName,
   parseInput,
@@ -30,12 +29,7 @@ import {
 
 const findRecurringPayment = async (_: unknown, { id }: { id: string }, req: Request) => {
   checkAuth(req);
-  const payment = isValidObjectId(id) ? await RecurringPayment.findById(id) : null;
-  if (!payment) {
-    throw RECURRING_PAYMENT_NOT_FOUND(id);
-  }
-  await checkBudgetAccess(payment.budget, req);
-  return payment;
+  return ownDocumentOrThrow(RecurringPayment, { id, req, notFound: RECURRING_PAYMENT_NOT_FOUND });
 };
 
 const createRecurringPayment = async (_: unknown, { input }: { input: CreateRecurringPaymentInput }, req: Request) => {
@@ -50,7 +44,7 @@ const createRecurringPayment = async (_: unknown, { input }: { input: CreateRecu
 
   return withTransaction(async session => {
     // Check if payment with same name exists
-    await validateUniqueName(payment.name, budgetId, session);
+    await validateUniqueName(payment.name, { budgetId, session });
     await checkPaymentAccounts(payment, { budget: budgetId, session });
     // An expense that doesn't say which account it goes out of is recorded on where pay lands, once
     // there's more than one to spend from
@@ -75,11 +69,11 @@ const updateRecurringPayment = async (
   req: Request
 ) => {
   checkAuth(req);
-  const payment = await RecurringPayment.findById(id);
-  if (!payment) {
-    throw RECURRING_PAYMENT_NOT_FOUND(id);
-  }
-  await checkBudgetAccess(payment.budget, req);
+  const payment = await ownDocumentOrThrow(RecurringPayment, {
+    id,
+    req,
+    notFound: RECURRING_PAYMENT_NOT_FOUND
+  });
   input = parseInput(recurringInput, input);
 
   if (Object.keys(input).length === 0) {
@@ -90,16 +84,7 @@ const updateRecurringPayment = async (
     throw INVALID_RECURRING_PAYMENT_TYPE();
   }
 
-  if (input.name) {
-    const existingPayment = await RecurringPayment.findOne({
-      budget: payment.budget,
-      name: input.name,
-      _id: { $ne: id }
-    });
-    if (existingPayment) {
-      throw RECURRING_PAYMENT_EXISTS(input.name);
-    }
-  }
+  if (input.name) await validateUniqueName(input.name, { budgetId: payment.budget, excludeId: payment._id });
 
   // The renewal rules span fields the update may leave alone, so they're checked on the result
   parseInput(updatedRecurring, { ...payment.toObject(), ...input });

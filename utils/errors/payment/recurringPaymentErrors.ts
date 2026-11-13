@@ -10,11 +10,6 @@ export const RECURRING_PAYMENTS_NOT_FOUND = (budgetId: unknown) =>
     extensions: { code: 'RECURRING_PAYMENTS_NOT_FOUND' }
   });
 
-export const RECURRING_PAYMENT_EXISTS = (name: string) =>
-  new GraphQLError(`Recurring payment with name '${name}' already exists`, {
-    extensions: { code: 'RECURRING_PAYMENT_EXISTS' }
-  });
-
 export const RECURRING_PAYMENT_UPDATE_FAILED = () =>
   new GraphQLError('Recurring payment cannot be updated', {
     extensions: { code: 'RECURRING_PAYMENT_UPDATE_FAILED' }

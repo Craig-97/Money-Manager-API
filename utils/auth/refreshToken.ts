@@ -1,22 +1,18 @@
 import crypto from 'crypto';
 import type { Request, Response } from 'express';
+import { DAY_MS } from '../dates/recurrence';
+import { hashToken } from './hashToken';
 
 export const REFRESH_COOKIE = 'mm_refresh';
 export const REFRESH_TOKEN_DAYS = 30;
 // A person signed in on more devices than this loses the one that was signed in longest ago
 export const MAX_REFRESH_TOKENS = 10;
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-// Only a hash of each refresh token is stored, so a leaked database can't be used to sign in
-export const hashRefreshToken = (token: string) =>
-  crypto.createHash('sha256').update(token).digest('hex');
-
 export const createRefreshToken = () => {
   const token = crypto.randomBytes(48).toString('hex');
   return {
     token,
-    hash: hashRefreshToken(token),
+    hash: hashToken(token),
     expires: new Date(Date.now() + REFRESH_TOKEN_DAYS * DAY_MS)
   };
 };

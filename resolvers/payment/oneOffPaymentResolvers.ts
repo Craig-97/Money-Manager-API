@@ -14,6 +14,7 @@ import {
   INVALID_PAYMENT_TYPE,
   withTransaction,
   incrementVersion,
+  ownDocumentOrThrow,
   validateUniqueName,
   parseInput,
   newOneOff,
@@ -31,7 +32,7 @@ const createOneOffPayment = async (_: unknown, { input }: { input: CreateOneOffP
   }
 
   return withTransaction(async session => {
-    await validateUniqueName(payment.name, budgetId, session);
+    await validateUniqueName(payment.name, { budgetId, session });
     await checkPaymentAccounts(payment, { budget: budgetId, session });
 
     const createdPayment = await new OneOffPayment({ ...payment, budget: budgetId }).save({ session });
@@ -46,12 +47,18 @@ const updateOneOffPayment = async (
   req: Request
 ) => {
   checkAuth(req);
-  const currentPayment = await OneOffPayment.findById(id);
-  if (!currentPayment) {
-    throw PAYMENT_NOT_FOUND(id);
-  }
-  await checkBudgetAccess(currentPayment.budget, req);
+  const currentPayment = await ownDocumentOrThrow(OneOffPayment, {
+    id,
+    req,
+    notFound: PAYMENT_NOT_FOUND
+  });
   input = parseInput(oneOffInput, input);
+  if (input.name) {
+    await validateUniqueName(input.name, {
+      budgetId: currentPayment.budget,
+      excludeId: currentPayment._id
+    });
+  }
   // The account rules span the type too, so they're checked on the result
   if (input.account !== undefined || input.type !== undefined) {
     await checkPaymentAccounts(

@@ -7,18 +7,16 @@ import type {
 } from '../../types/reminder/reminderTypes';
 import { ReminderAction } from '../../constants/reminder';
 import { checkBudgetAccess, checkAuth } from '../../middleware/isAuth';
-import { Budget } from '../../models/budget/Budget';
+import type { BudgetDocument } from '../../models/budget/Budget';
 import { ReminderState } from '../../models/reminder/ReminderState';
 import {
-  BUDGET_NOT_FOUND,
   REMINDER_UNTIL_INVALID,
+  budgetOrThrow,
   parseInput,
   reminderSettingsInput,
   remindersUpdate
 } from '../../utils';
-import { addDays, ukDay } from '../../utils/dates';
-
-const DAY_MS = 86_400_000;
+import { addDays, fromIsoDay, ukDay } from '../../utils/dates';
 
 // What's been done with a reminder is kept this long after it last changed. By then the date it was
 // for is long gone, so it won't come up again.
@@ -27,16 +25,12 @@ const KEEP_DAYS = 400;
 // Later can put a reminder away for a year at most
 const LATER_MAX_DAYS = 366;
 
-const keptSince = () => new Date(Date.now() - KEEP_DAYS * DAY_MS);
+const keptSince = () => addDays(new Date(), -KEEP_DAYS);
 
 const loadBudget = async (budgetId: string, req: Request) => {
   checkAuth(req);
   await checkBudgetAccess(budgetId, req);
-  const budget = await Budget.findById(budgetId);
-  if (!budget) {
-    throw BUDGET_NOT_FOUND(budgetId);
-  }
-  return budget;
+  return budgetOrThrow(budgetId);
 };
 
 // A calendar feed's secret, long enough that it can't be guessed
@@ -71,7 +65,7 @@ const UPDATES: Record<ReminderAction, (until: Date | null) => Record<string, unk
 // The day Later puts a reminder away until: after today, and within a year
 const laterDay = (until: string | null | undefined) => {
   const today = ukDay();
-  const day = until ? new Date(`${until}T00:00:00Z`) : null;
+  const day = until ? fromIsoDay(until) : null;
   if (!day || day <= today || day > addDays(today, LATER_MAX_DAYS)) {
     throw REMINDER_UNTIL_INVALID();
   }
@@ -126,8 +120,6 @@ const resetCalendarFeed = async (_: unknown, { budgetId }: { budgetId: string },
   await budget.save();
   return { budget, success: true };
 };
-
-type BudgetDocument = InstanceType<typeof Budget>;
 
 export const reminderResolvers = {
   Mutation: {

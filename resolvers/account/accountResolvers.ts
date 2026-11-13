@@ -5,7 +5,6 @@ import { InterestFrequency } from '../../constants/account/interestFrequency';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
 import { Account, type AccountInterest } from '../../models/account/Account';
-import { Budget } from '../../models/budget/Budget';
 import { OneOffPayment } from '../../models/payment/OneOffPayment';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
 import type {
@@ -15,13 +14,11 @@ import type {
   UpdateAccountBalancesInput,
   UpdateAccountInput
 } from '../../types/account/accountTypes';
-import { followingInterestDate, nextMonthlyDate } from '../../utils/dates/interest';
-import { ukDay } from '../../utils/dates/recurrence';
+import { fromIsoDay, nextMonthlyDate, ukDay } from '../../utils/dates';
 import { accrueSavings, addDueInterest, savingsAccruedTo } from '../../utils/interest';
 import {
   ACCOUNT_NOT_ALLOWED,
   ACCOUNT_NOT_FOUND,
-  BUDGET_NOT_FOUND,
   INTEREST_DATE_PASSED,
   PAID_INTO_ACCOUNT_FIXED,
   PAID_INTO_ACCOUNT_MISSING,
@@ -31,7 +28,9 @@ import {
   RECURRING_PAYMENT_NOT_FOUND,
   accountBalances,
   accountInput,
+  budgetOrThrow,
   newAccount,
+  ownDocumentOrThrow,
   parseInput,
   roundPence,
   withTransaction
@@ -185,14 +184,6 @@ export const checkPaymentAccounts = async (
   }
 };
 
-// An account the signed-in user can change: it has to be in one of their budgets
-const findOwnAccount = async (id: string, req: Request) => {
-  const account = isValidObjectId(id) ? await Account.findById(id) : null;
-  if (!account) throw ACCOUNT_NOT_FOUND(id);
-  await checkBudgetAccess(account.budget, req);
-  return account;
-};
-
 /*
  * Interest as it's kept: a monthly payment's next date from its day, the others' from the date
  * given, which has to be after today. Only savings earn it. A new one counts from today.
@@ -210,20 +201,54 @@ export const interestOf = (
     const day = input.day!;
     return { rate, frequency, day, nextDate: nextMonthlyDate(day, today), ...fresh };
   }
-  const nextDate = new Date(`${input.nextDate!.slice(0, 10)}T00:00:00Z`);
+  const nextDate = fromIsoDay(input.nextDate!.slice(0, 10));
   if (nextDate <= today) throw INTEREST_DATE_PASSED();
   return { rate, frequency, day: nextDate.getUTCDate(), nextDate, ...fresh };
 };
 
-const withBudget = async (account: AccountDocument | null, budgetId: BudgetId) => {
-  const budget = await Budget.findById(budgetId);
-  if (!budget) throw BUDGET_NOT_FOUND(budgetId);
-  return { account, budget, success: true };
+const withBudget = async (account: AccountDocument | null, budgetId: BudgetId) => ({
+  account,
+  budget: await budgetOrThrow(budgetId),
+  success: true
+});
+
+/*
+ * What a new account starts with: savings unless it says otherwise. Spending money counts in free
+ * to spend and money put aside doesn't, unless the user says otherwise.
+ */
+export const newAccountFields = ({
+  kind,
+  counts,
+  interest,
+  purpose
+}: {
+  kind?: AccountKind | null;
+  counts?: boolean | null;
+  interest?: AccountInterestInput | null;
+  purpose?: string | null;
+}) => {
+  const accountKind = kind ?? AccountKind.SAVINGS;
+  return {
+    kind: accountKind,
+    counts: counts ?? accountKind === AccountKind.SPENDING,
+    interest: interestOf(interest, { savings: accountKind === AccountKind.SAVINGS }),
+    purpose: purpose ?? null,
+    balanceUpdatedAt: new Date()
+  };
 };
 
-// A new account, savings unless it says otherwise. Spending money counts in free to spend and money
-// put aside doesn't, unless the user says otherwise. A spending account can be made where pay lands,
-// moving that from the account it was, and then it always counts.
+// Makes an account the one pay lands in, taking that off the old one first: one account per budget
+// is where pay lands
+const makePaidInto = async (account: AccountDocument, session: ClientSession) => {
+  await Account.updateMany(
+    { budget: account.budget, paidInto: true },
+    { $set: { paidInto: false } }
+  ).session(session);
+  account.paidInto = true;
+};
+
+// A new account. A spending account can be made where pay lands, moving that from the account it
+// was, and then it always counts.
 const createAccount = async (
   _: unknown,
   { input }: { input: CreateAccountInput },
@@ -242,31 +267,18 @@ const createAccount = async (
   const account = new Account({
     budget: budgetId,
     name,
-    kind: kind ?? AccountKind.SAVINGS,
     balance,
-    counts: paidInto ? true : (counts ?? spending),
-    interest: interestOf(interest, { savings: (kind ?? AccountKind.SAVINGS) === AccountKind.SAVINGS }),
-    purpose: purpose ?? null,
-    balanceUpdatedAt: new Date()
+    ...newAccountFields({ kind, counts: paidInto ? true : counts, interest, purpose })
   });
   if (!spending) return withBudget(await account.save(), budgetId);
 
   // Another account to spend from: payments that don't say which they go out of are recorded on
   // where pay lands, once that's settled
   return withTransaction(async session => {
-    if (paidInto) {
-      // Off the old one first: one account per budget is where pay lands
-      await Account.updateMany(
-        { budget: budgetId, paidInto: true },
-        { $set: { paidInto: false } }
-      ).session(session);
-      account.paidInto = true;
-    }
+    if (paidInto) await makePaidInto(account, session);
     await account.save({ session });
     await recordPaymentAccounts(budgetId, session);
-    const budget = await Budget.findById(budgetId).session(session);
-    if (!budget) throw BUDGET_NOT_FOUND(budgetId);
-    return { account, budget, success: true };
+    return { account, budget: await budgetOrThrow(budgetId, session), success: true };
   });
 };
 
@@ -282,7 +294,7 @@ const updateAccount = async (
   req: Request
 ) => {
   checkAuth(req);
-  const account = await findOwnAccount(id, req);
+  const account = await ownDocumentOrThrow(Account, { id, req, notFound: ACCOUNT_NOT_FOUND });
   const { name, kind, balance, counts, paidInto, interest, purpose } = parseInput(
     accountInput,
     input
@@ -320,21 +332,12 @@ const updateAccount = async (
     } else if (becameSpending) account.interest = null;
     if (purpose !== undefined) account.purpose = purpose;
 
-    if (paidInto && !account.paidInto) {
-      // Off the old one first: one account per budget is where pay lands
-      await Account.updateMany(
-        { budget: account.budget, paidInto: true },
-        { $set: { paidInto: false } }
-      ).session(session);
-      account.paidInto = true;
-    }
+    if (paidInto && !account.paidInto) await makePaidInto(account, session);
     // Saved first, so the accounts left to spend from are counted as they are now
     await account.save({ session });
     if (becameSavings) await moveOffAccount(account, { expenses: true, session });
     if (becameSpending) await recordPaymentAccounts(account.budget, session);
-    const budget = await Budget.findById(account.budget).session(session);
-    if (!budget) throw BUDGET_NOT_FOUND(account.budget);
-    return { account, budget, success: true };
+    return { account, budget: await budgetOrThrow(account.budget, session), success: true };
   });
 };
 
@@ -342,7 +345,7 @@ const updateAccount = async (
 // pay lands instead, and ones that moved money into it carry on as plain expenses.
 const deleteAccount = async (_: unknown, { id }: { id: string }, req: Request) => {
   checkAuth(req);
-  const account = await findOwnAccount(id, req);
+  const account = await ownDocumentOrThrow(Account, { id, req, notFound: ACCOUNT_NOT_FOUND });
   if (account.paidInto) throw PAID_INTO_ACCOUNT_FIXED('deleted');
 
   await withTransaction(async session => {
@@ -370,9 +373,7 @@ const updateAccountBalances = async (
 
   return withTransaction(async session => {
     await setBalances(budgetId, { balances, session });
-    const budget = await Budget.findById(budgetId).session(session);
-    if (!budget) throw BUDGET_NOT_FOUND(budgetId);
-    return { budget, success: true };
+    return { budget: await budgetOrThrow(budgetId, session), success: true };
   });
 };
 
@@ -408,9 +409,7 @@ const assignPaymentAccounts = async (
       payment.increment();
       await payment.save({ session });
     }
-    const budget = await Budget.findById(budgetId).session(session);
-    if (!budget) throw BUDGET_NOT_FOUND(budgetId);
-    return { budget, success: true };
+    return { budget: await budgetOrThrow(budgetId, session), success: true };
   });
 };
 

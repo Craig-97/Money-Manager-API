@@ -1,14 +1,13 @@
 import type { ClientSession, Types } from 'mongoose';
 import { PaymentRecordKind } from '../../constants/payment/paymentRecordKind';
 import { PaymentRecord } from '../../models/payment/PaymentRecord';
-import type { Debt, RecurringPayment } from '../../models/payment/RecurringPayment';
+import type { Debt, RecurringPaymentDocument } from '../../models/payment/RecurringPayment';
 import type { PaymentType } from '../../constants/payment/paymentType';
 import { ukDay } from '../../utils/dates';
 import { roundPence } from '../../utils/helpers/moneyHelpers';
 import { debtAccruedTo } from '../../utils/interest';
 
 type RecordDocument = InstanceType<typeof PaymentRecord>;
-type RecurringPaymentDocument = InstanceType<typeof RecurringPayment>;
 
 // What a record keeps of the payment it's about
 export const snapshotOf = (payment: { name: string; category: string; type: PaymentType }) => ({

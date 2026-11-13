@@ -196,12 +196,12 @@ describe('updateRecurringPayment', () => {
     expect(await mongoose.model('PaymentRecord').countDocuments()).toBe(0);
   });
 
-  it('rejects renaming to an existing recurring payment name', async () => {
+  it('rejects renaming to an existing payment name', async () => {
     const { token, budgetId } = await createUserWithBudget();
     await makePayment(token, budgetId, 'First');
     const second = await makePayment(token, budgetId, 'Second');
     const body = await gql(UPDATE, { id: idOf(second), input: { name: 'First' } }, token);
-    expect(errorCode(body)).toBe('RECURRING_PAYMENT_EXISTS');
+    expect(errorCode(body)).toBe('PAYMENT_EXISTS');
   });
 
   it('sets and clears a renewal', async () => {

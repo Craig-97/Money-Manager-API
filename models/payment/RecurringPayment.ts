@@ -1,4 +1,4 @@
-import mongoose, { Schema, Types } from 'mongoose';
+import mongoose, { Schema, Types, type HydratedDocument } from 'mongoose';
 import { PaymentFrequency, PaymentCategory } from '../../constants/payment';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { NonWorkingDay } from '../../constants/payment/nonWorkingDay';
@@ -162,3 +162,5 @@ recurringPaymentSchema.post('save', async function () {
 recurringPaymentSchema.index({ budget: 1 });
 
 export const RecurringPayment = mongoose.model<RecurringPayment>('RecurringPayment', recurringPaymentSchema);
+
+export type RecurringPaymentDocument = HydratedDocument<RecurringPayment>;
