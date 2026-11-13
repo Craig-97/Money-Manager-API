@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PaymentType } from '../../../constants/payment/paymentType';
 import { PAYMENT_REMINDER_DAYS, RENEWAL_REMINDER_DAYS } from '../../../constants/reminder';
 import { amount, isoDate, reminderTiming } from '../common';
 import { paymentName, paymentShape } from './paymentFields';
@@ -6,7 +7,7 @@ import { paymentName, paymentShape } from './paymentFields';
 // Loose, so fields without rules here (a category, a frequency) come through parsing untouched
 
 // A loan or card the payment pays off
-export const debtInput = z.object({
+const debtInput = z.object({
   balance: amount,
   startingBalance: amount.nullish(),
   apr: z.number().finite().min(0, "APR can't be negative").max(100, 'APR must be 100% or less')
@@ -59,7 +60,7 @@ const renewalRules = (payment: PaymentRuleFields, ctx: z.RefinementCtx) => {
 
 // A debt is always paid off, never paid in
 const debtRules = (payment: PaymentRuleFields, ctx: z.RefinementCtx) => {
-  if (payment.debt && payment.type === 'INCOME') {
+  if (payment.debt && payment.type === PaymentType.INCOME) {
     ctx.addIssue({ code: 'custom', message: "Income can't be tracked as a debt", path: ['debt'] });
   }
 };

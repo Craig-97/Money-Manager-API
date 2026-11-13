@@ -4,13 +4,6 @@ import { checkBudgetAccess } from '../../middleware/isAuth';
 import { Budget } from '../../models/budget/Budget';
 import { BUDGET_NOT_FOUND } from '../errors/budget/budgetErrors';
 
-const incrementVersion = <T extends { __v?: number }>(doc: T): T => {
-  doc.__v = (doc.__v || 0) + 1;
-  return doc;
-};
-
-export { incrementVersion };
-
 /* A budget by id, in the transaction when there is one */
 export const budgetOrThrow = async (id: Types.ObjectId | string, session?: ClientSession) => {
   const budget = await Budget.findById(id).session(session ?? null);

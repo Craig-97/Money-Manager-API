@@ -11,7 +11,7 @@ const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, char => `&#${char.charCodeAt(0)};`);
 
 // The front-end page that reads the token from the link and calls resetPassword
-export const passwordResetUrl = (token: string) =>
+const passwordResetUrl = (token: string) =>
   `${process.env.CLIENT_URL ?? 'http://localhost:5173'}/reset-password?token=${token}`;
 
 export const sendPasswordResetEmail = async ({

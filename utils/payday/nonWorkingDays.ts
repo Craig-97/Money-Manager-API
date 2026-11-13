@@ -13,7 +13,7 @@ import { isWorkingDay, type BankHolidays } from './paydays';
  * src/lib/payments/nonWorkingDay.ts.
  */
 
-export interface DateMove {
+interface DateMove {
   rule: NonWorkingDay;
   holidays: BankHolidays;
 }

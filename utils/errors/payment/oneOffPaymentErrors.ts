@@ -14,17 +14,7 @@ export const PAYMENT_EXISTS = (name: string) =>
     extensions: { code: 'PAYMENT_EXISTS' }
   });
 
-export const PAYMENT_UPDATE_FAILED = () =>
-  new GraphQLError('OneOffPayment cannot be updated', {
-    extensions: { code: 'PAYMENT_UPDATE_FAILED' }
-  });
-
 export const PAYMENT_DELETE_FAILED = () =>
   new GraphQLError('OneOffPayment cannot be deleted', {
     extensions: { code: 'PAYMENT_DELETE_FAILED' }
-  });
-
-export const INVALID_PAYMENT_TYPE = () =>
-  new GraphQLError('Invalid payment type. Must be either INCOME or EXPENSE', {
-    extensions: { code: 'INVALID_PAYMENT_TYPE' }
   });

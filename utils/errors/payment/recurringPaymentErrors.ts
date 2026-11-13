@@ -20,11 +20,6 @@ export const RECURRING_PAYMENT_DELETE_FAILED = () =>
     extensions: { code: 'RECURRING_PAYMENT_DELETE_FAILED' }
   });
 
-export const INVALID_RECURRING_PAYMENT_TYPE = () =>
-  new GraphQLError('Invalid payment type. Must be either INCOME or EXPENSE', {
-    extensions: { code: 'INVALID_RECURRING_PAYMENT_TYPE' }
-  });
-
 export const DEBT_NOT_TRACKED = (id: unknown) =>
   new GraphQLError(`Recurring payment with id '${id}' isn't tracked as a debt`, {
     extensions: { code: 'DEBT_NOT_TRACKED' }

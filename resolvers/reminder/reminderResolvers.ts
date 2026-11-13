@@ -34,7 +34,7 @@ const loadBudget = async (budgetId: string, req: Request) => {
 };
 
 // A calendar feed's secret, long enough that it can't be guessed
-export const newFeedToken = () => crypto.randomBytes(24).toString('base64url');
+const newFeedToken = () => crypto.randomBytes(24).toString('base64url');
 
 /* Sets when reminders go off for payments and renewals without their own timing, and payday's */
 const updateReminderSettings = async (

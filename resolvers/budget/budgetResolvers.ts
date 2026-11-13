@@ -70,7 +70,6 @@ import {
   PAYMENT_RECORD_CLOSED,
   ACCOUNT_NOT_ALLOWED,
   budgetOrThrow,
-  incrementVersion,
   roundPence,
   withBalanceDate,
   withTransaction,
@@ -248,7 +247,7 @@ const updateBudget = async (
   // Applies straight away: the dates still to go out move, while records keep the dates they had
   if (nonWorkingDay) budget.nonWorkingDay = nonWorkingDay;
 
-  incrementVersion(budget);
+  budget.increment();
   await budget.save();
 
   return { budget, success: true };
@@ -360,7 +359,7 @@ const startPaydayCycle = async (
     await setBalances(budgetId, { balances: accountBalances ?? [], session });
 
     budget.cycleStartedOn = cycleStart;
-    incrementVersion(budget);
+    budget.increment();
     await budget.save({ session });
 
     return { budget, success: true };
@@ -433,7 +432,7 @@ const changeRecurringPayments = (
 
     if (more) await more(session);
 
-    incrementVersion(budget);
+    budget.increment();
     await budget.save({ session });
 
     return { budget, success: true };
@@ -537,7 +536,7 @@ const payOneOff = async (
     account,
   }).save({ session });
   payment.paidAt = new Date();
-  incrementVersion(payment);
+  payment.increment();
   await payment.save({ session });
 };
 
@@ -632,7 +631,7 @@ const markPaymentsUnpaid = async (
         if (!record) continue;
         await PaymentRecord.deleteOne({ _id: record._id }).session(session);
         payment.paidAt = null;
-        incrementVersion(payment);
+        payment.increment();
         await payment.save({ session });
         await moveOn(budgetId, {
           account: record.account,

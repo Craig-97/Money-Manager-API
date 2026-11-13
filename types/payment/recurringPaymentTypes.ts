@@ -7,7 +7,7 @@ export interface ReminderTimingInput {
   days?: number | null;
 }
 
-export interface DebtFields {
+interface DebtFields {
   balance: number;
   startingBalance?: number | null;
   apr: number;

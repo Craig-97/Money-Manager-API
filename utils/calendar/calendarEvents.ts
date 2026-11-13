@@ -27,7 +27,7 @@ const MAX_DEBT_PAYMENTS = 600;
 
 type WithId<T> = T & { _id: { toString(): string } };
 
-export interface FeedSource {
+interface FeedSource {
   feed: CalendarFeed;
   settings: ReminderSettings;
   monthlyIncome?: number;

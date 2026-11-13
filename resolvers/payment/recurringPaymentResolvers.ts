@@ -1,7 +1,6 @@
 import type { Request } from 'express';
 import type { CreateRecurringPaymentInput, UpdateRecurringPaymentInput } from '../../types/payment/recurringPaymentTypes';
 import { PaymentType } from '../../constants/payment/paymentType';
-import { enumValues } from '../../utils/helpers/enumHelpers';
 import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
 import type { Types } from 'mongoose';
@@ -16,7 +15,6 @@ import {
   RECURRING_PAYMENTS_NOT_FOUND,
   RECURRING_PAYMENT_UPDATE_FAILED,
   RECURRING_PAYMENT_DELETE_FAILED,
-  INVALID_RECURRING_PAYMENT_TYPE,
   ownDocumentOrThrow,
   withTransaction,
   validateUniqueName,
@@ -36,11 +34,6 @@ const createRecurringPayment = async (_: unknown, { input }: { input: CreateRecu
   checkAuth(req);
   const { budgetId, ...payment } = parseInput(newRecurring, input);
   await checkBudgetAccess(budgetId, req);
-
-  // Validate payment type
-  if (!enumValues(PaymentType).includes(payment.type)) {
-    throw INVALID_RECURRING_PAYMENT_TYPE();
-  }
 
   return withTransaction(async session => {
     // Check if payment with same name exists
@@ -78,10 +71,6 @@ const updateRecurringPayment = async (
 
   if (Object.keys(input).length === 0) {
     throw RECURRING_PAYMENT_UPDATE_FAILED();
-  }
-
-  if (input.type && !enumValues(PaymentType).includes(input.type)) {
-    throw INVALID_RECURRING_PAYMENT_TYPE();
   }
 
   if (input.name) await validateUniqueName(input.name, { budgetId: payment.budget, excludeId: payment._id });

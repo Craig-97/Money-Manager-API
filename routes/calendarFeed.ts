@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { rateLimit, MINUTE } from 'express-rate-limit';
+import { NoteRepeat } from '../constants/note/noteRepeat';
 import { Budget } from '../models/budget/Budget';
 import { Note } from '../models/note/Note';
 import { Payday } from '../models/payday/Payday';
@@ -9,7 +10,7 @@ import { calendarEvents } from '../utils/calendar/calendarEvents';
 import { writeCalendar } from '../utils/calendar/ics';
 import { ukDay } from '../utils/dates';
 import { logger } from '../utils/logger';
-import { bankHolidaysFor } from '../utils/payday/bankHolidays';
+import { budgetMoves } from '../utils/payday/nonWorkingDays';
 
 // /cal/<token>.ics, where the token is the feed's secret
 const FEED_FILE = /^([A-Za-z0-9_-]{20,64})\.ics$/;
@@ -39,9 +40,10 @@ export const calendarFeed = async (req: Request, res: Response) => {
     const [payments, oneOffPayments, notes, payday] = await Promise.all([
       RecurringPayment.find({ budget: budget._id }),
       OneOffPayment.find({ budget: budget._id, paidAt: null }),
-      Note.find({ budget: budget._id, $or: [{ date: { $ne: null } }, { repeat: 'WITH_PAYMENT' }] }),
+      Note.find({ budget: budget._id, $or: [{ date: { $ne: null } }, { repeat: NoteRepeat.WITH_PAYMENT }] }),
       Payday.findOne({ budget: budget._id })
     ]);
+    const moves = await budgetMoves(budget, payday);
     const events = calendarEvents({
       feed: budget.calendarFeed,
       settings: budget.reminderSettings,
@@ -50,8 +52,8 @@ export const calendarFeed = async (req: Request, res: Response) => {
       oneOffPayments,
       notes,
       payday,
-      holidays: await bankHolidaysFor(payday?.bankHolidayRegion),
-      nonWorkingDay: budget.nonWorkingDay,
+      holidays: moves.holidays,
+      nonWorkingDay: moves.rule,
       today: ukDay()
     });
 

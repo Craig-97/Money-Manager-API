@@ -4,9 +4,7 @@ import { checkAuth } from '../../middleware/isAuth';
 import { Payday } from '../../models/payday/Payday';
 import {
   PAYDAY_NOT_FOUND,
-  PAYDAY_UPDATE_FAILED,
   PAYDAY_OVERRIDE_INVALID,
-  incrementVersion,
   ownDocumentOrThrow,
   parseInput,
   paydayInput,
@@ -19,17 +17,10 @@ const updatePayday = async (_: unknown, { id, input }: { id: string; input: Payd
   const currentPayday = await ownDocumentOrThrow(Payday, { id, req, notFound: PAYDAY_NOT_FOUND });
   input = parseInput(paydayInput, input);
 
-  const mergedPayday = incrementVersion(Object.assign(currentPayday, input));
+  Object.assign(currentPayday, input).increment();
+  await currentPayday.save();
 
-  const updatedPayday = await Payday.findOneAndUpdate({ _id: id }, mergedPayday, {
-    new: true
-  });
-
-  if (!updatedPayday) {
-    throw PAYDAY_UPDATE_FAILED();
-  }
-
-  return { payday: updatedPayday, success: true };
+  return { payday: currentPayday, success: true };
 };
 
 // Moves one payday to another date, or back to the usual date when `date` is left out. An override
@@ -50,16 +41,11 @@ const setPaydayOverride = async (
   const overrides = date && date !== usual ? [...kept, { for: usual, date }] : kept;
   overrides.sort((a, b) => a.for.localeCompare(b.for));
 
-  const edited = await Payday.findOneAndUpdate(
-    { _id: id },
-    { $set: { overrides }, $inc: { __v: 1 } },
-    { new: true }
-  );
-  if (!edited) {
-    throw PAYDAY_UPDATE_FAILED();
-  }
+  payday.set('overrides', overrides);
+  payday.increment();
+  await payday.save();
 
-  return { payday: edited, success: true };
+  return { payday, success: true };
 };
 
 export const paydayResolvers = {

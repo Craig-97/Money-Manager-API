@@ -29,7 +29,6 @@ import {
   setRefreshCookie,
   clearRefreshCookie,
   withTransaction,
-  incrementVersion,
   validatePassword,
   validateAccent,
   parseInput,
@@ -224,7 +223,7 @@ const updateCurrentUser = async (
   user.firstName = firstName;
   user.surname = surname;
   user.email = email;
-  incrementVersion(user);
+  user.increment();
   await user.save();
 
   return { user, success: true };
@@ -249,7 +248,7 @@ const changePassword = async (
 
   user.password = await bcrypt.hash(newPassword, 12);
   user.tokenVersion = (user.tokenVersion ?? 0) + 1;
-  incrementVersion(user);
+  user.increment();
   await user.save();
   // Every other device is signed out; this one carries on with a fresh session
   await signOutEverywhere(user);
@@ -317,7 +316,7 @@ const updatePreferences = async (
   if (accent) validateAccent(accent);
   if (theme) user.theme = theme;
   if (accent) user.accent = accent.toUpperCase();
-  incrementVersion(user);
+  user.increment();
   await user.save();
 
   return { user, success: true };

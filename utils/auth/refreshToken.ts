@@ -3,8 +3,8 @@ import type { Request, Response } from 'express';
 import { DAY_MS } from '../dates/recurrence';
 import { hashToken } from './hashToken';
 
-export const REFRESH_COOKIE = 'mm_refresh';
-export const REFRESH_TOKEN_DAYS = 30;
+const REFRESH_COOKIE = 'mm_refresh';
+const REFRESH_TOKEN_DAYS = 30;
 // A person signed in on more devices than this loses the one that was signed in longest ago
 export const MAX_REFRESH_TOKENS = 10;
 

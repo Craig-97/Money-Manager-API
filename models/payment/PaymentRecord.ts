@@ -5,7 +5,7 @@ import { enumValues } from '../../utils/helpers/enumHelpers';
 
 // What a payment was when the record was made, so the record still reads right after the payment
 // is renamed, or a paid one-off is cleared away at payday
-export interface PaymentSnapshot {
+interface PaymentSnapshot {
   name: string;
   category: string;
   type: PaymentType;

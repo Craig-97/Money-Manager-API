@@ -8,7 +8,7 @@ import { daysBetween } from '../dates/recurrence';
  * day of any change to the balance or rate, so each day uses the figures it closed with. It's
  * rounded only when it's added to the balance.
  */
-export interface Accrual {
+interface Accrual {
   accrued: number;
   // The first day not yet counted
   accruedTo: Date;

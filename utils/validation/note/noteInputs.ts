@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { NOTE_REMINDER_DAYS } from '../../../constants/reminder';
 import { isoDate, reminderDaysList } from '../common';
 
-export const noteBody = z
+const noteBody = z
   .string()
   .trim()
   .min(1, 'Notes cannot be empty')

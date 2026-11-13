@@ -1,7 +1,5 @@
 import type { Request } from 'express';
 import type { CreateOneOffPaymentInput, UpdateOneOffPaymentInput } from '../../types/payment/oneOffPaymentTypes';
-import { PaymentType } from '../../constants/payment/paymentType';
-import { enumValues } from '../../utils/helpers/enumHelpers';
 import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
 import { OneOffPayment } from '../../models/payment/OneOffPayment';
 import { PaymentRecord } from '../../models/payment/PaymentRecord';
@@ -9,11 +7,8 @@ import { accountFields, checkPaymentAccounts } from '../account/accountResolvers
 import {
   PAYMENT_NOT_FOUND,
   PAYMENTS_NOT_FOUND,
-  PAYMENT_UPDATE_FAILED,
   PAYMENT_DELETE_FAILED,
-  INVALID_PAYMENT_TYPE,
   withTransaction,
-  incrementVersion,
   ownDocumentOrThrow,
   validateUniqueName,
   parseInput,
@@ -25,11 +20,6 @@ const createOneOffPayment = async (_: unknown, { input }: { input: CreateOneOffP
   checkAuth(req);
   const { budgetId, ...payment } = parseInput(newOneOff, input);
   await checkBudgetAccess(budgetId, req);
-
-  // Validate type is either INCOME or EXPENSE
-  if (!enumValues(PaymentType).includes(payment.type)) {
-    throw INVALID_PAYMENT_TYPE();
-  }
 
   return withTransaction(async session => {
     await validateUniqueName(payment.name, { budgetId, session });
@@ -67,17 +57,10 @@ const updateOneOffPayment = async (
     );
   }
 
-  const mergedPayment = incrementVersion(Object.assign(currentPayment, input));
+  Object.assign(currentPayment, input).increment();
+  await currentPayment.save();
 
-  const updatedPayment = await OneOffPayment.findOneAndUpdate({ _id: id }, mergedPayment, {
-    new: true
-  });
-
-  if (!updatedPayment) {
-    throw PAYMENT_UPDATE_FAILED();
-  }
-
-  return { oneOffPayment: updatedPayment, success: true };
+  return { oneOffPayment: currentPayment, success: true };
 };
 
 const batchDeleteOneOffPayments = async (_: unknown, { ids }: { ids: string[] }, req: Request) => {

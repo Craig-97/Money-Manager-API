@@ -9,10 +9,8 @@ import {
   NOTE_NOT_FOUND,
   NOTE_PAYMENT_NOT_FOUND,
   NOTE_REPEAT_NEEDS_PAYMENT,
-  NOTE_UPDATE_FAILED,
   NOTE_DELETE_FAILED,
   NOTE_EXISTS,
-  incrementVersion,
   ownDocumentOrThrow,
   parseInput,
   newNote,
@@ -60,17 +58,10 @@ const updateNote = async (_: unknown, { id, input }: { id: string; input: Update
     payment: input.payment !== undefined ? input.payment : currentNote.payment
   });
 
-  const mergedNote = incrementVersion(Object.assign(currentNote, input));
+  Object.assign(currentNote, input).increment();
+  await currentNote.save();
 
-  const updatedNote = await Note.findOneAndUpdate({ _id: id }, mergedNote, {
-    new: true
-  });
-
-  if (!updatedNote) {
-    throw NOTE_UPDATE_FAILED();
-  }
-
-  return { note: updatedNote, success: true };
+  return { note: currentNote, success: true };
 };
 
 const deleteNote = async (_: unknown, { id }: { id: string }, req: Request) => {

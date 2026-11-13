@@ -8,7 +8,7 @@ import { DAY_MS, addDays, dayInMonth, fromIsoDay, toIsoDay } from '../dates/recu
  * whatever the server's time zone, and come out as 'YYYY-MM-DD'.
  */
 
-export type PaydayRule = Pick<Payday, 'frequency' | 'type' | 'dayOfMonth' | 'weekday' | 'firstPayDate'> & {
+type PaydayRule = Pick<Payday, 'frequency' | 'type' | 'dayOfMonth' | 'weekday' | 'firstPayDate'> & {
   overrides?: readonly PaydayOverride[];
 };
 

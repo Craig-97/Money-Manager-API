@@ -1,7 +1,7 @@
 import type { NoteColor } from '../../constants/note/noteColor';
 import type { NoteRepeat } from '../../constants/note/noteRepeat';
 
-export interface NoteFields {
+interface NoteFields {
   body: string;
   color?: NoteColor;
   // YYYY-MM-DD; null takes the date off
