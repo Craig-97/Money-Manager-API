@@ -7,7 +7,8 @@ import {
   errorCode,
   createUserWithBudget,
   GqlBody,
-  Variables
+  Variables,
+  debtInterestFrom
 } from '../../helpers';
 
 beforeAll(setupTestApp);
@@ -90,6 +91,8 @@ describe('payment history', () => {
   it('records each pay, skip, overpayment and balance change, newest first', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const payment = await recurring(token, budgetId, { debt: card });
+    // A month's £12 of interest built up by its date
+    await debtInterestFrom(payment.id, { day: '2030-01-31', accrued: 12 });
     await pay(token, budgetId, [payment.id]);
     await gql(SKIP, { input: { budgetId, recurringPaymentIds: [payment.id] } }, token);
     await gql(OVERPAY, { input: { budgetId, recurringPaymentId: payment.id, amount: 50 } }, token);
@@ -203,6 +206,8 @@ describe('paid off since payday', () => {
   it('counts what payments took off after interest, and overpayments, until payday', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const payment = await recurring(token, budgetId, { debt: card });
+    // A month's £12 of interest built up by its date
+    await debtInterestFrom(payment.id, { day: '2030-01-31', accrued: 12 });
     // Setting the balance doesn't count as paying it off
     expect(await paidOff(token)).toBe(0);
 
@@ -225,6 +230,8 @@ describe('paid off since payday', () => {
   it('is there on a payment read on its own', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const payment = await recurring(token, budgetId, { debt: card });
+    // A month's £12 of interest built up by its date
+    await debtInterestFrom(payment.id, { day: '2030-01-31', accrued: 12 });
     await pay(token, budgetId, [payment.id]);
 
     const body = await gql(

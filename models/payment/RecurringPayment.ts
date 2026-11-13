@@ -17,6 +17,11 @@ export interface Debt {
   apr: number;
   // When the balance was last set by hand
   balanceUpdatedAt?: Date | null;
+  // Interest built up since the last payment, unrounded, and the first day not yet counted in it.
+  // It's added when the next payment is marked paid. No date yet means it counts from the last
+  // payment, or when the balance was set if that's later.
+  accrued?: number;
+  accruedTo?: Date | null;
 }
 
 export interface RecurringPayment {
@@ -54,7 +59,9 @@ const debtSchema = new Schema<Debt>(
     balance: { type: Number, required: true, min: 0 },
     startingBalance: { type: Number, default: null, min: 0 },
     apr: { type: Number, required: true, min: 0, max: 100 },
-    balanceUpdatedAt: { type: Date, default: null }
+    balanceUpdatedAt: { type: Date, default: null },
+    accrued: { type: Number, default: 0 },
+    accruedTo: { type: Date, default: null }
   },
   { _id: false }
 );

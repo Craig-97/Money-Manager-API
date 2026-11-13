@@ -5,6 +5,7 @@ import type { Debt, RecurringPayment } from '../../models/payment/RecurringPayme
 import type { PaymentType } from '../../constants/payment/paymentType';
 import { ukDay } from '../../utils/dates';
 import { roundPence } from '../../utils/helpers/moneyHelpers';
+import { debtAccruedTo } from '../../utils/interest';
 
 type RecordDocument = InstanceType<typeof PaymentRecord>;
 type RecurringPaymentDocument = InstanceType<typeof RecurringPayment>;
@@ -110,5 +111,11 @@ const history = (payment: RecurringPaymentDocument, { limit }: { limit?: number 
 
 export const paymentRecordResolvers = {
   RecurringPayment: { thisCycle, history },
-  Debt: { paidOffThisCycle }
+  Debt: {
+    paidOffThisCycle,
+    // Interest built up since the last payment, and from when: one that hasn't been counted yet
+    // counts from the last payment, or when the balance was set
+    accrued: (debt: DebtDocument) => debt.accrued ?? 0,
+    accruedTo: (debt: DebtDocument) => debtAccruedTo(debt.ownerDocument())
+  }
 };

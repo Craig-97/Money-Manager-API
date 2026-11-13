@@ -3,8 +3,8 @@ import { AccountKind } from '../../constants/account/accountKind';
 import { InterestFrequency } from '../../constants/account/interestFrequency';
 
 /*
- * A savings account's interest. With a frequency it's worked out each day and the user checks each
- * payment before it's added; without one the rate is shown only.
+ * A savings account's interest. With a frequency it's worked out on each day's closing balance and
+ * added on the day it's paid; without one the rate is shown only.
  */
 export interface AccountInterest {
   // AER, as a percentage
@@ -14,6 +14,10 @@ export interface AccountInterest {
   day?: number | null;
   // When it's next paid. None once a fixed-term account has matured.
   nextDate?: Date | null;
+  // What's built up since it was last paid, unrounded, and the first day not yet counted in it.
+  // No date yet means it counts from the last payment.
+  accrued?: number;
+  accruedTo?: Date | null;
 }
 
 /*
@@ -52,7 +56,9 @@ const AccountSchema = new Schema<Account>(
           rate: { type: Number, required: true },
           frequency: { type: String, enum: Object.values(InterestFrequency), default: null },
           day: { type: Number, default: null },
-          nextDate: { type: Date, default: null }
+          nextDate: { type: Date, default: null },
+          accrued: { type: Number, default: 0 },
+          accruedTo: { type: Date, default: null }
         },
         { _id: false }
       ),

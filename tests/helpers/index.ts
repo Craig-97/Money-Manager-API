@@ -149,3 +149,19 @@ export async function createUserWithBudget({
   const budgetId = created.data.createBudget.budget.id;
   return { token, user, email, password, budgetId };
 }
+
+/*
+ * Sets what a debt has built up in interest and from which day it carries on counting, as if time
+ * had passed. With only a day, nothing has built up and it counts from then.
+ */
+export const debtInterestFrom = async (
+  paymentId: string,
+  { day, accrued = 0 }: { day: string; accrued?: number }
+) => {
+  await mongoose
+    .model('RecurringPayment')
+    .updateOne(
+      { _id: paymentId },
+      { $set: { 'debt.accrued': accrued, 'debt.accruedTo': new Date(`${day}T00:00:00Z`) } }
+    );
+};

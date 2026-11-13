@@ -16,6 +16,10 @@ export const accountTypeDefs = `
     day: Int
     # When it's next paid. None once a fixed-term account has matured.
     nextDate: String
+    # Interest built up since it was last paid, unrounded, worked out on each day's closing
+    # balance up to the start of accruedTo. The app adds the days since at the balance it has now.
+    accrued: Float!
+    accruedTo: String
   }
 
   # MONTHLY needs day (1 to 31); the others need nextDate, after today. A monthly payment's

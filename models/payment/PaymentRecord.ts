@@ -18,6 +18,9 @@ export interface RecordDebt {
   // How much less is owed afterwards; negative when the balance went up
   reduction: number;
   balanceAfter: number;
+  // The interest built up before, so undoing puts it back as it was
+  accruedBefore?: number | null;
+  accruedToBefore?: Date | null;
 }
 
 // Money a record moved into one of the budget's other accounts: a payment into savings
@@ -67,7 +70,9 @@ const recordDebtSchema = new Schema<RecordDebt>(
   {
     interest: { type: Number, required: true },
     reduction: { type: Number, required: true },
-    balanceAfter: { type: Number, required: true }
+    balanceAfter: { type: Number, required: true },
+    accruedBefore: { type: Number, default: null },
+    accruedToBefore: { type: Date, default: null }
   },
   { _id: false }
 );

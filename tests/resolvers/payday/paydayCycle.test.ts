@@ -5,6 +5,7 @@ import {
   gql,
   errorCode,
   createUserWithBudget,
+  debtInterestFrom,
 } from "../../helpers";
 import mongoose from "mongoose";
 import { nextOccurrence, ukDay } from "../../../utils/dates";
@@ -465,6 +466,8 @@ describe("startPaydayCycle", () => {
         category: "FINANCES",
         debt: { balance: 1000, apr: 12, startingBalance: 1000 },
       });
+      // £10 of interest built up by its date
+      await debtInterestFrom(card.id, { day: "2030-01-10", accrued: 10 });
 
       const body = await start(token, {
         budgetId,

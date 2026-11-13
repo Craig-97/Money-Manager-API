@@ -627,6 +627,46 @@ describe('savings interest', () => {
   // A date some days from today, as the API takes it
   const fromToday = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 
+  const BUILT_UP = `query { budget { accounts { name balance interest { rate accrued accruedTo } } } }`;
+  const isaOf = async (token: string) =>
+    byName((await gql(BUILT_UP, undefined, token)).data.budget.accounts)['Cash ISA'];
+  // As if interest had been counted up to some days ago
+  const countedFrom = (id: string, days: number) =>
+    mongoose.model('Account').updateOne(
+      { _id: id },
+      { $set: { 'interest.accrued': 0, 'interest.accruedTo': new Date(`${fromToday(-days)}T00:00:00Z`) } }
+    );
+  const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+
+  it('counts what’s built up at the old balance before a new one, and carries it on', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    // 3.65% AER on £100,000 is close to £9.83 a day
+    const isa = await addSavings(token, budgetId, {
+      balance: 100000,
+      interest: { rate: 3.65, frequency: 'MONTHLY', day: 3 }
+    });
+    expect(iso((await isaOf(token)).interest.accruedTo)).toBe(today());
+    await countedFrom(isa.id, 10);
+
+    await gql(UPDATE, { id: isa.id, input: { balance: 50000 } }, token);
+
+    const after = await isaOf(token);
+    expect(after.interest.accrued).toBeCloseTo(100000 * (1.0365 ** (1 / 365) - 1) * 10, 6);
+    expect(iso(after.interest.accruedTo)).toBe(today());
+  });
+
+  it('keeps what’s built up when the rate or day changes', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const isa = await addSavings(token, budgetId, { interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 } });
+    await countedFrom(isa.id, 5);
+
+    await gql(UPDATE, { id: isa.id, input: { interest: { rate: 5, frequency: 'MONTHLY', day: 20 } } }, token);
+
+    const after = await isaOf(token);
+    expect(after.interest.rate).toBe(5);
+    expect(after.interest.accrued).toBeCloseTo(8650 * (1.045 ** (1 / 365) - 1) * 5, 6);
+  });
+
   it('works out a monthly payment’s next date from its day', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const isa = await addSavings(token, budgetId, {

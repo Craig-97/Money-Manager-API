@@ -66,7 +66,6 @@ import {
   ACCOUNT_NOT_ALLOWED,
   incrementVersion,
   roundPence,
-  payTowardsDebt,
   withBalanceDate,
   withTransaction,
   validateUniqueName,
@@ -77,6 +76,7 @@ import {
   skipRecurring,
   debtOverpayment,
 } from "../../utils";
+import { accrualBefore, accrueDebt, payDebtOn } from "../../utils/interest";
 import {
   addDays,
   nextOccurrence,
@@ -503,8 +503,8 @@ const handle = async (
 
 /*
  * Records dates as paid that the confirmed payday balance already allows for: nothing comes off the
- * balance, but a debt still has each period's interest added and the payment taken off. Returns
- * false when there's nothing to record.
+ * balance, but a debt still has the interest to each date added and the payment taken off, in
+ * order. Returns false when there's nothing to record.
  */
 const recordAlreadyPaid = async (
   payment: RecurringPaymentDocument,
@@ -512,18 +512,19 @@ const recordAlreadyPaid = async (
 ) => {
   let debt: RecordDebt | undefined;
   if (payment.debt && dates.length) {
+    const before = accrualBefore(payment.debt);
     let interest = 0;
     let reduction = 0;
-    for (let k = 0; k < dates.length; k++) {
-      const paidOff = payTowardsDebt(payment.debt, payment.amount, payment.frequency);
+    for (const date of dates) {
+      const paidOff = payDebtOn({ ...payment.toObject(), debt: payment.debt }, date);
       interest += paidOff.interest;
       reduction += paidOff.reduction;
-      payment.debt.balance = paidOff.balance;
     }
     debt = {
       interest: roundPence(interest),
       reduction: roundPence(reduction),
       balanceAfter: payment.debt.balance,
+      ...before,
     };
   }
   const transfer = await payInto(payment, { times: dates.length, session });
@@ -567,15 +568,14 @@ const markPaymentsPaid = async (
     async (payment, session) => {
       // Nothing to pay once it has ended
       if (!payment.nextDueDate) return null;
-      // A debt has the period's interest added, then the payment taken off
+      // A debt has the interest up to its date added, even when it's marked paid late, then the
+      // payment taken off
       let debt: RecordDebt | undefined;
       if (payment.debt) {
-        const paidOff = payTowardsDebt(payment.debt, payment.amount, payment.frequency);
-        payment.debt.balance = paidOff.balance;
+        const before = accrualBefore(payment.debt);
         debt = {
-          interest: paidOff.interest,
-          reduction: paidOff.reduction,
-          balanceAfter: paidOff.balance,
+          ...payDebtOn({ ...payment.toObject(), debt: payment.debt }, payment.nextDueDate),
+          ...before,
         };
       }
       const change = balanceChange(payment);
@@ -642,6 +642,12 @@ const markPaymentsUnpaid = async (
       payment.nextDueDate = latest.dates[0];
       if (payment.debt && latest.debt) {
         payment.debt.balance = roundPence(payment.debt.balance + latest.debt.reduction);
+        // The interest it added goes back to building up. Records from before it was counted each
+        // day don't say, so it carries on from where it is.
+        if (latest.debt.accruedBefore != null) {
+          payment.debt.accrued = latest.debt.accruedBefore;
+          payment.debt.accruedTo = latest.debt.accruedToBefore ?? null;
+        }
       }
       if (latest.transfer) {
         await moveMoney(latest.transfer.account, { amount: -latest.transfer.amount, session });
@@ -738,6 +744,8 @@ const logDebtOverpayment = async (
       if (amount > payment.debt.balance) {
         throw OVERPAYMENT_TOO_LARGE();
       }
+      // Interest so far was on the balance before
+      accrueDebt(payment);
       payment.debt.balance = roundPence(payment.debt.balance - amount);
       const account = await accountFor(budgetId, { account: payment.account, session });
       await new PaymentRecord({
@@ -790,6 +798,8 @@ const undoDebtOverpayment = async (
         throw PAYMENT_RECORD_NOT_FOUND(recordId);
       }
       if (payment.debt && record.debt) {
+        // Interest so far was on the balance without it
+        accrueDebt(payment);
         payment.debt.balance = roundPence(payment.debt.balance + record.debt.reduction);
       }
       return { amount: -record.balanceChange, account: record.account };

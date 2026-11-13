@@ -60,6 +60,10 @@ export const recurringPaymentTypeDefs = `
     balanceUpdatedAt: String
     # How much less it owes since payday, from payments marked paid and overpayments
     paidOffThisCycle: Float!
+    # Interest built up since the last payment, unrounded, worked out on each day's closing balance
+    # up to the start of accruedTo. It's added when the next payment is marked paid.
+    accrued: Float!
+    accruedTo: String
   }
 
   # Tracks a payment as a debt. On an update, null stops tracking it.
@@ -93,7 +97,7 @@ export const recurringPaymentTypeDefs = `
   }
 
   type PaymentRecordDebt {
-    # Interest added for the period, estimated from the APR
+    # Interest added up to the payment's date, worked out each day from the APR
     interest: Float!
     # How much less is owed afterwards; negative when it went up
     reduction: Float!

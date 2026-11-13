@@ -4,7 +4,7 @@ import { AccountKind } from '../../constants/account/accountKind';
 import { InterestFrequency } from '../../constants/account/interestFrequency';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
-import { Account } from '../../models/account/Account';
+import { Account, type AccountInterest } from '../../models/account/Account';
 import { Budget } from '../../models/budget/Budget';
 import { OneOffPayment } from '../../models/payment/OneOffPayment';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
@@ -18,6 +18,7 @@ import type {
 } from '../../types/account/accountTypes';
 import { followingInterestDate, nextMonthlyDate } from '../../utils/dates/interest';
 import { ukDay } from '../../utils/dates/recurrence';
+import { accrueSavings, savingsAccruedTo } from '../../utils/interest';
 import {
   ACCOUNT_NOT_ALLOWED,
   ACCOUNT_NOT_FOUND,
@@ -76,6 +77,8 @@ export const moveMoney = async (
   if (!amount) return;
   const found = await Account.findById(account).session(session);
   if (!found) return;
+  // Interest so far was earned on the balance before
+  accrueSavings(found);
   found.balance = roundPence(found.balance + amount);
   await found.save({ session });
 };
@@ -123,6 +126,8 @@ const moveOffAccount = async (
 
 /* Sets a balance the user typed in, dated now so the app can say how old it is */
 export const setBalance = (account: AccountDocument, balance: number) => {
+  // Interest so far was earned on the balance before. It isn't paid yet, so it carries on.
+  accrueSavings(account);
   account.balance = balance;
   account.balanceUpdatedAt = new Date();
 };
@@ -191,7 +196,7 @@ const findOwnAccount = async (id: string, req: Request) => {
 
 /*
  * Interest as it's kept: a monthly payment's next date from its day, the others' from the date
- * given, which has to be after today. Only savings earn it.
+ * given, which has to be after today. Only savings earn it. A new one counts from today.
  */
 export const interestOf = (
   input: AccountInterestInput | null | undefined,
@@ -199,15 +204,16 @@ export const interestOf = (
 ) => {
   if (!input || !savings) return null;
   const { rate, frequency } = input;
-  if (!frequency) return { rate, frequency: null, day: null, nextDate: null };
   const today = ukDay();
+  const fresh = { accrued: 0, accruedTo: frequency ? today : null };
+  if (!frequency) return { rate, frequency: null, day: null, nextDate: null, ...fresh };
   if (frequency === InterestFrequency.MONTHLY) {
     const day = input.day!;
-    return { rate, frequency, day, nextDate: nextMonthlyDate(day, today) };
+    return { rate, frequency, day, nextDate: nextMonthlyDate(day, today), ...fresh };
   }
   const nextDate = new Date(`${input.nextDate!.slice(0, 10)}T00:00:00Z`);
   if (nextDate <= today) throw INTEREST_DATE_PASSED();
-  return { rate, frequency, day: nextDate.getUTCDate(), nextDate };
+  return { rate, frequency, day: nextDate.getUTCDate(), nextDate, ...fresh };
 };
 
 const withBudget = async (account: AccountDocument | null, budgetId: BudgetId) => {
@@ -293,6 +299,11 @@ const updateAccount = async (
   const becameSpending = account.kind !== AccountKind.SPENDING && spending;
 
   return withTransaction(async session => {
+    // What's built up so far is counted at the balance and rate from before
+    accrueSavings(account);
+    const builtUp = account.interest?.frequency
+      ? { accrued: account.interest.accrued ?? 0, accruedTo: account.interest.accruedTo ?? null }
+      : null;
     if (name !== undefined) account.name = name;
     if (balance !== undefined) setBalance(account, balance);
     if (kind !== undefined) account.kind = kind;
@@ -303,8 +314,11 @@ const updateAccount = async (
     else if (becameSavings) account.counts = false;
     else if (becameSpending) account.counts = true;
     // Only savings earn interest, so an account that becomes one to spend from stops
-    if (interest !== undefined) account.interest = interestOf(interest, { savings: !spending });
-    else if (becameSpending) account.interest = null;
+    if (interest !== undefined) {
+      const next = interestOf(interest, { savings: !spending });
+      // A new rate, day or frequency carries on from what's built up, which is still to be paid
+      account.interest = next?.frequency && builtUp ? { ...next, ...builtUp } : next;
+    } else if (becameSpending) account.interest = null;
     if (purpose !== undefined) account.purpose = purpose;
 
     if (paidInto && !account.paidInto) {
@@ -453,7 +467,22 @@ const confirmInterest = async (
   return withBudget(account, account.budget);
 };
 
+type InterestDocument = AccountInterest & {
+  ownerDocument?: () => AccountDocument;
+};
+
+/*
+ * What's built up and from when, as the app shows it: interest that hasn't been counted yet counts
+ * from the last payment
+ */
+const interestFields = {
+  accrued: (interest: InterestDocument) => interest.accrued ?? 0,
+  accruedTo: (interest: InterestDocument) =>
+    interest.ownerDocument ? savingsAccruedTo(interest.ownerDocument()) : (interest.accruedTo ?? null)
+};
+
 export const accountResolvers = {
+  AccountInterest: interestFields,
   Mutation: {
     createAccount,
     updateAccount,

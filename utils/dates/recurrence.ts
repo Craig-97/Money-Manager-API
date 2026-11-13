@@ -64,6 +64,17 @@ export const nextOccurrence = (
   return null;
 };
 
+/* The date the payment fell on before `date`, or null when `date` is its first */
+export const previousOccurrence = ({ firstPaymentDate, frequency }: Schedule, date: Date) => {
+  let previous: Date | null = null;
+  for (let k = 0; k < MAX_OCCURRENCES; k++) {
+    const next = occurrence(firstPaymentDate, frequency, k);
+    if (next >= date) return previous;
+    previous = next;
+  }
+  return previous;
+};
+
 /* Every date the payment falls on from `from` up to, but not including, `until` */
 export const occurrencesBefore = (schedule: Schedule, from: Date, until: Date) => {
   const dates: Date[] = [];

@@ -35,3 +35,16 @@ export const followingInterestDate = (
   if (months === null) return null;
   return dayInMonth({ year: date.getUTCFullYear(), month: date.getUTCMonth() + months, day });
 };
+
+/*
+ * The payment before the next one, which interest counts from when nothing has been counted yet.
+ * None for a fixed term, which pays once.
+ */
+export const previousInterestDate = (
+  { frequency, day }: { frequency: InterestFrequency; day: number },
+  nextDate: Date
+) => {
+  const months = MONTHS[frequency];
+  if (months === null) return null;
+  return dayInMonth({ year: nextDate.getUTCFullYear(), month: nextDate.getUTCMonth() - months, day });
+};

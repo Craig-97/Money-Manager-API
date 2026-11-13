@@ -11,6 +11,7 @@ import { PaymentRecord } from '../../models/payment/PaymentRecord';
 import { Note } from '../../models/note/Note';
 import { NoteRepeat } from '../../constants/note/noteRepeat';
 import { latestOpenRecord, recordBalanceSet } from './paymentRecordResolvers';
+import { accrueDebt } from '../../utils/interest';
 import {
   RECURRING_PAYMENT_NOT_FOUND,
   RECURRING_PAYMENTS_NOT_FOUND,
@@ -133,9 +134,18 @@ const updateRecurringPayment = async (
     if (debt === null) {
       payment.set('debt', undefined);
     } else if (debt) {
+      // A new APR carries on from what's built up at the old one
+      if (!balanceSet) accrueDebt(payment);
       payment.set(
         'debt',
-        balanceSet ? withBalanceDate(debt) : { ...debt, balanceUpdatedAt: payment.debt?.balanceUpdatedAt }
+        balanceSet
+          ? withBalanceDate(debt)
+          : {
+              ...debt,
+              balanceUpdatedAt: payment.debt?.balanceUpdatedAt,
+              accrued: payment.debt?.accrued ?? 0,
+              accruedTo: payment.debt?.accruedTo ?? null
+            }
       );
     }
 
