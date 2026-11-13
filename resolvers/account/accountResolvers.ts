@@ -14,8 +14,6 @@ import type {
   UpdateAccountBalancesInput,
   UpdateAccountInput
 } from '../../types/account/accountTypes';
-import { fromIsoDay, nextMonthlyDate, ukDay } from '../../utils/dates';
-import { accrueSavings, addDueInterest, savingsAccruedTo } from '../../utils/interest';
 import {
   ACCOUNT_NOT_ALLOWED,
   ACCOUNT_NOT_FOUND,
@@ -33,7 +31,13 @@ import {
   ownDocumentOrThrow,
   parseInput,
   roundPence,
-  withTransaction
+  withTransaction,
+  fromIsoDay,
+  nextMonthlyDate,
+  ukDay,
+  accrueSavings,
+  addDueInterest,
+  savingsAccruedTo
 } from '../../utils';
 
 type AccountDocument = InstanceType<typeof Account>;

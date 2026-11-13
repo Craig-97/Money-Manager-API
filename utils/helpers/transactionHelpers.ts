@@ -1,4 +1,4 @@
-import mongoose, { ClientSession } from 'mongoose';
+import mongoose, { type ClientSession } from 'mongoose';
 
 export const withTransaction = async <T>(
   operations: (session: ClientSession) => Promise<T>

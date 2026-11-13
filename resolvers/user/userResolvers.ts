@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-import type { RegisterInput, UserDetailsInput } from "../../types/user/userTypes";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -14,6 +13,7 @@ import { Payday } from "../../models/payday/Payday";
 import { RecurringPayment } from "../../models/payment/RecurringPayment";
 import { PaymentRecord } from "../../models/payment/PaymentRecord";
 import { ReminderState } from "../../models/reminder/ReminderState";
+import type { RegisterInput, UserDetailsInput } from "../../types/user/userTypes";
 import {
   USER_NOT_FOUND,
   USER_EMAIL_NOT_FOUND,

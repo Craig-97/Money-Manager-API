@@ -1,9 +1,8 @@
 import type { Request } from 'express';
-import type { CreateOneOffPaymentInput, UpdateOneOffPaymentInput } from '../../types/payment/oneOffPaymentTypes';
 import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
 import { OneOffPayment } from '../../models/payment/OneOffPayment';
 import { PaymentRecord } from '../../models/payment/PaymentRecord';
-import { accountFields, checkPaymentAccounts } from '../account/accountResolvers';
+import type { CreateOneOffPaymentInput, UpdateOneOffPaymentInput } from '../../types/payment/oneOffPaymentTypes';
 import {
   PAYMENT_NOT_FOUND,
   PAYMENTS_NOT_FOUND,
@@ -15,6 +14,7 @@ import {
   newOneOff,
   oneOffInput
 } from '../../utils';
+import { accountFields, checkPaymentAccounts } from '../account/accountResolvers';
 
 const createOneOffPayment = async (_: unknown, { input }: { input: CreateOneOffPaymentInput }, req: Request) => {
   checkAuth(req);

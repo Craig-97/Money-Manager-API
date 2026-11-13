@@ -1,16 +1,17 @@
 import type { Request } from 'express';
-import type { PaydayInput } from '../../types/payday/paydayTypes';
 import { checkAuth } from '../../middleware/isAuth';
 import { Payday } from '../../models/payday/Payday';
+import type { PaydayInput } from '../../types/payday/paydayTypes';
 import {
   PAYDAY_NOT_FOUND,
   PAYDAY_OVERRIDE_INVALID,
   ownDocumentOrThrow,
   parseInput,
   paydayInput,
-  paydayOverride
+  paydayOverride,
+  addDays,
+  toIsoDay
 } from '../../utils';
-import { addDays, toIsoDay } from '../../utils/dates';
 
 const updatePayday = async (_: unknown, { id, input }: { id: string; input: PaydayInput }, req: Request) => {
   checkAuth(req);

@@ -1,15 +1,12 @@
 import type { Request } from 'express';
-import type { CreateRecurringPaymentInput, UpdateRecurringPaymentInput } from '../../types/payment/recurringPaymentTypes';
+import type { Types } from 'mongoose';
 import { PaymentType } from '../../constants/payment/paymentType';
+import { NoteRepeat } from '../../constants/note/noteRepeat';
 import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
-import type { Types } from 'mongoose';
-import { accountFields, checkPaymentAccounts, expenseAccountOf } from '../account/accountResolvers';
 import { PaymentRecord } from '../../models/payment/PaymentRecord';
 import { Note } from '../../models/note/Note';
-import { NoteRepeat } from '../../constants/note/noteRepeat';
-import { latestOpenRecord, recordBalanceSet } from './paymentRecordResolvers';
-import { accrueDebt } from '../../utils/interest';
+import type { CreateRecurringPaymentInput, UpdateRecurringPaymentInput } from '../../types/payment/recurringPaymentTypes';
 import {
   RECURRING_PAYMENT_NOT_FOUND,
   RECURRING_PAYMENTS_NOT_FOUND,
@@ -22,8 +19,11 @@ import {
   newRecurring,
   recurringInput,
   updatedRecurring,
-  withBalanceDate
+  withBalanceDate,
+  accrueDebt
 } from '../../utils';
+import { accountFields, checkPaymentAccounts, expenseAccountOf } from '../account/accountResolvers';
+import { latestOpenRecord, recordBalanceSet } from './paymentRecordResolvers';
 
 const findRecurringPayment = async (_: unknown, { id }: { id: string }, req: Request) => {
   checkAuth(req);
