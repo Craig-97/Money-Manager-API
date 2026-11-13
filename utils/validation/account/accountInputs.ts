@@ -21,13 +21,24 @@ const rate = z
 export const interest = z
   .looseObject({
     rate,
-    frequency: z.enum(Object.values(InterestFrequency) as [InterestFrequency, ...InterestFrequency[]]).nullish(),
-    day: z.number().int().min(1, 'Choose a day from 1 to 31').max(31, 'Choose a day from 1 to 31').nullish(),
+    frequency: z
+      .enum(Object.values(InterestFrequency) as [InterestFrequency, ...InterestFrequency[]])
+      .nullish(),
+    day: z
+      .number()
+      .int()
+      .min(1, 'Choose a day from 1 to 31')
+      .max(31, 'Choose a day from 1 to 31')
+      .nullish(),
     nextDate: isoDate.nullish()
   })
   .superRefine((value, ctx) => {
     if (value.frequency === InterestFrequency.MONTHLY && !value.day) {
-      ctx.addIssue({ code: 'custom', message: 'Choose the day of the month it’s paid', path: ['day'] });
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Choose the day of the month it’s paid',
+        path: ['day']
+      });
     }
     if (value.frequency && value.frequency !== InterestFrequency.MONTHLY && !value.nextDate) {
       ctx.addIssue({ code: 'custom', message: 'Choose when it’s next paid', path: ['nextDate'] });

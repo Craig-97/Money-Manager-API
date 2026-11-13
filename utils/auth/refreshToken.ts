@@ -29,7 +29,8 @@ const cookieOptions = () => ({
 export const setRefreshCookie = (res: Response, token: string) =>
   res.cookie(REFRESH_COOKIE, token, { ...cookieOptions(), maxAge: REFRESH_TOKEN_DAYS * DAY_MS });
 
-export const clearRefreshCookie = (res: Response) => res.clearCookie(REFRESH_COOKIE, cookieOptions());
+export const clearRefreshCookie = (res: Response) =>
+  res.clearCookie(REFRESH_COOKIE, cookieOptions());
 
 // Reads one cookie from the Cookie header, so the API doesn't need a cookie-parsing dependency
 export const readRefreshCookie = (req: Request) => {

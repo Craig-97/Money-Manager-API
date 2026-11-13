@@ -52,7 +52,10 @@ export const budgetMoves = async (
 });
 
 /* How one payment's dates move: its own choice, or the budget's */
-export const moveOf = (payment: Pick<RecurringPayment, 'nonWorkingDay'>, moves: DateMove): DateMove => ({
+export const moveOf = (
+  payment: Pick<RecurringPayment, 'nonWorkingDay'>,
+  moves: DateMove
+): DateMove => ({
   rule: payment.nonWorkingDay ?? moves.rule,
   holidays: moves.holidays
 });

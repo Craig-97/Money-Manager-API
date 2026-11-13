@@ -20,7 +20,12 @@ const CREATE = `mutation ($input: CreateOneOffPaymentInput!) {
 }`;
 const UNKNOWN = '507f1f77bcf86cd799439011';
 
-const makePayment = (token: string | undefined, budgetId: string, name: string, extra: Variables = {}) =>
+const makePayment = (
+  token: string | undefined,
+  budgetId: string,
+  name: string,
+  extra: Variables = {}
+) =>
   gql(
     CREATE,
     {
@@ -94,7 +99,10 @@ describe('reading one-off payments', () => {
     await makePayment(token, budgetId, 'Small', { amount: 5 });
     const body = await gql(`query { budget { oneOffPayments { name amount } } }`, undefined, token);
     expect(body.errors).toBeUndefined();
-    expect(body.data.budget.oneOffPayments.map((p: { name: string }) => p.name)).toEqual(['Small', 'Big']);
+    expect(body.data.budget.oneOffPayments.map((p: { name: string }) => p.name)).toEqual([
+      'Small',
+      'Big'
+    ]);
   });
 });
 
@@ -194,22 +202,44 @@ describe('one-off reminders', () => {
     updateOneOffPayment(id: $id, input: $input) { oneOffPayment { dueReminder { off days } } }
   }`;
   const input = (budgetId: string, extra: Variables = {}) => ({
-    input: { budgetId, name: 'Birthday', amount: 75, dueDate: '2030-06-15', type: 'EXPENSE', category: 'GIFTS', ...extra }
+    input: {
+      budgetId,
+      name: 'Birthday',
+      amount: 75,
+      dueDate: '2030-06-15',
+      type: 'EXPENSE',
+      category: 'GIFTS',
+      ...extra
+    }
   });
 
   it('follows the usual timing unless given its own, which can change', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const created = await gql(TIMING, input(budgetId), token);
-    expect(created.data.createOneOffPayment.oneOffPayment.dueReminder).toEqual({ off: false, days: null });
+    expect(created.data.createOneOffPayment.oneOffPayment.dueReminder).toEqual({
+      off: false,
+      days: null
+    });
 
     const { id } = created.data.createOneOffPayment.oneOffPayment;
-    const updated = await gql(UPDATE_TIMING, { id, input: { dueReminder: { off: false, days: 3 } } }, token);
-    expect(updated.data.updateOneOffPayment.oneOffPayment.dueReminder).toEqual({ off: false, days: 3 });
+    const updated = await gql(
+      UPDATE_TIMING,
+      { id, input: { dueReminder: { off: false, days: 3 } } },
+      token
+    );
+    expect(updated.data.updateOneOffPayment.oneOffPayment.dueReminder).toEqual({
+      off: false,
+      days: 3
+    });
   });
 
   it('rejects days that are not a choice', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const body = await gql(TIMING, input(budgetId, { dueReminder: { off: false, days: 5 } }), token);
+    const body = await gql(
+      TIMING,
+      input(budgetId, { dueReminder: { off: false, days: 5 } }),
+      token
+    );
     expect(errorCode(body)).toBe('BAD_USER_INPUT');
   });
 });

@@ -1,11 +1,4 @@
-import {
-  setupTestApp,
-  teardownTestApp,
-  clearDatabase,
-  gql,
-  gqlRaw,
-  agent
-} from '../helpers';
+import { setupTestApp, teardownTestApp, clearDatabase, gql, gqlRaw, agent } from '../helpers';
 
 beforeAll(setupTestApp);
 afterAll(teardownTestApp);
@@ -13,10 +6,7 @@ beforeEach(clearDatabase);
 
 describe('http layer', () => {
   const preflight = (origin: string) =>
-    agent()
-      .options('/graphql')
-      .set('Origin', origin)
-      .set('Access-Control-Request-Method', 'POST');
+    agent().options('/graphql').set('Origin', origin).set('Access-Control-Request-Method', 'POST');
 
   it('answers a preflight from the front-end origin and allows its cookies', async () => {
     const res = await preflight('http://localhost:5173');
@@ -32,9 +22,9 @@ describe('http layer', () => {
     try {
       await teardownTestApp();
       await setupTestApp();
-      expect((await preflight('https://b.example.com')).headers['access-control-allow-origin']).toBe(
-        'https://b.example.com'
-      );
+      expect(
+        (await preflight('https://b.example.com')).headers['access-control-allow-origin']
+      ).toBe('https://b.example.com');
     } finally {
       delete process.env.CORS_ORIGINS;
     }

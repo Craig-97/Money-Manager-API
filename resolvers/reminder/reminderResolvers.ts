@@ -75,7 +75,11 @@ const laterDay = (until: string | null | undefined) => {
 };
 
 /* Marks reminders read, clears them, puts them away until a day, or brings them back */
-const updateReminders = async (_: unknown, { input }: { input: UpdateRemindersInput }, req: Request) => {
+const updateReminders = async (
+  _: unknown,
+  { input }: { input: UpdateRemindersInput },
+  req: Request
+) => {
   checkAuth(req);
   const { budgetId, keys, action, until } = parseInput(remindersUpdate, input);
   await checkBudgetAccess(budgetId, req);
@@ -94,10 +98,21 @@ const updateReminders = async (_: unknown, { input }: { input: UpdateRemindersIn
   return { states, success: true };
 };
 
-const FEED_FIELDS = ['payments', 'paydays', 'renewals', 'notes', 'debtFree', 'showAmounts'] as const;
+const FEED_FIELDS = [
+  'payments',
+  'paydays',
+  'renewals',
+  'notes',
+  'debtFree',
+  'showAmounts'
+] as const;
 
 /* Turns the calendar feed on or off, and chooses what it carries */
-const updateCalendarFeed = async (_: unknown, { input }: { input: UpdateCalendarFeedInput }, req: Request) => {
+const updateCalendarFeed = async (
+  _: unknown,
+  { input }: { input: UpdateCalendarFeedInput },
+  req: Request
+) => {
   const budget = await loadBudget(input.budgetId, req);
 
   if (input.enabled === true && !budget.calendarFeed.token) {

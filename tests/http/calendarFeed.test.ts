@@ -55,7 +55,7 @@ const addPayment = (token: string, budgetId: string, extra: Variables) =>
   );
 
 // The next Saturday after today, as days from today
-const toSaturday = () => ((6 - ukDay().getUTCDay() + 7) % 7) || 7;
+const toSaturday = () => (6 - ukDay().getUTCDay() + 7) % 7 || 7;
 
 // The VEVENT whose summary starts with the title, unfolded
 const eventFor = (calendar: string, title: string) => {
@@ -87,7 +87,11 @@ describe('the calendar feed settings', () => {
     const feedToken = await turnOn(token, budgetId);
     expect(feedToken).toMatch(/^[A-Za-z0-9_-]{32}$/);
 
-    const changed = await gql(FEED, { input: { budgetId, debtFree: true, showAmounts: true } }, token);
+    const changed = await gql(
+      FEED,
+      { input: { budgetId, debtFree: true, showAmounts: true } },
+      token
+    );
     expect(changed.data.updateCalendarFeed.budget.calendarFeed).toMatchObject({
       token: feedToken,
       debtFree: true,
@@ -113,7 +117,11 @@ describe('the calendar feed settings', () => {
   it("refuses someone else's budget", async () => {
     const owner = await createUserWithBudget();
     const other = await createUserWithBudget();
-    const body = await gql(FEED, { input: { budgetId: owner.budgetId, enabled: true } }, other.token);
+    const body = await gql(
+      FEED,
+      { input: { budgetId: owner.budgetId, enabled: true } },
+      other.token
+    );
     expect(errorCode(body)).toBe('FORBIDDEN');
   });
 });
@@ -148,7 +156,11 @@ describe('GET /cal/:token.ics', () => {
   it('moves a date on a weekend to when it goes out, keeping its event', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const saturday = toSaturday();
-    await addPayment(token, budgetId, { name: 'Energy', firstPaymentDate: day(saturday), nonWorkingDay: null });
+    await addPayment(token, budgetId, {
+      name: 'Energy',
+      firstPaymentDate: day(saturday),
+      nonWorkingDay: null
+    });
     await addPayment(token, budgetId, {
       name: 'Water',
       firstPaymentDate: day(saturday),
@@ -196,7 +208,11 @@ describe('GET /cal/:token.ics', () => {
       firstPaymentDate: day(3),
       dueReminder: { off: false, days: 3 }
     });
-    await addPayment(token, budgetId, { name: 'Gym', firstPaymentDate: day(4), dueReminder: { off: true } });
+    await addPayment(token, budgetId, {
+      name: 'Gym',
+      firstPaymentDate: day(4),
+      dueReminder: { off: true }
+    });
     const feedToken = await turnOn(token, budgetId);
 
     const res = await fetchFeed(feedToken);
@@ -215,14 +231,22 @@ describe('GET /cal/:token.ics', () => {
 
   it('carries renewals, a yearly payment as its renewal, paydays and dated notes', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    await addPayment(token, budgetId, { name: 'Phone', firstPaymentDate: day(-20), renewalDate: day(40) });
+    await addPayment(token, budgetId, {
+      name: 'Phone',
+      firstPaymentDate: day(-20),
+      renewalDate: day(40)
+    });
     await addPayment(token, budgetId, {
       name: 'Car insurance',
       frequency: 'ANNUALLY',
       firstPaymentDate: day(36),
       renewalReminder: { off: false, days: 7 }
     });
-    await gql(NOTE, { input: { budgetId, body: 'Car MOT and service', date: day(20), remind: [14, 0] } }, token);
+    await gql(
+      NOTE,
+      { input: { budgetId, body: 'Car MOT and service', date: day(20), remind: [14, 0] } },
+      token
+    );
     const feedToken = await turnOn(token, budgetId);
 
     const { text } = await fetchFeed(feedToken);
@@ -253,7 +277,15 @@ describe('GET /cal/:token.ics', () => {
     const payment = created.data.createRecurringPayment.recurringPayment.id;
     await gql(
       NOTE,
-      { input: { budgetId, body: 'Book the prescription review', repeat: 'WITH_PAYMENT', remind: [14], payment } },
+      {
+        input: {
+          budgetId,
+          body: 'Book the prescription review',
+          repeat: 'WITH_PAYMENT',
+          remind: [14],
+          payment
+        }
+      },
       token
     );
     const feedToken = await turnOn(token, budgetId);
@@ -262,7 +294,9 @@ describe('GET /cal/:token.ics', () => {
 
     // Every 6 months, twice in the year ahead
     expect(text.match(/SUMMARY:Book the prescription review/g)).toHaveLength(2);
-    expect(eventFor(text, 'Book the prescription review')).toContain(`DTSTART;VALUE=DATE:${compact(10)}`);
+    expect(eventFor(text, 'Book the prescription review')).toContain(
+      `DTSTART;VALUE=DATE:${compact(10)}`
+    );
     expect(eventFor(text, 'Prescription due')).toBeDefined();
   });
 
@@ -290,6 +324,8 @@ describe('GET /cal/:token.ics', () => {
     // £250 at £100 a month clears on the third payment
     const paidOff = eventFor(text, 'Loan paid off');
     const third = occurrence(addDays(ukDay(), 2), 'MONTHLY', 2);
-    expect(paidOff).toContain(`DTSTART;VALUE=DATE:${third.toISOString().slice(0, 10).replace(/-/g, '')}`);
+    expect(paidOff).toContain(
+      `DTSTART;VALUE=DATE:${third.toISOString().slice(0, 10).replace(/-/g, '')}`
+    );
   });
 });

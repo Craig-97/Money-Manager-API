@@ -155,7 +155,9 @@ describe('updating a debt', () => {
     const body = await update(token, payment.id, { debt: { ...card, balance: 1150 } });
 
     expect(updated(body).debt.balance).toBe(1150);
-    expect(Number(updated(body).debt.balanceUpdatedAt)).toBeGreaterThan(Number(payment.debt.balanceUpdatedAt));
+    expect(Number(updated(body).debt.balanceUpdatedAt)).toBeGreaterThan(
+      Number(payment.debt.balanceUpdatedAt)
+    );
   });
 
   it('keeps the date when only the rate changes', async () => {
@@ -165,7 +167,10 @@ describe('updating a debt', () => {
 
     const body = await update(token, payment.id, { debt: { ...card, apr: 19.9 } });
 
-    expect(updated(body).debt).toMatchObject({ apr: 19.9, balanceUpdatedAt: payment.debt.balanceUpdatedAt });
+    expect(updated(body).debt).toMatchObject({
+      apr: 19.9,
+      balanceUpdatedAt: payment.debt.balanceUpdatedAt
+    });
   });
 
   it('starts tracking an existing payment', async () => {
@@ -214,7 +219,11 @@ describe('paying a debt', () => {
   it('counts each day whatever the payment’s frequency', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const payment = created(
-      await makePayment(token, budgetId, { amount: 50, frequency: 'WEEKLY', debt: { balance: 5200, apr: 10 } })
+      await makePayment(token, budgetId, {
+        amount: 50,
+        frequency: 'WEEKLY',
+        debt: { balance: 5200, apr: 10 }
+      })
     );
     await debtInterestFrom(payment.id, { day: '2030-01-24' });
 
@@ -226,10 +235,14 @@ describe('paying a debt', () => {
 
   it('adds what had built up at an earlier balance, then the days since at the new one', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const payment = created(await makePayment(token, budgetId, { debt: { balance: 3650, apr: 10 } }));
+    const payment = created(
+      await makePayment(token, budgetId, { debt: { balance: 3650, apr: 10 } })
+    );
     // £1 a day had built up for 10 days when £1,825 was paid off, halving it
     await debtInterestFrom(payment.id, { day: '2030-01-21', accrued: 10 });
-    await mongoose.model('RecurringPayment').updateOne({ _id: payment.id }, { $set: { 'debt.balance': 1825 } });
+    await mongoose
+      .model('RecurringPayment')
+      .updateOne({ _id: payment.id }, { $set: { 'debt.balance': 1825 } });
 
     const budget = budgetOf(await markPaid(token, budgetId, payment.id), 'markPaymentsPaid');
 
@@ -271,7 +284,8 @@ describe('paying a debt', () => {
 
 describe('interest built up on a debt', () => {
   const ACCRUAL = `query { budget { recurringPayments { id debt { balance accrued accruedTo } } } }`;
-  const debtOf = async (token: string) => (await gql(ACCRUAL, undefined, token)).data.budget.recurringPayments[0].debt;
+  const debtOf = async (token: string) =>
+    (await gql(ACCRUAL, undefined, token)).data.budget.recurringPayments[0].debt;
   const isoOf = (accruedTo: string) => new Date(Number(accruedTo)).toISOString().slice(0, 10);
   const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
   const update = (token: string, id: string, input: Variables) => gql(UPDATE, { id, input }, token);
@@ -290,7 +304,9 @@ describe('interest built up on a debt', () => {
 
   it('keeps what’s built up when only the rate changes, counted at the old rate first', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const payment = created(await makePayment(token, budgetId, { debt: { balance: 3650, apr: 10 } }));
+    const payment = created(
+      await makePayment(token, budgetId, { debt: { balance: 3650, apr: 10 } })
+    );
     await debtInterestFrom(payment.id, { day: today(), accrued: 7 });
 
     await update(token, payment.id, { debt: { balance: 3650, apr: 20 } });
@@ -300,7 +316,9 @@ describe('interest built up on a debt', () => {
 
   it('counts a late payment up to its own date, and the days since after it', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const payment = created(await makePayment(token, budgetId, { debt: card, firstPaymentDate: '2026-08-31' }));
+    const payment = created(
+      await makePayment(token, budgetId, { debt: card, firstPaymentDate: '2026-08-31' })
+    );
     // Due on 31 Oct and still not marked paid
     await mongoose
       .model('RecurringPayment')
@@ -331,8 +349,12 @@ describe('interest built up on a debt', () => {
 
   it('counts what’s built up at the balance before an overpayment', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const payment = created(await makePayment(token, budgetId, { debt: { balance: 3650, apr: 10 } }));
-    const tenDaysAgo = new Date(Date.now() - 10 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+    const payment = created(
+      await makePayment(token, budgetId, { debt: { balance: 3650, apr: 10 } })
+    );
+    const tenDaysAgo = new Date(Date.now() - 10 * 86_400_000).toLocaleDateString('en-CA', {
+      timeZone: 'Europe/London'
+    });
     await debtInterestFrom(payment.id, { day: tenDaysAgo });
 
     await overpay(token, budgetId, payment.id, 1825);

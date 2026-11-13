@@ -36,7 +36,6 @@ const DAYS_BETWEEN: Partial<Record<PayFrequency, number>> = {
 
 const WEEKDAY_NUMBER = { MONDAY: 1, TUESDAY: 2, WEDNESDAY: 3, THURSDAY: 4, FRIDAY: 5 } as const;
 
-
 export const isWorkingDay = (date: Date, holidays: BankHolidays) =>
   date.getUTCDay() !== 0 && date.getUTCDay() !== 6 && !holidays.has(toIsoDay(date));
 
@@ -113,8 +112,14 @@ export const nextPayday = (rule: PaydayRule, holidays: BankHolidays, today: Date
 };
 
 // Every payday from `from` up to and including `to`, as 'YYYY-MM-DD'
-export const paydaysBetween = (rule: PaydayRule, holidays: BankHolidays, range: { from: Date; to: Date }) => {
+export const paydaysBetween = (
+  rule: PaydayRule,
+  holidays: BankHolidays,
+  range: { from: Date; to: Date }
+) => {
   const first = toIsoDay(range.from);
   const last = toIsoDay(range.to);
-  return paydaysAround(rule, holidays, range.from, range.to).filter(date => date >= first && date <= last);
+  return paydaysAround(rule, holidays, range.from, range.to).filter(
+    date => date >= first && date <= last
+  );
 };

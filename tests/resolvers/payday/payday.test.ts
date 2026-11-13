@@ -127,11 +127,16 @@ describe('setPaydayOverride', () => {
   const SET = `mutation ($id: ID!, $for: String!, $date: String) {
     setPaydayOverride(id: $id, for: $for, date: $date) { success payday { ${FIELDS} } }
   }`;
-  const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+  const inDays = (days: number) =>
+    new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 
   it('starts with no overrides', async () => {
     const { token } = await withPayday();
-    const body = await gql(`query { budget { payday { overrides { for date } } } }`, undefined, token);
+    const body = await gql(
+      `query { budget { payday { overrides { for date } } } }`,
+      undefined,
+      token
+    );
     expect(body.data.budget.payday.overrides).toEqual([]);
   });
 
@@ -164,10 +169,9 @@ describe('setPaydayOverride', () => {
     const { token, id } = await withPayday();
     await gql(SET, { id, for: inDays(50), date: inDays(45) }, token);
     const body = await gql(SET, { id, for: inDays(20), date: inDays(13) }, token);
-    expect(body.data.setPaydayOverride.payday.overrides.map((o: { for: string }) => o.for)).toEqual([
-      inDays(20),
-      inDays(50)
-    ]);
+    expect(body.data.setPaydayOverride.payday.overrides.map((o: { for: string }) => o.for)).toEqual(
+      [inDays(20), inDays(50)]
+    );
   });
 
   it('forgets moves for paydays that have passed', async () => {

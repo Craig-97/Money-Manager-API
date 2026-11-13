@@ -40,7 +40,9 @@ describe('login attempts', () => {
     const blocked = await attempt(LOGIN, { email, password: 'wrong' });
     expect(blocked.status).toBe(429);
     expect(errorCode(blocked.body)).toBe('TOO_MANY_REQUESTS');
-    expect(blocked.body.errors[0].message).toMatch(/Too many attempts\. Try again in \d+ minutes?\./);
+    expect(blocked.body.errors[0].message).toMatch(
+      /Too many attempts\. Try again in \d+ minutes?\./
+    );
     expect(blocked.body.errors[0].extensions.retryAfter).toBeGreaterThan(0);
     expect(blocked.headers['retry-after']).toBeDefined();
   });
@@ -55,7 +57,10 @@ describe('login attempts', () => {
   it('counts the email without regard to case or surrounding spaces', async () => {
     const { email } = await createUserWithBudget({ withBudget: false });
     for (let i = 0; i < 10; i++) {
-      await attempt(LOGIN, { email: i % 2 ? email.toUpperCase() : ` ${email} `, password: 'wrong' });
+      await attempt(LOGIN, {
+        email: i % 2 ? email.toUpperCase() : ` ${email} `,
+        password: 'wrong'
+      });
     }
 
     expect((await attempt(LOGIN, { email, password: 'wrong' })).status).toBe(429);
@@ -134,9 +139,9 @@ describe('password reset requests', () => {
 describe('reset token attempts', () => {
   it('blocks guessing tokens after 20 attempts', async () => {
     for (let i = 0; i < 20; i++) {
-      expect(errorCode((await attempt(RESET, { token: `guess${i}`, password: 'NewPassword1' })).body)).toBe(
-        'PASSWORD_RESET_TOKEN_INVALID'
-      );
+      expect(
+        errorCode((await attempt(RESET, { token: `guess${i}`, password: 'NewPassword1' })).body)
+      ).toBe('PASSWORD_RESET_TOKEN_INVALID');
     }
 
     const blocked = await attempt(RESET, { token: 'guess21', password: 'NewPassword1' });
@@ -159,7 +164,14 @@ describe('other operations', () => {
     for (let i = 0; i < 15; i++) {
       const body = await gql(
         `mutation ($input: RegisterInput!) { registerAndLogin(input: $input) { token } }`,
-        { input: { email: `new${i}@example.com`, password: 'Password1', firstName: 'A', surname: 'B' } }
+        {
+          input: {
+            email: `new${i}@example.com`,
+            password: 'Password1',
+            firstName: 'A',
+            surname: 'B'
+          }
+        }
       );
       expect(body.errors).toBeUndefined();
     }

@@ -32,7 +32,10 @@ export const sendEmail = async (email: Email) => {
     if (process.env.NODE_ENV === 'production') {
       logger.error({ subject: email.subject }, 'SMTP_HOST is not set, so an email was not sent');
     } else {
-      logger.info({ to: email.to, subject: email.subject, text: email.text }, 'Email not sent (no SMTP_HOST)');
+      logger.info(
+        { to: email.to, subject: email.subject, text: email.text },
+        'Email not sent (no SMTP_HOST)'
+      );
     }
     return;
   }

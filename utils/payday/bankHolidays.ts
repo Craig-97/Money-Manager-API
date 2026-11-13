@@ -31,7 +31,8 @@ const forRegion = (data: AllRegions, region: BankHolidayRegion): BankHolidays =>
   new Set((data[REGION_KEYS[region]]?.events ?? []).map(event => event.date));
 
 /* A region's bank holidays, straight from gov.uk; throws when it can't be reached */
-export const fetchBankHolidays = async (region: BankHolidayRegion) => forRegion(await fetchAll(), region);
+export const fetchBankHolidays = async (region: BankHolidayRegion) =>
+  forRegion(await fetchAll(), region);
 
 let cached: { data: AllRegions; at: number } | null = null;
 

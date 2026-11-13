@@ -189,7 +189,12 @@ describe('note dates', () => {
   it('has no date, reminders or payment unless given', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const body = await gql(CREATE_DATED, { input: { budgetId, body: 'Plain' } }, token);
-    expect(body.data.createNote.note).toMatchObject({ date: null, remind: [], repeat: 'NONE', payment: null });
+    expect(body.data.createNote.note).toMatchObject({
+      date: null,
+      remind: [],
+      repeat: 'NONE',
+      payment: null
+    });
   });
 
   it('saves a date, its reminders, a yearly repeat and a payment', async () => {
@@ -228,7 +233,11 @@ describe('note dates', () => {
     );
     const { id } = created.data.createNote.note;
 
-    const body = await gql(UPDATE_DATED, { id, input: { date: null, payment: null, remind: [] } }, token);
+    const body = await gql(
+      UPDATE_DATED,
+      { id, input: { date: null, payment: null, remind: [] } },
+      token
+    );
     expect(body.errors).toBeUndefined();
     expect(body.data.updateNote.note).toMatchObject({ date: null, payment: null, remind: [] });
   });
@@ -259,9 +268,17 @@ describe('note dates', () => {
   it('stays when its payment is deleted, no longer linked', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const payment = await makePayment(token, budgetId);
-    const created = await gql(CREATE_DATED, { input: { budgetId, body: 'Quotes', payment } }, token);
+    const created = await gql(
+      CREATE_DATED,
+      { input: { budgetId, body: 'Quotes', payment } },
+      token
+    );
 
-    await gql(`mutation ($ids: [ID!]!) { batchDeleteRecurringPayments(ids: $ids) { success } }`, { ids: [payment] }, token);
+    await gql(
+      `mutation ($ids: [ID!]!) { batchDeleteRecurringPayments(ids: $ids) { success } }`,
+      { ids: [payment] },
+      token
+    );
 
     const note = await mongoose.model('Note').findById(created.data.createNote.note.id);
     expect(note.payment).toBeNull();
@@ -271,7 +288,15 @@ describe('note dates', () => {
     const { token, budgetId } = await createUserWithBudget();
     const body = await gql(
       CREATE_DATED,
-      { input: { budgetId, body: 'Prescription', date: '2030-10-01', remind: [7], repeat: 'BIANNUALLY' } },
+      {
+        input: {
+          budgetId,
+          body: 'Prescription',
+          date: '2030-10-01',
+          remind: [7],
+          repeat: 'BIANNUALLY'
+        }
+      },
       token
     );
     expect(body.errors).toBeUndefined();
@@ -313,7 +338,11 @@ describe('note dates', () => {
       token
     );
 
-    await gql(`mutation ($ids: [ID!]!) { batchDeleteRecurringPayments(ids: $ids) { success } }`, { ids: [payment] }, token);
+    await gql(
+      `mutation ($ids: [ID!]!) { batchDeleteRecurringPayments(ids: $ids) { success } }`,
+      { ids: [payment] },
+      token
+    );
 
     const note = await mongoose.model('Note').findById(created.data.createNote.note.id);
     expect(note).toMatchObject({ repeat: 'NONE', payment: null, remind: [30] });

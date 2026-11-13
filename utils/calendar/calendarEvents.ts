@@ -106,7 +106,8 @@ const oneOffEvents = ({ feed, settings, oneOffPayments, today }: FeedSource): Ca
   const from = addDays(today, -DAYS_BEHIND);
   const until = addDays(today, DAYS_AHEAD);
   return oneOffPayments.flatMap(payment => {
-    if (payment.paidAt || !payment.dueDate || payment.dueDate < from || payment.dueDate > until) return [];
+    if (payment.paidAt || !payment.dueDate || payment.dueDate < from || payment.dueDate > until)
+      return [];
     const day = toIsoDay(payment.dueDate);
     const what = payment.type === PaymentType.INCOME ? 'comes in' : 'due';
     return [
@@ -125,7 +126,8 @@ const renewalEvents = ({ feed, settings, payments, today }: FeedSource): Calenda
   const from = addDays(today, -DAYS_BEHIND);
   return payments.flatMap(payment => {
     const { renewalDate } = payment;
-    if (!renewalDate || payment.frequency === PaymentFrequency.ANNUALLY || renewalDate < from) return [];
+    if (!renewalDate || payment.frequency === PaymentFrequency.ANNUALLY || renewalDate < from)
+      return [];
     const day = toIsoDay(renewalDate);
     return [
       {
@@ -139,7 +141,14 @@ const renewalEvents = ({ feed, settings, payments, today }: FeedSource): Calenda
   });
 };
 
-const paydayEvents = ({ feed, settings, monthlyIncome, payday, holidays, today }: FeedSource): CalendarEvent[] => {
+const paydayEvents = ({
+  feed,
+  settings,
+  monthlyIncome,
+  payday,
+  holidays,
+  today
+}: FeedSource): CalendarEvent[] => {
   if (!feed.paydays) return [];
   const rule = payday ?? DEFAULT_PAYDAY;
   // Monthly pay is the one where the monthly income is what comes in on the day

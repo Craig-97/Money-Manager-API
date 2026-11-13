@@ -37,10 +37,15 @@ describe('interest worked out each day', () => {
   });
 
   it('counts savings from the last payment until something’s been counted', () => {
-    const interest = { rate: 4.5, frequency: 'MONTHLY' as const, day: 31, nextDate: day('2026-11-30') };
-    expect(savingsAccruedTo({ balance: 100, balanceUpdatedAt: day('2026-11-02'), interest })).toEqual(
-      day('2026-10-31')
-    );
+    const interest = {
+      rate: 4.5,
+      frequency: 'MONTHLY' as const,
+      day: 31,
+      nextDate: day('2026-11-30')
+    };
+    expect(
+      savingsAccruedTo({ balance: 100, balanceUpdatedAt: day('2026-11-02'), interest })
+    ).toEqual(day('2026-10-31'));
     // A fixed term pays once, so it counts from when the balance was set
     expect(
       savingsAccruedTo({
@@ -58,17 +63,28 @@ describe('interest worked out each day', () => {
       firstPaymentDate: day('2026-01-15'),
       nextDueDate: day('2026-11-15')
     };
-    expect(debtAccruedTo({ ...payment, debt: { balance: 1000, apr: 12, balanceUpdatedAt: day('2026-01-01') } })).toEqual(
-      day('2026-10-15')
-    );
-    expect(debtAccruedTo({ ...payment, debt: { balance: 1000, apr: 12, balanceUpdatedAt: day('2026-10-20') } })).toEqual(
-      day('2026-10-20')
-    );
+    expect(
+      debtAccruedTo({
+        ...payment,
+        debt: { balance: 1000, apr: 12, balanceUpdatedAt: day('2026-01-01') }
+      })
+    ).toEqual(day('2026-10-15'));
+    expect(
+      debtAccruedTo({
+        ...payment,
+        debt: { balance: 1000, apr: 12, balanceUpdatedAt: day('2026-10-20') }
+      })
+    ).toEqual(day('2026-10-20'));
   });
 
   it('pays several missed dates in order, each with the interest up to it', () => {
     const debt = { balance: 3650, apr: 10, accrued: 0, accruedTo: day('2026-09-01') };
-    const payment = { amount: 100, frequency: 'MONTHLY' as const, firstPaymentDate: day('2026-01-01'), debt };
+    const payment = {
+      amount: 100,
+      frequency: 'MONTHLY' as const,
+      firstPaymentDate: day('2026-01-01'),
+      debt
+    };
 
     // 30 days at £1, then 31 days at a little less
     expect(payDebtOn(payment, [day('2026-10-01'), day('2026-11-01')])).toEqual({

@@ -17,9 +17,9 @@ export const balancesToAccounts = async ({ apply }: { apply: boolean }) => {
   // Written before spending accounts, as the one current account per budget
   const current = await accounts.find({ kind: 'CURRENT' }, { projection: { budget: 1 } }).toArray();
   const withCurrent = new Set(
-    (
-      await accounts.find({ paidInto: true }, { projection: { budget: 1 } }).toArray()
-    ).map(account => String(account.budget))
+    (await accounts.find({ paidInto: true }, { projection: { budget: 1 } }).toArray()).map(
+      account => String(account.budget)
+    )
   );
   for (const account of current) withCurrent.add(String(account.budget));
   const all = await budgets.find({}, { projection: { bankBalance: 1 } }).toArray();

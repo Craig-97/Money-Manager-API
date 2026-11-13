@@ -6,7 +6,9 @@ const write = (event: Partial<Parameters<typeof writeCalendar>[0]['events'][numb
   writeCalendar({
     name: 'Money Manager',
     now: NOW,
-    events: [{ uid: 'one@money-manager', date: '2030-01-31', title: 'Payday', alarms: [], ...event }]
+    events: [
+      { uid: 'one@money-manager', date: '2030-01-31', title: 'Payday', alarms: [], ...event }
+    ]
   });
 
 describe('writeCalendar', () => {

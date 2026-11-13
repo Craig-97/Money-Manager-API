@@ -6,7 +6,10 @@ import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
 import { PaymentRecord } from '../../models/payment/PaymentRecord';
 import { Note } from '../../models/note/Note';
-import type { CreateRecurringPaymentInput, UpdateRecurringPaymentInput } from '../../types/payment/recurringPaymentTypes';
+import type {
+  CreateRecurringPaymentInput,
+  UpdateRecurringPaymentInput
+} from '../../types/payment/recurringPaymentTypes';
 import {
   RECURRING_PAYMENT_NOT_FOUND,
   RECURRING_PAYMENTS_NOT_FOUND,
@@ -30,7 +33,11 @@ const findRecurringPayment = async (_: unknown, { id }: { id: string }, req: Req
   return ownDocumentOrThrow(RecurringPayment, { id, req, notFound: RECURRING_PAYMENT_NOT_FOUND });
 };
 
-const createRecurringPayment = async (_: unknown, { input }: { input: CreateRecurringPaymentInput }, req: Request) => {
+const createRecurringPayment = async (
+  _: unknown,
+  { input }: { input: CreateRecurringPaymentInput },
+  req: Request
+) => {
   checkAuth(req);
   const { budgetId, ...payment } = parseInput(newRecurring, input);
   await checkBudgetAccess(budgetId, req);
@@ -42,7 +49,8 @@ const createRecurringPayment = async (_: unknown, { input }: { input: CreateRecu
     // An expense that doesn't say which account it goes out of is recorded on where pay lands, once
     // there's more than one to spend from
     const account =
-      payment.account ?? (payment.type === PaymentType.EXPENSE ? await expenseAccountOf(budgetId, session) : null);
+      payment.account ??
+      (payment.type === PaymentType.EXPENSE ? await expenseAccountOf(budgetId, session) : null);
 
     const createdPayment = await new RecurringPayment({
       ...payment,
@@ -73,14 +81,19 @@ const updateRecurringPayment = async (
     throw RECURRING_PAYMENT_UPDATE_FAILED();
   }
 
-  if (input.name) await validateUniqueName(input.name, { budgetId: payment.budget, excludeId: payment._id });
+  if (input.name)
+    await validateUniqueName(input.name, { budgetId: payment.budget, excludeId: payment._id });
 
   // The renewal rules span fields the update may leave alone, so they're checked on the result
   parseInput(updatedRecurring, { ...payment.toObject(), ...input });
   // As do the rules for its accounts: becoming income or a debt stops it moving money to another
   // account, and accounts it's newly given are checked
   const after = { ...payment.toObject(), ...input };
-  if (input.paysInto === undefined && after.paysInto && (after.type !== PaymentType.EXPENSE || after.debt)) {
+  if (
+    input.paysInto === undefined &&
+    after.paysInto &&
+    (after.type !== PaymentType.EXPENSE || after.debt)
+  ) {
     input.paysInto = null;
     after.paysInto = null;
   }
@@ -133,7 +146,11 @@ const updateRecurringPayment = async (
   });
 };
 
-const batchDeleteRecurringPayments = async (_: unknown, { ids }: { ids: string[] }, req: Request) => {
+const batchDeleteRecurringPayments = async (
+  _: unknown,
+  { ids }: { ids: string[] },
+  req: Request
+) => {
   checkAuth(req);
 
   return withTransaction(async session => {

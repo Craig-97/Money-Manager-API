@@ -47,7 +47,13 @@ export const moveHandledToRecords = async ({ apply }: { apply: boolean }) => {
         dates: entry.dates,
         balanceChange: paid ? (payment.type === 'INCOME' ? amount : -amount) : 0,
         ...(paid && entry.debtReduction != null
-          ? { debt: { interest: 0, reduction: entry.debtReduction, balanceAfter: payment.debt?.balance ?? 0 } }
+          ? {
+              debt: {
+                interest: 0,
+                reduction: entry.debtReduction,
+                balanceAfter: payment.debt?.balance ?? 0
+              }
+            }
           : {}),
         open: true,
         createdAt: entry.dates[entry.dates.length - 1] ?? new Date(),

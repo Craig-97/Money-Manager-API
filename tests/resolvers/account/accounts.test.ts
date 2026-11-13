@@ -1,5 +1,12 @@
 import mongoose from 'mongoose';
-import { setupTestApp, teardownTestApp, clearDatabase, gql, errorCode, createUserWithBudget } from '../../helpers';
+import {
+  setupTestApp,
+  teardownTestApp,
+  clearDatabase,
+  gql,
+  errorCode,
+  createUserWithBudget
+} from '../../helpers';
 import { balancesToAccounts } from '../../../scripts/migrations/balancesToAccounts';
 
 beforeAll(setupTestApp);
@@ -20,7 +27,8 @@ const DELETE = `mutation ($id: ID!) { deleteAccount(id: $id) { success ${BUDGET}
 const BALANCES = `mutation ($input: UpdateAccountBalancesInput!) {
   updateAccountBalances(input: $input) { success ${BUDGET} }
 }`;
-const PAYMENT = 'id name account paysInto history { kind balanceChange transfer { account amount } }';
+const PAYMENT =
+  'id name account paysInto history { kind balanceChange transfer { account amount } }';
 const CREATE_PAYMENT = `mutation ($input: CreateRecurringPaymentInput!) {
   createRecurringPayment(input: $input) { recurringPayment { ${PAYMENT} } }
 }`;
@@ -51,7 +59,11 @@ const byName = (accounts: any[]): Record<string, any> =>
   Object.fromEntries(accounts.map(account => [account.name, account]));
 
 const addSavings = async (token: string, budgetId: string, extra: Record<string, unknown> = {}) => {
-  const body = await gql(CREATE, { input: { budgetId, name: 'Cash ISA', balance: 8650, ...extra } }, token);
+  const body = await gql(
+    CREATE,
+    { input: { budgetId, name: 'Cash ISA', balance: 8650, ...extra } },
+    token
+  );
   return body.data.createAccount.account;
 };
 
@@ -86,7 +98,19 @@ describe('accounts', () => {
 
   it('adds savings kept out of free to spend, unless switched on', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const body = await gql(CREATE, { input: { budgetId, name: '  Cash ISA ', balance: 8650, interest: { rate: 4.5 }, purpose: ' ' } }, token);
+    const body = await gql(
+      CREATE,
+      {
+        input: {
+          budgetId,
+          name: '  Cash ISA ',
+          balance: 8650,
+          interest: { rate: 4.5 },
+          purpose: ' '
+        }
+      },
+      token
+    );
     expect(body.errors).toBeUndefined();
     expect(body.data.createAccount.account).toMatchObject({
       name: 'Cash ISA',
@@ -97,7 +121,11 @@ describe('accounts', () => {
     });
     expect(body.data.createAccount.budget.bankBalance).toBe(1000);
 
-    const easy = await gql(CREATE, { input: { budgetId, name: 'Easy access', balance: 4200, counts: true } }, token);
+    const easy = await gql(
+      CREATE,
+      { input: { budgetId, name: 'Easy access', balance: 4200, counts: true } },
+      token
+    );
     expect(easy.data.createAccount.budget.bankBalance).toBe(5200);
     // Where pay lands first, then savings, oldest first
     expect(easy.data.createAccount.budget.accounts.map((a: { name: string }) => a.name)).toEqual([
@@ -111,10 +139,21 @@ describe('accounts', () => {
     const { token, budgetId } = await createUserWithBudget();
     const isa = await addSavings(token, budgetId);
 
-    const body = await gql(UPDATE, { id: isa.id, input: { balance: 8900, counts: true, purpose: 'Rainy day' } }, token);
+    const body = await gql(
+      UPDATE,
+      { id: isa.id, input: { balance: 8900, counts: true, purpose: 'Rainy day' } },
+      token
+    );
     expect(body.errors).toBeUndefined();
-    expect(body.data.updateAccount.account).toMatchObject({ name: 'Cash ISA', balance: 8900, counts: true, purpose: 'Rainy day' });
-    expect(Number(body.data.updateAccount.account.balanceUpdatedAt)).toBeGreaterThanOrEqual(Number(isa.balanceUpdatedAt));
+    expect(body.data.updateAccount.account).toMatchObject({
+      name: 'Cash ISA',
+      balance: 8900,
+      counts: true,
+      purpose: 'Rainy day'
+    });
+    expect(Number(body.data.updateAccount.account.balanceUpdatedAt)).toBeGreaterThanOrEqual(
+      Number(isa.balanceUpdatedAt)
+    );
     expect(body.data.updateAccount.budget.bankBalance).toBe(9900);
   });
 
@@ -122,15 +161,23 @@ describe('accounts', () => {
     const { token } = await createUserWithBudget();
     const current = (await gql(QUERY, undefined, token)).data.budget.accounts[0];
 
-    expect(errorCode(await gql(UPDATE, { id: current.id, input: { counts: false } }, token))).toBe('PAID_INTO_ACCOUNT_FIXED');
-    expect(errorCode(await gql(UPDATE, { id: current.id, input: { kind: 'SAVINGS' } }, token))).toBe('PAID_INTO_ACCOUNT_FIXED');
+    expect(errorCode(await gql(UPDATE, { id: current.id, input: { counts: false } }, token))).toBe(
+      'PAID_INTO_ACCOUNT_FIXED'
+    );
+    expect(
+      errorCode(await gql(UPDATE, { id: current.id, input: { kind: 'SAVINGS' } }, token))
+    ).toBe('PAID_INTO_ACCOUNT_FIXED');
     expect(errorCode(await gql(DELETE, { id: current.id }, token))).toBe('PAID_INTO_ACCOUNT_FIXED');
   });
 
   it('deletes savings, and payments into it carry on as plain expenses', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const isa = await addSavings(token, budgetId);
-    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { paysInto: isa.id }) }, token);
+    const created = await gql(
+      CREATE_PAYMENT,
+      { input: payment(budgetId, { paysInto: isa.id }) },
+      token
+    );
     const topUp = created.data.createRecurringPayment.recurringPayment;
     expect(topUp.paysInto).toBe(isa.id);
 
@@ -146,23 +193,41 @@ describe('accounts', () => {
     const other = await createUserWithBudget();
     const isa = await addSavings(owner.token, owner.budgetId);
 
-    expect(errorCode(await gql(UPDATE, { id: isa.id, input: { balance: 0 } }, other.token))).toBe('FORBIDDEN');
+    expect(errorCode(await gql(UPDATE, { id: isa.id, input: { balance: 0 } }, other.token))).toBe(
+      'FORBIDDEN'
+    );
     expect(errorCode(await gql(DELETE, { id: isa.id }, other.token))).toBe('FORBIDDEN');
     expect(
       errorCode(
-        await gql(BALANCES, { input: { budgetId: other.budgetId, balances: [{ accountId: isa.id, balance: 0 }] } }, other.token)
+        await gql(
+          BALANCES,
+          { input: { budgetId: other.budgetId, balances: [{ accountId: isa.id, balance: 0 }] } },
+          other.token
+        )
       )
     ).toBe('ACCOUNT_NOT_FOUND');
   });
 
   it('sets several balances at once, the bank balance following those that count', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const easy = await addSavings(token, budgetId, { name: 'Easy access', balance: 4200, counts: true });
+    const easy = await addSavings(token, budgetId, {
+      name: 'Easy access',
+      balance: 4200,
+      counts: true
+    });
     const current = (await gql(QUERY, undefined, token)).data.budget.accounts[0];
 
     const body = await gql(
       BALANCES,
-      { input: { budgetId, balances: [{ accountId: current.id, balance: 5800 }, { accountId: easy.id, balance: 4300 }] } },
+      {
+        input: {
+          budgetId,
+          balances: [
+            { accountId: current.id, balance: 5800 },
+            { accountId: easy.id, balance: 4300 }
+          ]
+        }
+      },
       token
     );
     expect(body.errors).toBeUndefined();
@@ -174,23 +239,39 @@ describe('paying into savings', () => {
   it('takes it off the current account and adds it to the savings, and undoing takes it back', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const isa = await addSavings(token, budgetId);
-    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { paysInto: isa.id }) }, token);
+    const created = await gql(
+      CREATE_PAYMENT,
+      { input: payment(budgetId, { paysInto: isa.id }) },
+      token
+    );
     const topUp = created.data.createRecurringPayment.recurringPayment;
 
-    const paid = await gql(PAID, { input: { budgetId, recurringPaymentIds: [topUp.id], oneOffPaymentIds: [] } }, token);
+    const paid = await gql(
+      PAID,
+      { input: { budgetId, recurringPaymentIds: [topUp.id], oneOffPaymentIds: [] } },
+      token
+    );
     expect(paid.errors).toBeUndefined();
     expect(byName(paid.data.markPaymentsPaid.budget.accounts)).toMatchObject({
       'Current account': { balance: 750 },
       'Cash ISA': { balance: 8900 }
     });
-    const history = await gql(`query ($id: ID!) { recurringPayment(id: $id) { ${PAYMENT} } }`, { id: topUp.id }, token);
+    const history = await gql(
+      `query ($id: ID!) { recurringPayment(id: $id) { ${PAYMENT} } }`,
+      { id: topUp.id },
+      token
+    );
     expect(history.data.recurringPayment.history[0]).toEqual({
       kind: 'PAID',
       balanceChange: -250,
       transfer: { account: isa.id, amount: 250 }
     });
 
-    const undone = await gql(UNPAID, { input: { budgetId, recurringPaymentIds: [topUp.id] } }, token);
+    const undone = await gql(
+      UNPAID,
+      { input: { budgetId, recurringPaymentIds: [topUp.id] } },
+      token
+    );
     expect(byName(undone.data.markPaymentsUnpaid.budget.accounts)).toMatchObject({
       'Current account': { balance: 1000 },
       'Cash ISA': { balance: 8650 }
@@ -206,9 +287,13 @@ describe('paying into savings', () => {
     const create = (extra: Record<string, unknown>) =>
       gql(CREATE_PAYMENT, { input: payment(owner.budgetId, extra) }, owner.token);
 
-    expect(errorCode(await create({ paysInto: isa.id, type: 'INCOME' }))).toBe('PAYS_INTO_NOT_ALLOWED');
+    expect(errorCode(await create({ paysInto: isa.id, type: 'INCOME' }))).toBe(
+      'PAYS_INTO_NOT_ALLOWED'
+    );
     expect(
-      errorCode(await create({ paysInto: isa.id, category: 'FINANCES', debt: { balance: 100, apr: 5 } }))
+      errorCode(
+        await create({ paysInto: isa.id, category: 'FINANCES', debt: { balance: 100, apr: 5 } })
+      )
     ).toBe('PAYS_INTO_NOT_ALLOWED');
     // It goes out of the account pay lands in, so it can't go back into it
     expect(errorCode(await create({ paysInto: current.id }))).toBe('PAYS_INTO_SAME_ACCOUNT');
@@ -218,7 +303,11 @@ describe('paying into savings', () => {
   it('stops paying into savings once the payment becomes income', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const isa = await addSavings(token, budgetId);
-    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { paysInto: isa.id }) }, token);
+    const created = await gql(
+      CREATE_PAYMENT,
+      { input: payment(budgetId, { paysInto: isa.id }) },
+      token
+    );
     const topUp = created.data.createRecurringPayment.recurringPayment;
 
     const body = await gql(UPDATE_PAYMENT, { id: topUp.id, input: { type: 'INCOME' } }, token);
@@ -267,9 +356,16 @@ describe('balancesToAccounts', () => {
     const { token, budgetId } = await createUserWithBudget();
     // As older versions stored it: the balance on the budget, and no accounts
     await db().collection('accounts').deleteMany({});
-    await db().collection('budgets').updateOne({}, { $set: { bankBalance: 1234.5 } });
+    await db()
+      .collection('budgets')
+      .updateOne({}, { $set: { bankBalance: 1234.5 } });
 
-    expect(await balancesToAccounts({ apply: false })).toEqual({ budgets: 1, created: 1, cleared: 1, converted: 0 });
+    expect(await balancesToAccounts({ apply: false })).toEqual({
+      budgets: 1,
+      created: 1,
+      cleared: 1,
+      converted: 0
+    });
     expect(await db().collection('accounts').countDocuments()).toBe(0);
 
     await balancesToAccounts({ apply: true });
@@ -278,17 +374,26 @@ describe('balancesToAccounts', () => {
       bankBalance: 1234.5,
       accounts: [{ kind: 'SPENDING', paidInto: true, balance: 1234.5, counts: true }]
     });
-    const stored = await db().collection('budgets').findOne({ _id: new mongoose.Types.ObjectId(budgetId) });
+    const stored = await db()
+      .collection('budgets')
+      .findOne({ _id: new mongoose.Types.ObjectId(budgetId) });
     expect(stored).not.toHaveProperty('bankBalance');
 
     // Run again, there's nothing left to do
-    expect(await balancesToAccounts({ apply: true })).toEqual({ budgets: 1, created: 0, cleared: 0, converted: 0 });
+    expect(await balancesToAccounts({ apply: true })).toEqual({
+      budgets: 1,
+      created: 0,
+      cleared: 0,
+      converted: 0
+    });
   });
 
   it('makes a current account from before spending accounts the one pay lands in', async () => {
     const { token } = await createUserWithBudget();
     // As the first version of accounts stored it
-    await db().collection('accounts').updateMany({}, { $set: { kind: 'CURRENT' }, $unset: { paidInto: '' } });
+    await db()
+      .collection('accounts')
+      .updateMany({}, { $set: { kind: 'CURRENT' }, $unset: { paidInto: '' } });
 
     expect(await balancesToAccounts({ apply: true })).toMatchObject({ created: 0, converted: 1 });
     const body = await gql(QUERY, undefined, token);
@@ -321,7 +426,11 @@ describe('spending accounts', () => {
 
   it('keeps one out of free to spend when asked, unless pay lands in it', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const pot = await gql(CREATE, { input: { budgetId, name: 'Holiday pot', kind: 'SPENDING', balance: 300, counts: false } }, token);
+    const pot = await gql(
+      CREATE,
+      { input: { budgetId, name: 'Holiday pot', kind: 'SPENDING', balance: 300, counts: false } },
+      token
+    );
     expect(pot.data.createAccount.account).toMatchObject({ kind: 'SPENDING', counts: false });
     expect(pot.data.createAccount.budget.bankBalance).toBe(1000);
 
@@ -331,9 +440,11 @@ describe('spending accounts', () => {
     expect(out.data.updateAccount.budget.bankBalance).toBe(1000);
 
     // Pay landing in it brings it back into free to spend, and it can't be kept out
-    expect(errorCode(await gql(UPDATE, { id: joint.id, input: { paidInto: true, counts: false } }, token))).toBe(
-      'PAID_INTO_ACCOUNT_FIXED'
-    );
+    expect(
+      errorCode(
+        await gql(UPDATE, { id: joint.id, input: { paidInto: true, counts: false } }, token)
+      )
+    ).toBe('PAID_INTO_ACCOUNT_FIXED');
     const paid = await gql(UPDATE, { id: joint.id, input: { paidInto: true } }, token);
     expect(paid.data.updateAccount.account).toMatchObject({ paidInto: true, counts: true });
   });
@@ -351,16 +462,24 @@ describe('spending accounts', () => {
     });
     // Where pay lands is listed first
     expect(body.data.updateAccount.budget.accounts[0].name).toBe('Joint bills');
-    expect(errorCode(await gql(UPDATE, { id: isa.id, input: { paidInto: true } }, token))).toBe('PAID_INTO_NOT_SPENDING');
+    expect(errorCode(await gql(UPDATE, { id: isa.id, input: { paidInto: true } }, token))).toBe(
+      'PAID_INTO_NOT_SPENDING'
+    );
   });
 
   it('adds one that pay lands in from then on, only ever a spending account that counts', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const input = { budgetId, name: 'New current', kind: 'SPENDING', balance: 400, paidInto: true };
 
-    expect(errorCode(await gql(CREATE, { input: { ...input, kind: 'SAVINGS' } }, token))).toBe('PAID_INTO_NOT_SPENDING');
-    expect(errorCode(await gql(CREATE, { input: { ...input, counts: false } }, token))).toBe('PAID_INTO_ACCOUNT_FIXED');
-    expect(errorCode(await gql(CREATE, { input: { ...input, paidInto: false } }, token))).toBe('BAD_USER_INPUT');
+    expect(errorCode(await gql(CREATE, { input: { ...input, kind: 'SAVINGS' } }, token))).toBe(
+      'PAID_INTO_NOT_SPENDING'
+    );
+    expect(errorCode(await gql(CREATE, { input: { ...input, counts: false } }, token))).toBe(
+      'PAID_INTO_ACCOUNT_FIXED'
+    );
+    expect(errorCode(await gql(CREATE, { input: { ...input, paidInto: false } }, token))).toBe(
+      'BAD_USER_INPUT'
+    );
 
     const body = await gql(CREATE, { input }, token);
     expect(body.errors).toBeUndefined();
@@ -375,20 +494,36 @@ describe('spending accounts', () => {
   it('pays from the account a payment names, and undoes onto that account even once it has moved', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const joint = await addSpending(token, budgetId);
-    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { name: 'Energy', category: 'BILLS', account: joint.id }) }, token);
+    const created = await gql(
+      CREATE_PAYMENT,
+      { input: payment(budgetId, { name: 'Energy', category: 'BILLS', account: joint.id }) },
+      token
+    );
     const energy = created.data.createRecurringPayment.recurringPayment;
     expect(energy.account).toBe(joint.id);
 
-    const paid = await gql(PAID, { input: { budgetId, recurringPaymentIds: [energy.id], oneOffPaymentIds: [] } }, token);
+    const paid = await gql(
+      PAID,
+      { input: { budgetId, recurringPaymentIds: [energy.id], oneOffPaymentIds: [] } },
+      token
+    );
     expect(byName(paid.data.markPaymentsPaid.budget.accounts)).toMatchObject({
       'Current account': { balance: 1000 },
       'Joint bills': { balance: 1855 }
     });
 
     // Moved back to where pay lands, then undone: the money goes back where it came from
-    const moved = await gql(ASSIGN, { input: { budgetId, payments: [{ recurringPaymentId: energy.id, accountId: null }] } }, token);
+    const moved = await gql(
+      ASSIGN,
+      { input: { budgetId, payments: [{ recurringPaymentId: energy.id, accountId: null }] } },
+      token
+    );
     expect(moved.errors).toBeUndefined();
-    const undone = await gql(UNPAID, { input: { budgetId, recurringPaymentIds: [energy.id] } }, token);
+    const undone = await gql(
+      UNPAID,
+      { input: { budgetId, recurringPaymentIds: [energy.id] } },
+      token
+    );
     expect(byName(undone.data.markPaymentsUnpaid.budget.accounts)).toMatchObject({
       'Current account': { balance: 1000 },
       'Joint bills': { balance: 2105 }
@@ -400,26 +535,53 @@ describe('spending accounts', () => {
     const isa = await addSavings(token, budgetId);
     const income = await gql(
       CREATE_PAYMENT,
-      { input: payment(budgetId, { name: 'Interest', type: 'INCOME', category: 'GENERAL', account: isa.id }) },
+      {
+        input: payment(budgetId, {
+          name: 'Interest',
+          type: 'INCOME',
+          category: 'GENERAL',
+          account: isa.id
+        })
+      },
       token
     );
     const interest = income.data.createRecurringPayment.recurringPayment;
 
-    const paid = await gql(PAID, { input: { budgetId, recurringPaymentIds: [interest.id], oneOffPaymentIds: [] } }, token);
+    const paid = await gql(
+      PAID,
+      { input: { budgetId, recurringPaymentIds: [interest.id], oneOffPaymentIds: [] } },
+      token
+    );
     expect(byName(paid.data.markPaymentsPaid.budget.accounts)).toMatchObject({
       'Current account': { balance: 1000 },
       'Cash ISA': { balance: 8900 }
     });
-    expect(errorCode(await gql(CREATE_PAYMENT, { input: payment(budgetId, { account: isa.id }) }, token))).toBe('ACCOUNT_NOT_ALLOWED');
+    expect(
+      errorCode(await gql(CREATE_PAYMENT, { input: payment(budgetId, { account: isa.id }) }, token))
+    ).toBe('ACCOUNT_NOT_ALLOWED');
   });
 
   it('moves money between spending accounts', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const joint = await addSpending(token, budgetId);
-    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { name: 'Joint bills top-up', category: 'BILLS', paysInto: joint.id }) }, token);
+    const created = await gql(
+      CREATE_PAYMENT,
+      {
+        input: payment(budgetId, {
+          name: 'Joint bills top-up',
+          category: 'BILLS',
+          paysInto: joint.id
+        })
+      },
+      token
+    );
     const topUp = created.data.createRecurringPayment.recurringPayment;
 
-    const paid = await gql(PAID, { input: { budgetId, recurringPaymentIds: [topUp.id], oneOffPaymentIds: [] } }, token);
+    const paid = await gql(
+      PAID,
+      { input: { budgetId, recurringPaymentIds: [topUp.id], oneOffPaymentIds: [] } },
+      token
+    );
     expect(byName(paid.data.markPaymentsPaid.budget.accounts)).toMatchObject({
       'Current account': { balance: 750 },
       'Joint bills': { balance: 2355 }
@@ -433,19 +595,34 @@ describe('spending accounts', () => {
     const joint = await addSpending(token, budgetId);
     const isa = await addSavings(token, budgetId);
     const make = async (name: string, extra: Record<string, unknown> = {}) =>
-      (await gql(CREATE_PAYMENT, { input: payment(budgetId, { name, category: 'BILLS', ...extra }) }, token)).data
-        .createRecurringPayment.recurringPayment;
+      (
+        await gql(
+          CREATE_PAYMENT,
+          { input: payment(budgetId, { name, category: 'BILLS', ...extra }) },
+          token
+        )
+      ).data.createRecurringPayment.recurringPayment;
     const energy = await make('Energy');
     const water = await make('Water');
     const topUp = await make('Joint bills top-up', { paysInto: joint.id });
 
     const body = await gql(
       ASSIGN,
-      { input: { budgetId, payments: [{ recurringPaymentId: energy.id, accountId: joint.id }, { recurringPaymentId: water.id, accountId: joint.id }] } },
+      {
+        input: {
+          budgetId,
+          payments: [
+            { recurringPaymentId: energy.id, accountId: joint.id },
+            { recurringPaymentId: water.id, accountId: joint.id }
+          ]
+        }
+      },
       token
     );
     expect(body.errors).toBeUndefined();
-    const stored = await mongoose.model('RecurringPayment').find({ _id: { $in: [energy.id, water.id] } });
+    const stored = await mongoose
+      .model('RecurringPayment')
+      .find({ _id: { $in: [energy.id, water.id] } });
     expect(stored.map(p => String(p.account))).toEqual([joint.id, joint.id]);
 
     const assign = (recurringPaymentId: string, accountId: string) =>
@@ -457,7 +634,11 @@ describe('spending accounts', () => {
   it('sends expenses back to where pay lands when their account becomes savings or is deleted', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const joint = await addSpending(token, budgetId);
-    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { name: 'Energy', category: 'BILLS', account: joint.id }) }, token);
+    const created = await gql(
+      CREATE_PAYMENT,
+      { input: payment(budgetId, { name: 'Energy', category: 'BILLS', account: joint.id }) },
+      token
+    );
     const energy = created.data.createRecurringPayment.recurringPayment;
 
     const savings = await gql(UPDATE, { id: joint.id, input: { kind: 'SAVINGS' } }, token);
@@ -465,7 +646,11 @@ describe('spending accounts', () => {
     expect((await mongoose.model('RecurringPayment').findById(energy.id)).account).toBeNull();
 
     await gql(UPDATE, { id: joint.id, input: { kind: 'SPENDING' } }, token);
-    await gql(ASSIGN, { input: { budgetId, payments: [{ recurringPaymentId: energy.id, accountId: joint.id }] } }, token);
+    await gql(
+      ASSIGN,
+      { input: { budgetId, payments: [{ recurringPaymentId: energy.id, accountId: joint.id }] } },
+      token
+    );
     await gql(DELETE, { id: joint.id }, token);
     expect((await mongoose.model('RecurringPayment').findById(energy.id)).account).toBeNull();
     expect((await currentOf(token)).name).toBe('Current account');
@@ -474,8 +659,13 @@ describe('spending accounts', () => {
   it('records every expense on where pay lands once there’s a second account to spend from', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const make = async (name: string, extra: Record<string, unknown> = {}) =>
-      (await gql(CREATE_PAYMENT, { input: payment(budgetId, { name, category: 'BILLS', ...extra }) }, token)).data
-        .createRecurringPayment.recurringPayment;
+      (
+        await gql(
+          CREATE_PAYMENT,
+          { input: payment(budgetId, { name, category: 'BILLS', ...extra }) },
+          token
+        )
+      ).data.createRecurringPayment.recurringPayment;
     const energy = await make('Energy');
     const pay = await make('Pay', { type: 'INCOME', category: 'GENERAL' });
     // With one, none needs naming
@@ -501,7 +691,11 @@ describe('spending accounts', () => {
   it('records them when savings become an account to spend from', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const isa = await addSavings(token, budgetId);
-    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { name: 'Energy', category: 'BILLS' }) }, token);
+    const created = await gql(
+      CREATE_PAYMENT,
+      { input: payment(budgetId, { name: 'Energy', category: 'BILLS' }) },
+      token
+    );
     const energy = created.data.createRecurringPayment.recurringPayment;
 
     await gql(UPDATE, { id: isa.id, input: { kind: 'SPENDING' } }, token);
@@ -513,11 +707,20 @@ describe('spending accounts', () => {
   it('moves a deleted account’s payments to where pay lands, by name while two are left to spend from', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const joint = await addSpending(token, budgetId);
-    const pot = await addSavings(token, budgetId, { name: 'Bills pot', kind: 'SPENDING', balance: 50 });
+    const pot = await addSavings(token, budgetId, {
+      name: 'Bills pot',
+      kind: 'SPENDING',
+      balance: 50
+    });
     const current = await currentOf(token);
     const make = async (name: string, account: string) =>
-      (await gql(CREATE_PAYMENT, { input: payment(budgetId, { name, category: 'BILLS', account }) }, token)).data
-        .createRecurringPayment.recurringPayment;
+      (
+        await gql(
+          CREATE_PAYMENT,
+          { input: payment(budgetId, { name, category: 'BILLS', account }) },
+          token
+        )
+      ).data.createRecurringPayment.recurringPayment;
     const energy = await make('Energy', joint.id);
     const water = await make('Water', pot.id);
     const accountOf = async (id: string) => {
@@ -538,23 +741,54 @@ describe('spending accounts', () => {
     const joint = await addSpending(token, budgetId);
     const oneOff = await gql(
       CREATE_ONE_OFF,
-      { input: { budgetId, name: 'Hotel deposit', amount: 220, dueDate: '2030-01-23', type: 'EXPENSE', category: 'HOLIDAYS', account: joint.id } },
+      {
+        input: {
+          budgetId,
+          name: 'Hotel deposit',
+          amount: 220,
+          dueDate: '2030-01-23',
+          type: 'EXPENSE',
+          category: 'HOLIDAYS',
+          account: joint.id
+        }
+      },
       token
     );
     const hotel = oneOff.data.createOneOffPayment.oneOffPayment;
     expect(hotel.account).toBe(joint.id);
-    const paid = await gql(PAID, { input: { budgetId, recurringPaymentIds: [], oneOffPaymentIds: [hotel.id] } }, token);
+    const paid = await gql(
+      PAID,
+      { input: { budgetId, recurringPaymentIds: [], oneOffPaymentIds: [hotel.id] } },
+      token
+    );
     expect(byName(paid.data.markPaymentsPaid.budget.accounts)['Joint bills'].balance).toBe(1885);
-    const undone = await gql(UNPAID, { input: { budgetId, recurringPaymentIds: [], oneOffPaymentIds: [hotel.id] } }, token);
-    expect(byName(undone.data.markPaymentsUnpaid.budget.accounts)['Joint bills'].balance).toBe(2105);
+    const undone = await gql(
+      UNPAID,
+      { input: { budgetId, recurringPaymentIds: [], oneOffPaymentIds: [hotel.id] } },
+      token
+    );
+    expect(byName(undone.data.markPaymentsUnpaid.budget.accounts)['Joint bills'].balance).toBe(
+      2105
+    );
 
     const loan = await gql(
       CREATE_PAYMENT,
-      { input: payment(budgetId, { name: 'Car finance', category: 'FINANCES', account: joint.id, debt: { balance: 5000, apr: 7 } }) },
+      {
+        input: payment(budgetId, {
+          name: 'Car finance',
+          category: 'FINANCES',
+          account: joint.id,
+          debt: { balance: 5000, apr: 7 }
+        })
+      },
       token
     );
     const car = loan.data.createRecurringPayment.recurringPayment;
-    const over = await gql(OVERPAY, { input: { budgetId, recurringPaymentId: car.id, amount: 100 } }, token);
+    const over = await gql(
+      OVERPAY,
+      { input: { budgetId, recurringPaymentId: car.id, amount: 100 } },
+      token
+    );
     expect(over.errors).toBeUndefined();
     expect(byName(over.data.logDebtOverpayment.budget.accounts)).toMatchObject({
       'Current account': { balance: 1000 },
@@ -569,7 +803,11 @@ describe('setting up accounts with the budget', () => {
   }`;
   const setUp = async (input: Record<string, unknown>) => {
     const { token } = await createUserWithBudget({ withBudget: false });
-    return gql(CREATE_BUDGET, { input: { bankBalance: 7895, monthlyIncome: 3600, ...input } }, token);
+    return gql(
+      CREATE_BUDGET,
+      { input: { bankBalance: 7895, monthlyIncome: 3600, ...input } },
+      token
+    );
   };
   const topUp = (extra: Record<string, unknown>) => ({
     name: 'Joint bills top-up',
@@ -646,20 +884,29 @@ describe('savings interest', () => {
       }
     );
   // A monthly payment's share of the AER, spread over the year's days
-  const dailyAt = (balance: number, rate: number) => (balance * 12 * ((1 + rate / 100) ** (1 / 12) - 1)) / 365;
+  const dailyAt = (balance: number, rate: number) =>
+    (balance * 12 * ((1 + rate / 100) ** (1 / 12) - 1)) / 365;
   const iso = (ms: string) => new Date(Number(ms)).toISOString().slice(0, 10);
   // A date some days from today, as the API takes it
-  const fromToday = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+  const fromToday = (days: number) =>
+    new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 
   const BUILT_UP = `query { budget { accounts { name balance interest { rate accrued accruedTo } } } }`;
   const isaOf = async (token: string) =>
     byName((await gql(BUILT_UP, undefined, token)).data.budget.accounts)['Cash ISA'];
   // As if interest had been counted up to some days ago
   const countedFrom = (id: string, days: number) =>
-    mongoose.model('Account').updateOne(
-      { _id: id },
-      { $set: { 'interest.accrued': 0, 'interest.accruedTo': new Date(`${fromToday(-days)}T00:00:00Z`) } }
-    );
+    mongoose
+      .model('Account')
+      .updateOne(
+        { _id: id },
+        {
+          $set: {
+            'interest.accrued': 0,
+            'interest.accruedTo': new Date(`${fromToday(-days)}T00:00:00Z`)
+          }
+        }
+      );
   const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
 
   it('counts what’s built up at the old balance before a new one, and carries it on', async () => {
@@ -681,10 +928,16 @@ describe('savings interest', () => {
 
   it('keeps what’s built up when the rate or day changes', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const isa = await addSavings(token, budgetId, { interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 } });
+    const isa = await addSavings(token, budgetId, {
+      interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 }
+    });
     await countedFrom(isa.id, 5);
 
-    await gql(UPDATE, { id: isa.id, input: { interest: { rate: 5, frequency: 'MONTHLY', day: 20 } } }, token);
+    await gql(
+      UPDATE,
+      { id: isa.id, input: { interest: { rate: 5, frequency: 'MONTHLY', day: 20 } } },
+      token
+    );
 
     const after = await isaOf(token);
     expect(after.interest.rate).toBe(5);
@@ -713,7 +966,9 @@ describe('savings interest', () => {
     expect(noDay.errors?.[0].message).toMatch('Choose the day of the month');
     const noDate = await gql(
       CREATE,
-      { input: { budgetId, name: 'Bond', balance: 1, interest: { rate: 4, frequency: 'MATURITY' } } },
+      {
+        input: { budgetId, name: 'Bond', balance: 1, interest: { rate: 4, frequency: 'MATURITY' } }
+      },
       token
     );
     expect(noDate.errors?.[0].message).toMatch('Choose when it’s next paid');
@@ -734,7 +989,9 @@ describe('savings interest', () => {
 
   it('adds a payment that’s come on its own date, without dating the balance, keeping it to check', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const isa = await addSavings(token, budgetId, { interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 } });
+    const isa = await addSavings(token, budgetId, {
+      interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 }
+    });
     await dueSince(isa.id, { due: 10, countedFrom: 40 });
 
     const after = await catchUp(token, budgetId);
@@ -752,17 +1009,27 @@ describe('savings interest', () => {
 
   it('adds each missed payment in order, the later ones earning on the earlier', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const isa = await addSavings(token, budgetId, { interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 } });
+    const isa = await addSavings(token, budgetId, {
+      interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 }
+    });
     const nextDate = new Date(Number(isa.interest.nextDate));
     const monthsBack = (months: number) => {
       const date = new Date(nextDate);
       date.setUTCMonth(date.getUTCMonth() - months);
       return date;
     };
-    await mongoose.model('Account').updateOne(
-      { _id: isa.id },
-      { $set: { 'interest.nextDate': monthsBack(3), 'interest.accrued': 0, 'interest.accruedTo': monthsBack(4) } }
-    );
+    await mongoose
+      .model('Account')
+      .updateOne(
+        { _id: isa.id },
+        {
+          $set: {
+            'interest.nextDate': monthsBack(3),
+            'interest.accrued': 0,
+            'interest.accruedTo': monthsBack(4)
+          }
+        }
+      );
 
     const after = await catchUp(token, budgetId);
 
@@ -779,7 +1046,9 @@ describe('savings interest', () => {
 
   it('adds it once when two tabs open at the same time', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const isa = await addSavings(token, budgetId, { interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 } });
+    const isa = await addSavings(token, budgetId, {
+      interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 }
+    });
     await dueSince(isa.id, { due: 10, countedFrom: 40 });
 
     await Promise.all([gql(CATCH_UP, { budgetId }, token), gql(CATCH_UP, { budgetId }, token)]);
@@ -806,7 +1075,9 @@ describe('savings interest', () => {
 
   it('stops asking to check what was added once the balance is typed in', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const isa = await addSavings(token, budgetId, { interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 } });
+    const isa = await addSavings(token, budgetId, {
+      interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 }
+    });
     await dueSince(isa.id, { due: 10, countedFrom: 40 });
     await catchUp(token, budgetId);
 

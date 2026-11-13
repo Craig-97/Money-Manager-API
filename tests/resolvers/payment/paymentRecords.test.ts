@@ -15,7 +15,8 @@ beforeAll(setupTestApp);
 afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
-const HISTORY = 'history { id kind dates balanceChange open debt { interest reduction balanceAfter } }';
+const HISTORY =
+  'history { id kind dates balanceChange open debt { interest reduction balanceAfter } }';
 const RECURRING = `id name nextDueDate thisCycle { kind dates } debt { balance } ${HISTORY}`;
 const BUDGET = `budget { bankBalance recurringPayments { ${RECURRING} } oneOffPayments { id name paidAt } }`;
 
@@ -71,16 +72,26 @@ const oneOff = async (token: string, budgetId: string, name: string, dueDate = '
     )
   ).data.createOneOffPayment.oneOffPayment.id as string;
 
-const pay = (token: string, budgetId: string, recurringPaymentIds: string[], oneOffPaymentIds: string[] = []) =>
-  gql(PAID, { input: { budgetId, recurringPaymentIds, oneOffPaymentIds } }, token);
-const unpay = (token: string, budgetId: string, recurringPaymentIds: string[], oneOffPaymentIds?: string[]) =>
-  gql(UNPAID, { input: { budgetId, recurringPaymentIds, oneOffPaymentIds } }, token);
+const pay = (
+  token: string,
+  budgetId: string,
+  recurringPaymentIds: string[],
+  oneOffPaymentIds: string[] = []
+) => gql(PAID, { input: { budgetId, recurringPaymentIds, oneOffPaymentIds } }, token);
+const unpay = (
+  token: string,
+  budgetId: string,
+  recurringPaymentIds: string[],
+  oneOffPaymentIds?: string[]
+) => gql(UNPAID, { input: { budgetId, recurringPaymentIds, oneOffPaymentIds } }, token);
 const startCycle = (token: string, budgetId: string, payday: string) =>
   gql(START, { input: { budgetId, payday, paidIntoBalance: 1000, leftOver: [] } }, token);
 
 const budgetIn = (body: GqlBody) => {
   expect(body.errors).toBeUndefined();
-  return Object.values(body.data as Record<string, { budget?: unknown }>)[0].budget ?? body.data.budget;
+  return (
+    Object.values(body.data as Record<string, { budget?: unknown }>)[0].budget ?? body.data.budget
+  );
 };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const onlyPayment = (body: GqlBody): any => (budgetIn(body) as any).recurringPayments[0];
@@ -111,16 +122,29 @@ describe('payment history', () => {
       open: true,
       debt: { interest: 12, reduction: 88, balanceAfter: 1112 }
     });
-    expect(history[0]).toMatchObject({ balanceChange: -50, debt: { reduction: 50, balanceAfter: 1062 } });
-    expect(history[3]).toMatchObject({ balanceChange: 0, debt: { reduction: 0, balanceAfter: 1200 } });
+    expect(history[0]).toMatchObject({
+      balanceChange: -50,
+      debt: { reduction: 50, balanceAfter: 1062 }
+    });
+    expect(history[3]).toMatchObject({
+      balanceChange: 0,
+      debt: { reduction: 0, balanceAfter: 1200 }
+    });
   });
 
   it('keeps the latest ones when given a limit', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const payment = await recurring(token, budgetId, { frequency: 'WEEKLY', firstPaymentDate: '2030-01-07' });
+    const payment = await recurring(token, budgetId, {
+      frequency: 'WEEKLY',
+      firstPaymentDate: '2030-01-07'
+    });
     for (let i = 0; i < 3; i += 1) await pay(token, budgetId, [payment.id]);
 
-    const body = await gql(`query { budget { recurringPayments { history(limit: 2) { dates } } } }`, {}, token);
+    const body = await gql(
+      `query { budget { recurringPayments { history(limit: 2) { dates } } } }`,
+      {},
+      token
+    );
 
     expect(body.data.budget.recurringPayments[0].history).toEqual([
       { dates: [apiDate('2030-01-21')] },
@@ -132,17 +156,28 @@ describe('payment history', () => {
     const { token, budgetId } = await createUserWithBudget();
     const payment = await recurring(token, budgetId, { debt: card });
 
-    const body = await gql(UPDATE, { id: payment.id, input: { debt: { ...card, balance: 1150 } } }, token);
+    const body = await gql(
+      UPDATE,
+      { id: payment.id, input: { debt: { ...card, balance: 1150 } } },
+      token
+    );
 
     const [latest] = body.data.updateRecurringPayment.recurringPayment.history;
-    expect(latest).toMatchObject({ kind: 'BALANCE_SET', debt: { reduction: 50, balanceAfter: 1150 } });
+    expect(latest).toMatchObject({
+      kind: 'BALANCE_SET',
+      debt: { reduction: 50, balanceAfter: 1150 }
+    });
   });
 
   it("doesn't note a balance when only the rate changes", async () => {
     const { token, budgetId } = await createUserWithBudget();
     const payment = await recurring(token, budgetId, { debt: card });
 
-    const body = await gql(UPDATE, { id: payment.id, input: { debt: { ...card, apr: 20 } } }, token);
+    const body = await gql(
+      UPDATE,
+      { id: payment.id, input: { debt: { ...card, apr: 20 } } },
+      token
+    );
 
     expect(body.data.updateRecurringPayment.recurringPayment.history).toHaveLength(1);
   });
@@ -180,10 +215,9 @@ describe('payment history', () => {
 
     expect(body.errors).toBeUndefined();
     expect(body.data.recurringPayment).toMatchObject({ id: payment.id, name: 'Credit card' });
-    expect(body.data.recurringPayment.history.map((record: { kind: string }) => record.kind)).toEqual([
-      'PAID',
-      'BALANCE_SET'
-    ]);
+    expect(
+      body.data.recurringPayment.history.map((record: { kind: string }) => record.kind)
+    ).toEqual(['PAID', 'BALANCE_SET']);
   });
 
   it("won't read another user's payment, or one that doesn't exist", async () => {
@@ -193,7 +227,9 @@ describe('payment history', () => {
     const query = `query ($id: ID!) { recurringPayment(id: $id) { id } }`;
 
     expect(errorCode(await gql(query, { id: payment.id }, other.token))).toBe('FORBIDDEN');
-    expect(errorCode(await gql(query, { id: 'nope' }, owner.token))).toBe('RECURRING_PAYMENT_NOT_FOUND');
+    expect(errorCode(await gql(query, { id: 'nope' }, owner.token))).toBe(
+      'RECURRING_PAYMENT_NOT_FOUND'
+    );
     expect(errorCode(await gql(query, { id: payment.id }))).toBe('UNAUTHENTICATED');
   });
 });
@@ -281,9 +317,9 @@ describe('payday', () => {
     const budget = budgetIn(await startCycle(token, budgetId, '2030-02-01'));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((budget as any).oneOffPayments.map((payment: { id: string }) => payment.id).sort()).toEqual(
-      [unpaid, later].sort()
-    );
+    expect(
+      (budget as any).oneOffPayments.map((payment: { id: string }) => payment.id).sort()
+    ).toEqual([unpaid, later].sort());
     // The cleared one-off's record stays as history
     expect(await records().countDocuments({ 'payment.name': 'Gift', open: false })).toBe(1);
   });
@@ -297,7 +333,10 @@ describe('one-off payments', () => {
 
     const again = budgetIn(await pay(token, budgetId, [], [gift]));
 
-    expect(again).toMatchObject({ bankBalance: 960, oneOffPayments: [{ id: gift, paidAt: expect.any(String) }] });
+    expect(again).toMatchObject({
+      bankBalance: 960,
+      oneOffPayments: [{ id: gift, paidAt: expect.any(String) }]
+    });
   });
 
   it('can be made unpaid again, putting the money back', async () => {
@@ -307,7 +346,10 @@ describe('one-off payments', () => {
 
     const budget = budgetIn(await unpay(token, budgetId, [], [gift]));
 
-    expect(budget).toMatchObject({ bankBalance: 1000, oneOffPayments: [{ id: gift, paidAt: null }] });
+    expect(budget).toMatchObject({
+      bankBalance: 1000,
+      oneOffPayments: [{ id: gift, paidAt: null }]
+    });
     expect(await records().countDocuments()).toBe(0);
   });
 
@@ -319,7 +361,10 @@ describe('one-off payments', () => {
     await gql(DELETE_ONE_OFF, { ids: [gift] }, token);
 
     expect(await records().countDocuments()).toBe(0);
-    expect(budgetIn(await gql(BUDGET_QUERY, {}, token))).toMatchObject({ bankBalance: 960, oneOffPayments: [] });
+    expect(budgetIn(await gql(BUDGET_QUERY, {}, token))).toMatchObject({
+      bankBalance: 960,
+      oneOffPayments: []
+    });
   });
 });
 
@@ -342,7 +387,9 @@ describe('undoDebtOverpayment', () => {
 
     expect(budgetIn(body)).toMatchObject({ bankBalance: 1000 });
     expect(onlyPayment(body)).toMatchObject({ debt: { balance: 1200 } });
-    expect(onlyPayment(body).history.map((record: { kind: string }) => record.kind)).toEqual(['BALANCE_SET']);
+    expect(onlyPayment(body).history.map((record: { kind: string }) => record.kind)).toEqual([
+      'BALANCE_SET'
+    ]);
   });
 
   it("can't take back one from before the last payday", async () => {
@@ -359,7 +406,9 @@ describe('undoDebtOverpayment', () => {
     const payment = await recurring(token, budgetId, { debt: card });
     const paid = onlyPayment(await pay(token, budgetId, [payment.id]));
 
-    expect(errorCode(await undo(token, budgetId, paid.history[0].id))).toBe('PAYMENT_RECORD_NOT_FOUND');
+    expect(errorCode(await undo(token, budgetId, paid.history[0].id))).toBe(
+      'PAYMENT_RECORD_NOT_FOUND'
+    );
   });
 
   it("can't touch someone else's", async () => {
@@ -369,7 +418,9 @@ describe('undoDebtOverpayment', () => {
     const other = await createUserWithBudget();
 
     expect(errorCode(await undo(other.token, owner.budgetId, recordId))).toBe('FORBIDDEN');
-    expect(errorCode(await undo(other.token, other.budgetId, recordId))).toBe('PAYMENT_RECORD_NOT_FOUND');
+    expect(errorCode(await undo(other.token, other.budgetId, recordId))).toBe(
+      'PAYMENT_RECORD_NOT_FOUND'
+    );
   });
 });
 

@@ -7,8 +7,7 @@ interface PasswordResetEmail {
   expiresInMinutes: number;
 }
 
-const escapeHtml = (value: string) =>
-  value.replace(/[&<>"']/g, char => `&#${char.charCodeAt(0)};`);
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, char => `&#${char.charCodeAt(0)};`);
 
 // The front-end page that reads the token from the link and calls resetPassword
 const passwordResetUrl = (token: string) =>

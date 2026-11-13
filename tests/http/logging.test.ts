@@ -1,7 +1,13 @@
 import { GraphQLError } from 'graphql';
 import { formatError } from '../../utils/errors';
 import { authLog, logger } from '../../utils/logger';
-import { setupTestApp, teardownTestApp, clearDatabase, gql, createUserWithBudget } from '../helpers';
+import {
+  setupTestApp,
+  teardownTestApp,
+  clearDatabase,
+  gql,
+  createUserWithBudget
+} from '../helpers';
 
 beforeAll(setupTestApp);
 afterAll(teardownTestApp);
@@ -14,7 +20,11 @@ describe('formatError', () => {
     const raw = new Error('No matching document found for id "6ac3" version 1');
 
     const sent = formatError(
-      { message: raw.message, path: ['changePassword'], extensions: { code: 'INTERNAL_SERVER_ERROR' } },
+      {
+        message: raw.message,
+        path: ['changePassword'],
+        extensions: { code: 'INTERNAL_SERVER_ERROR' }
+      },
       raw
     );
 
@@ -29,12 +39,17 @@ describe('formatError', () => {
 
   it('treats an error with no code as unexpected', () => {
     jest.spyOn(logger, 'error').mockImplementation(() => undefined);
-    expect(formatError({ message: 'boom' }, new Error('boom')).message).toBe('Something went wrong. Please try again.');
+    expect(formatError({ message: 'boom' }, new Error('boom')).message).toBe(
+      'Something went wrong. Please try again.'
+    );
   });
 
   it("passes the API's own errors through untouched", () => {
     const logged = jest.spyOn(logger, 'error');
-    const formatted = { message: 'Password is incorrect', extensions: { code: 'INVALID_CREDENTIALS' } };
+    const formatted = {
+      message: 'Password is incorrect',
+      extensions: { code: 'INVALID_CREDENTIALS' }
+    };
     expect(formatError(formatted, new GraphQLError(formatted.message))).toBe(formatted);
     expect(logged).not.toHaveBeenCalled();
   });

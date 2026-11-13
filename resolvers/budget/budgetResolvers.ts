@@ -1,28 +1,25 @@
-import type { ClientSession, Types } from "mongoose";
-import type { Request } from "express";
-import { PaymentType } from "../../constants/payment/paymentType";
-import { PaymentRecordKind } from "../../constants/payment/paymentRecordKind";
-import { LeftOverOutcome } from "../../constants/payday/leftOverOutcome";
-import { AccountKind, PAID_INTO_KEY } from "../../constants/account/accountKind";
-import { checkBudgetAccess, checkAuth } from "../../middleware/isAuth";
-import { Account } from "../../models/account/Account";
-import { Budget, type BudgetDocument } from "../../models/budget/Budget";
-import { User } from "../../models/user/User";
-import { Note } from "../../models/note/Note";
-import {
-  OneOffPayment,
-  type OneOffPaymentDocument,
-} from "../../models/payment/OneOffPayment";
-import { Payday } from "../../models/payday/Payday";
+import type { ClientSession, Types } from 'mongoose';
+import type { Request } from 'express';
+import { PaymentType } from '../../constants/payment/paymentType';
+import { PaymentRecordKind } from '../../constants/payment/paymentRecordKind';
+import { LeftOverOutcome } from '../../constants/payday/leftOverOutcome';
+import { AccountKind, PAID_INTO_KEY } from '../../constants/account/accountKind';
+import { checkBudgetAccess, checkAuth } from '../../middleware/isAuth';
+import { Account } from '../../models/account/Account';
+import { Budget, type BudgetDocument } from '../../models/budget/Budget';
+import { User } from '../../models/user/User';
+import { Note } from '../../models/note/Note';
+import { OneOffPayment, type OneOffPaymentDocument } from '../../models/payment/OneOffPayment';
+import { Payday } from '../../models/payday/Payday';
 import {
   RecurringPayment,
-  type RecurringPaymentDocument,
-} from "../../models/payment/RecurringPayment";
+  type RecurringPaymentDocument
+} from '../../models/payment/RecurringPayment';
 import {
   PaymentRecord,
   type RecordDebt,
-  type RecordTransfer,
-} from "../../models/payment/PaymentRecord";
+  type RecordTransfer
+} from '../../models/payment/PaymentRecord';
 import type {
   CreateBudgetInput,
   UpdateBudgetInput,
@@ -31,14 +28,9 @@ import type {
   SkipRecurringPaymentsInput,
   StartPaydayCycleInput,
   LogDebtOverpaymentInput,
-  UndoDebtOverpaymentInput,
-} from "../../types/budget/budgetTypes";
-import {
-  budgetMoves,
-  datesOutBefore,
-  goesOutOn,
-  moveOf,
-} from "../../utils/payday";
+  UndoDebtOverpaymentInput
+} from '../../types/budget/budgetTypes';
+import { budgetMoves, datesOutBefore, goesOutOn, moveOf } from '../../utils/payday';
 import {
   USER_NOT_FOUND,
   BUDGET_NOT_LINKED,
@@ -68,7 +60,7 @@ import {
   nextOccurrence,
   occurrencesBefore,
   ukDay
-} from "../../utils";
+} from '../../utils';
 import {
   accountFor,
   accountsOf,
@@ -79,21 +71,17 @@ import {
   paidIntoAccountOf,
   setBalance,
   setBalances,
-  newAccountFields,
-} from "../account/accountResolvers";
+  newAccountFields
+} from '../account/accountResolvers';
 import {
   latestOpenRecord,
   recordBalanceSet,
   snapshotOf,
-  withThisCycle,
-} from "../payment/paymentRecordResolvers";
+  withThisCycle
+} from '../payment/paymentRecordResolvers';
 
 // One of the signed-in user's budgets, or their default budget when no id is given
-const findBudget = async (
-  _: unknown,
-  { id }: { id?: string | null },
-  req: Request,
-) => {
+const findBudget = async (_: unknown, { id }: { id?: string | null }, req: Request) => {
   checkAuth(req);
 
   let budgetId = id;
@@ -115,11 +103,7 @@ const findBudget = async (
 };
 
 // A new budget for the signed-in user, with any payments and payday set up alongside it
-const createBudget = async (
-  _: unknown,
-  { input }: { input: CreateBudgetInput },
-  req: Request,
-) => {
+const createBudget = async (_: unknown, { input }: { input: CreateBudgetInput }, req: Request) => {
   checkAuth(req);
   const {
     bankBalance,
@@ -128,19 +112,17 @@ const createBudget = async (
     monthlyIncome,
     oneOffPayments = [],
     recurringPayments = [],
-    payday,
+    payday
   } = parseInput(newBudget, input);
 
-  return withTransaction(async (session) => {
+  return withTransaction(async session => {
     const user = await User.findById(req.userId).session(session);
     if (!user) {
       throw USER_NOT_FOUND(req.userId);
     }
 
     // One budget each for now
-    const existingBudget = await Budget.findOne({ user: user._id }).session(
-      session,
-    );
+    const existingBudget = await Budget.findOne({ user: user._id }).session(session);
     if (existingBudget) {
       throw BUDGET_EXISTS(existingBudget.id);
     }
@@ -149,30 +131,30 @@ const createBudget = async (
       monthlyIncome,
       user: user._id,
       // Setup starts the first cycle, so the payday prompt waits for the next payday
-      cycleStartedOn: ukDay(),
+      cycleStartedOn: ukDay()
     }).save({ session });
 
     // Where pay lands, holding the balance the user started with, then the other accounts. Payments
     // set up alongside them name them by key.
     const paidInto = await new Account({
       budget: budget._id,
-      name: paidIntoName ?? "Current account",
+      name: paidIntoName ?? 'Current account',
       kind: AccountKind.SPENDING,
       paidInto: true,
       balance: bankBalance,
       counts: true,
-      balanceUpdatedAt: new Date(),
+      balanceUpdatedAt: new Date()
     }).save({ session });
     const keys = new Map<string, Types.ObjectId>([[PAID_INTO_KEY, paidInto._id]]);
     for (const { key, kind, counts, interest, purpose, ...account } of accounts ?? []) {
       const saved = await new Account({
         ...account,
         budget: budget._id,
-        ...newAccountFields({ kind, counts, interest, purpose }),
+        ...newAccountFields({ kind, counts, interest, purpose })
       }).save({ session });
       keys.set(key, saved._id);
     }
-    const idOf = (key: string | null | undefined, field: "account" | "paysInto") => {
+    const idOf = (key: string | null | undefined, field: 'account' | 'paysInto') => {
       if (!key) return null;
       const id = keys.get(key);
       if (!id) throw ACCOUNT_NOT_ALLOWED(key, field);
@@ -185,14 +167,14 @@ const createBudget = async (
 
     // Check for name conflicts for all payments
     await Promise.all(
-      [...oneOffPayments, ...recurringPayments].map((payment) =>
-        validateUniqueName(payment.name, { budgetId: budget._id, session }),
-      ),
+      [...oneOffPayments, ...recurringPayments].map(payment =>
+        validateUniqueName(payment.name, { budgetId: budget._id, session })
+      )
     );
 
     // Sequential: operations within a transaction session can't run in parallel
     for (const payment of oneOffPayments ?? []) {
-      const mapped = { ...payment, account: idOf(payment.account, "account") };
+      const mapped = { ...payment, account: idOf(payment.account, 'account') };
       await checkPaymentAccounts(mapped, { budget: budget._id, session });
       await new OneOffPayment({ ...mapped, budget: budget._id }).save({ session });
     }
@@ -200,16 +182,16 @@ const createBudget = async (
     for (const payment of recurringPayments ?? []) {
       const mapped = {
         ...payment,
-        account: idOf(payment.account, "account"),
-        paysInto: idOf(payment.paysInto, "paysInto"),
+        account: idOf(payment.account, 'account'),
+        paysInto: idOf(payment.paysInto, 'paysInto')
       };
       await checkPaymentAccounts(mapped, { budget: budget._id, session });
       saved.push(
         await new RecurringPayment({
           ...mapped,
           debt: withBalanceDate(payment.debt),
-          budget: budget._id,
-        }).save({ session }),
+          budget: budget._id
+        }).save({ session })
       );
     }
     // Each debt's starting balance goes in its history
@@ -230,7 +212,7 @@ const createBudget = async (
 const updateBudget = async (
   _: unknown,
   { id, input }: { id: string; input: UpdateBudgetInput },
-  req: Request,
+  req: Request
 ) => {
   checkAuth(req);
   await checkBudgetAccess(id, req);
@@ -264,34 +246,32 @@ const updateBudget = async (
 const startPaydayCycle = async (
   _: unknown,
   { input }: { input: StartPaydayCycleInput },
-  req: Request,
+  req: Request
 ) => {
   checkAuth(req);
   const { budgetId, payday, paidIntoBalance, accountBalances, leftOver, alreadyPaid } = parseInput(
     paydayCycle,
-    input,
+    input
   );
   await checkBudgetAccess(budgetId, req);
 
-  return withTransaction(async (session) => {
+  return withTransaction(async session => {
     const budget = await budgetOrThrow(budgetId, session);
 
     const cycleStart = new Date(payday);
     const today = ukDay();
-    const payments = await RecurringPayment.find({ budget: budgetId }).session(
-      session,
-    );
+    const payments = await RecurringPayment.find({ budget: budgetId }).session(session);
     // Whether a date fell before payday, or has gone out by today, is decided by when it goes out
     const moves = await budgetMoves(
       budget,
-      await Payday.findOne({ budget: budgetId }).session(session),
+      await Payday.findOne({ budget: budgetId }).session(session)
     );
     const outcomes = new Map(
-      leftOver.map(({ recurringPaymentId, outcome }) => [recurringPaymentId, outcome]),
+      leftOver.map(({ recurringPaymentId, outcome }) => [recurringPaymentId, outcome])
     );
     const goneOut = new Set(alreadyPaid?.recurringPaymentIds ?? []);
     for (const id of [...outcomes.keys(), ...goneOut]) {
-      if (!payments.some((payment) => payment.id === id)) {
+      if (!payments.some(payment => payment.id === id)) {
         throw RECURRING_PAYMENT_NOT_FOUND(id);
       }
     }
@@ -302,15 +282,15 @@ const startPaydayCycle = async (
       {
         budget: budgetId,
         open: true,
-        dates: { $not: { $elemMatch: { $gte: cycleStart } } },
+        dates: { $not: { $elemMatch: { $gte: cycleStart } } }
       },
       { $set: { open: false } },
-      { session },
+      { session }
     );
     await OneOffPayment.deleteMany({
       budget: budgetId,
       paidAt: { $ne: null },
-      dueDate: { $lt: cycleStart },
+      dueDate: { $lt: cycleStart }
     }).session(session);
 
     // Sequential: operations within a transaction session can't run in parallel
@@ -331,7 +311,7 @@ const startPaydayCycle = async (
             ? await recordAlreadyPaid(payment, { dates, session, open: false })
             : await handle(payment, PaymentRecordKind.SKIPPED, dates, session, {
                 balanceChange: 0,
-                open: false,
+                open: false
               });
       }
       // Gone out since payday: its dates up to today, once it's in the new cycle
@@ -379,7 +359,7 @@ type BalanceEffect = number | { amount: number; account: AccountId };
 const movesOf = async (budgetId: string) => {
   const [budget, payday] = await Promise.all([
     budgetOrThrow(budgetId),
-    Payday.findOne({ budget: budgetId }),
+    Payday.findOne({ budget: budgetId })
   ]);
   return budgetMoves(budget, payday);
 };
@@ -387,7 +367,7 @@ const movesOf = async (budgetId: string) => {
 /* Moves an account's balance; none means the one pay lands in */
 const moveOn = async (
   budgetId: string,
-  { account, amount, session }: { account: AccountId; amount: number; session: ClientSession },
+  { account, amount, session }: { account: AccountId; amount: number; session: ClientSession }
 ) => {
   if (!amount) return;
   await moveMoney(await accountFor(budgetId, { account, session }), { amount, session });
@@ -403,19 +383,19 @@ const changeRecurringPayments = (
   recurringPaymentIds: string[],
   change: (
     payment: RecurringPaymentDocument,
-    session: ClientSession,
+    session: ClientSession
   ) => Promise<BalanceEffect | null>,
   // Further work in the same transaction, moving balances itself
-  more?: (session: ClientSession) => Promise<void>,
+  more?: (session: ClientSession) => Promise<void>
 ) =>
-  withTransaction(async (session) => {
+  withTransaction(async session => {
     const budget = await budgetOrThrow(budgetId, session);
 
     // Sequential: operations within a transaction session can't run in parallel
     for (const id of recurringPaymentIds) {
       const payment = await RecurringPayment.findOne({
         _id: id,
-        budget: budgetId,
+        budget: budgetId
       }).session(session);
       if (!payment) {
         throw RECURRING_PAYMENT_NOT_FOUND(id);
@@ -423,7 +403,7 @@ const changeRecurringPayments = (
       const effect = await change(payment, session);
       if (effect === null) continue;
       const { amount, account } =
-        typeof effect === "number" ? { amount: effect, account: payment.account } : effect;
+        typeof effect === 'number' ? { amount: effect, account: payment.account } : effect;
       await moveOn(budgetId, { account, amount, session });
       payment.increment();
       await payment.save({ session });
@@ -453,7 +433,7 @@ const handle = async (
     debt?: RecordDebt;
     transfer?: RecordTransfer;
     open?: boolean;
-  } = { balanceChange: 0 },
+  } = { balanceChange: 0 }
 ) => {
   if (!dates.length) return false;
   await new PaymentRecord({
@@ -462,7 +442,7 @@ const handle = async (
     payment: snapshotOf(payment),
     kind,
     dates,
-    ...paid,
+    ...paid
   }).save({ session });
   payment.nextDueDate = nextOccurrence(payment, addDays(dates[dates.length - 1], 1));
   return true;
@@ -475,7 +455,7 @@ const handle = async (
  */
 const recordAlreadyPaid = async (
   payment: RecurringPaymentDocument,
-  { dates, session, open }: { dates: Date[]; session: ClientSession; open: boolean },
+  { dates, session, open }: { dates: Date[]; session: ClientSession; open: boolean }
 ) => {
   const debt = payment.debt && dates.length ? payDebtOn(payment, dates) : undefined;
   const transfer = await payInto(payment, { times: dates.length, session });
@@ -483,7 +463,7 @@ const recordAlreadyPaid = async (
     balanceChange: 0,
     debt,
     transfer,
-    open,
+    open
   });
 };
 
@@ -493,7 +473,7 @@ const recordAlreadyPaid = async (
  */
 const payInto = async (
   payment: RecurringPaymentDocument,
-  { times, session }: { times: number; session: ClientSession },
+  { times, session }: { times: number; session: ClientSession }
 ): Promise<RecordTransfer | undefined> => {
   if (!payment.paysInto || !times) return undefined;
   const amount = roundPence(payment.amount * times);
@@ -504,7 +484,7 @@ const payInto = async (
 /* A one-off in the budget, or not found */
 const oneOffInBudget = async (
   id: string,
-  { budgetId, session }: { budgetId: string; session: ClientSession },
+  { budgetId, session }: { budgetId: string; session: ClientSession }
 ) => {
   const payment = await OneOffPayment.findOne({ _id: id, budget: budgetId }).session(session);
   if (!payment) {
@@ -522,8 +502,8 @@ const payOneOff = async (
   {
     balanceChange,
     account,
-    session,
-  }: { balanceChange: number; account?: Types.ObjectId; session: ClientSession },
+    session
+  }: { balanceChange: number; account?: Types.ObjectId; session: ClientSession }
 ) => {
   await new PaymentRecord({
     budget: payment.budget,
@@ -532,7 +512,7 @@ const payOneOff = async (
     kind: PaymentRecordKind.PAID,
     dates: [payment.dueDate ?? ukDay()],
     balanceChange,
-    account,
+    account
   }).save({ session });
   payment.paidAt = new Date();
   payment.increment();
@@ -545,7 +525,7 @@ const payOneOff = async (
 const markPaymentsPaid = async (
   _: unknown,
   { input }: { input: MarkPaymentsPaidInput },
-  req: Request,
+  req: Request
 ) => {
   checkAuth(req);
   const { budgetId, recurringPaymentIds, oneOffPaymentIds } = input;
@@ -567,11 +547,11 @@ const markPaymentsPaid = async (
         balanceChange: change,
         account,
         debt,
-        transfer,
+        transfer
       });
       return { amount: change, account };
     },
-    async (session) => {
+    async session => {
       for (const id of oneOffPaymentIds) {
         const payment = await oneOffInBudget(id, { budgetId, session });
         // Already paid: nothing more comes off
@@ -581,7 +561,7 @@ const markPaymentsPaid = async (
         await payOneOff(payment, { balanceChange: change, account, session });
         await moveOn(budgetId, { account, amount: change, session });
       }
-    },
+    }
   );
 };
 
@@ -591,7 +571,7 @@ const markPaymentsPaid = async (
 const markPaymentsUnpaid = async (
   _: unknown,
   { input }: { input: MarkPaymentsUnpaidInput },
-  req: Request,
+  req: Request
 ) => {
   checkAuth(req);
   const { budgetId, recurringPaymentIds, oneOffPaymentIds } = input;
@@ -619,13 +599,13 @@ const markPaymentsUnpaid = async (
       }
       return { amount: -latest.balanceChange, account: latest.account };
     },
-    async (session) => {
+    async session => {
       for (const id of oneOffPaymentIds ?? []) {
         const payment = await oneOffInBudget(id, { budgetId, session });
         const record = await PaymentRecord.findOne({
           oneOffPayment: payment._id,
           open: true,
-          kind: PaymentRecordKind.PAID,
+          kind: PaymentRecordKind.PAID
         }).session(session);
         if (!record) continue;
         await PaymentRecord.deleteOne({ _id: record._id }).session(session);
@@ -635,10 +615,10 @@ const markPaymentsUnpaid = async (
         await moveOn(budgetId, {
           account: record.account,
           amount: -record.balanceChange,
-          session,
+          session
         });
       }
-    },
+    }
   );
 };
 
@@ -647,36 +627,27 @@ const markPaymentsUnpaid = async (
 const skipRecurringPayments = async (
   _: unknown,
   { input }: { input: SkipRecurringPaymentsInput },
-  req: Request,
+  req: Request
 ) => {
   checkAuth(req);
-  const { budgetId, recurringPaymentIds, until } = parseInput(
-    skipRecurring,
-    input,
-  );
+  const { budgetId, recurringPaymentIds, until } = parseInput(skipRecurring, input);
   await checkBudgetAccess(budgetId, req);
   // Skipping the rest of a cycle takes the dates that go out before payday
   const moves = until ? await movesOf(budgetId) : null;
 
-  return changeRecurringPayments(
-    budgetId,
-    recurringPaymentIds,
-    async (payment, session) => {
-      const next = payment.nextDueDate;
-      if (!next) return null;
-      const dates =
-        until && moves
-          ? datesOutBefore(payment, {
-              from: next,
-              until: new Date(until),
-              move: moveOf(payment, moves),
-            })
-          : [next];
-      return (await handle(payment, PaymentRecordKind.SKIPPED, dates, session))
-        ? 0
-        : null;
-    },
-  );
+  return changeRecurringPayments(budgetId, recurringPaymentIds, async (payment, session) => {
+    const next = payment.nextDueDate;
+    if (!next) return null;
+    const dates =
+      until && moves
+        ? datesOutBefore(payment, {
+            from: next,
+            until: new Date(until),
+            move: moveOf(payment, moves)
+          })
+        : [next];
+    return (await handle(payment, PaymentRecordKind.SKIPPED, dates, session)) ? 0 : null;
+  });
 };
 
 // Pays extra off a debt today, on top of its usual payments. It's money out of the bank like any
@@ -684,42 +655,35 @@ const skipRecurringPayments = async (
 const logDebtOverpayment = async (
   _: unknown,
   { input }: { input: LogDebtOverpaymentInput },
-  req: Request,
+  req: Request
 ) => {
   checkAuth(req);
-  const { budgetId, recurringPaymentId, amount } = parseInput(
-    debtOverpayment,
-    input,
-  );
+  const { budgetId, recurringPaymentId, amount } = parseInput(debtOverpayment, input);
   await checkBudgetAccess(budgetId, req);
 
-  return changeRecurringPayments(
-    budgetId,
-    [recurringPaymentId],
-    async (payment, session) => {
-      if (!payment.debt) {
-        throw DEBT_NOT_TRACKED(recurringPaymentId);
-      }
-      if (amount > payment.debt.balance) {
-        throw OVERPAYMENT_TOO_LARGE();
-      }
-      // Interest so far was on the balance before
-      accrueDebt(payment);
-      payment.debt.balance = roundPence(payment.debt.balance - amount);
-      const account = await accountFor(budgetId, { account: payment.account, session });
-      await new PaymentRecord({
-        budget: payment.budget,
-        recurringPayment: payment._id,
-        payment: snapshotOf(payment),
-        kind: PaymentRecordKind.OVERPAYMENT,
-        dates: [ukDay()],
-        balanceChange: -amount,
-        account,
-        debt: { interest: 0, reduction: amount, balanceAfter: payment.debt.balance },
-      }).save({ session });
-      return { amount: -amount, account };
-    },
-  );
+  return changeRecurringPayments(budgetId, [recurringPaymentId], async (payment, session) => {
+    if (!payment.debt) {
+      throw DEBT_NOT_TRACKED(recurringPaymentId);
+    }
+    if (amount > payment.debt.balance) {
+      throw OVERPAYMENT_TOO_LARGE();
+    }
+    // Interest so far was on the balance before
+    accrueDebt(payment);
+    payment.debt.balance = roundPence(payment.debt.balance - amount);
+    const account = await accountFor(budgetId, { account: payment.account, session });
+    await new PaymentRecord({
+      budget: payment.budget,
+      recurringPayment: payment._id,
+      payment: snapshotOf(payment),
+      kind: PaymentRecordKind.OVERPAYMENT,
+      dates: [ukDay()],
+      balanceChange: -amount,
+      account,
+      debt: { interest: 0, reduction: amount, balanceAfter: payment.debt.balance }
+    }).save({ session });
+    return { amount: -amount, account };
+  });
 };
 
 // Takes back an overpayment from this cycle: the record goes, and the amount goes back on the debt
@@ -727,7 +691,7 @@ const logDebtOverpayment = async (
 const undoDebtOverpayment = async (
   _: unknown,
   { input }: { input: UndoDebtOverpaymentInput },
-  req: Request,
+  req: Request
 ) => {
   checkAuth(req);
   const { budgetId, recordId } = input;
@@ -736,7 +700,7 @@ const undoDebtOverpayment = async (
   const record = await PaymentRecord.findOne({
     _id: recordId,
     budget: budgetId,
-    kind: PaymentRecordKind.OVERPAYMENT,
+    kind: PaymentRecordKind.OVERPAYMENT
   });
   if (!record || !record.recurringPayment) {
     throw PAYMENT_RECORD_NOT_FOUND(recordId);
@@ -751,7 +715,7 @@ const undoDebtOverpayment = async (
     async (payment, session) => {
       const removed = await PaymentRecord.deleteOne({
         _id: record._id,
-        open: true,
+        open: true
       }).session(session);
       if (removed.deletedCount !== 1) {
         throw PAYMENT_RECORD_NOT_FOUND(recordId);
@@ -762,7 +726,7 @@ const undoDebtOverpayment = async (
         payment.debt.balance = roundPence(payment.debt.balance + record.debt.reduction);
       }
       return { amount: -record.balanceChange, account: record.account };
-    },
+    }
   );
 };
 
@@ -778,17 +742,15 @@ const budgetFields = {
     OneOffPayment.find({ budget: budget._id }).sort(byAmount).exec(),
   // With this cycle's pays and skips loaded in one go, for their thisCycle field
   recurringPayments: async (budget: BudgetDocument) =>
-    withThisCycle(
-      await RecurringPayment.find({ budget: budget._id }).sort(byAmount).exec(),
-    ),
+    withThisCycle(await RecurringPayment.find({ budget: budget._id }).sort(byAmount).exec()),
   notes: (budget: BudgetDocument) => Note.find({ budget: budget._id }).exec(),
-  payday: (budget: BudgetDocument) => Payday.findOne({ budget: budget._id }).exec(),
+  payday: (budget: BudgetDocument) => Payday.findOne({ budget: budget._id }).exec()
 };
 
 // Export the resolvers
 export const budgetResolvers = {
   Query: {
-    budget: findBudget,
+    budget: findBudget
   },
   Mutation: {
     createBudget,
@@ -798,7 +760,7 @@ export const budgetResolvers = {
     markPaymentsUnpaid,
     skipRecurringPayments,
     logDebtOverpayment,
-    undoDebtOverpayment,
+    undoDebtOverpayment
   },
-  Budget: budgetFields,
+  Budget: budgetFields
 };

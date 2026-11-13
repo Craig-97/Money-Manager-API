@@ -40,7 +40,10 @@ export const calendarFeed = async (req: Request, res: Response) => {
     const [payments, oneOffPayments, notes, payday] = await Promise.all([
       RecurringPayment.find({ budget: budget._id }),
       OneOffPayment.find({ budget: budget._id, paidAt: null }),
-      Note.find({ budget: budget._id, $or: [{ date: { $ne: null } }, { repeat: NoteRepeat.WITH_PAYMENT }] }),
+      Note.find({
+        budget: budget._id,
+        $or: [{ date: { $ne: null } }, { repeat: NoteRepeat.WITH_PAYMENT }]
+      }),
       Payday.findOne({ budget: budget._id })
     ]);
     const moves = await budgetMoves(budget, payday);

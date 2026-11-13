@@ -2,7 +2,11 @@ import mongoose, { Schema, Types, type HydratedDocument } from 'mongoose';
 import { PaymentCategory } from '../../constants/payment';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { enumValues } from '../../utils/helpers/enumHelpers';
-import { reminderTimingSchema, USUAL_TIMING, type ReminderTiming } from '../reminder/reminderTiming';
+import {
+  reminderTimingSchema,
+  USUAL_TIMING,
+  type ReminderTiming
+} from '../reminder/reminderTiming';
 
 export interface OneOffPayment {
   name: string;

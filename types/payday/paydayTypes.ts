@@ -1,9 +1,4 @@
-import type {
-  BankHolidayRegion,
-  PayFrequency,
-  PaydayType,
-  Weekday
-} from '../../constants/payday';
+import type { BankHolidayRegion, PayFrequency, PaydayType, Weekday } from '../../constants/payday';
 
 export interface PaydayInput {
   frequency: PayFrequency;

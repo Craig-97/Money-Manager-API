@@ -22,15 +22,16 @@ beforeEach(async () => {
   other = await createUserWithBudget();
 });
 
-const asOther = (query: string, variables?: Record<string, unknown>) => gql(query, variables, other.token);
+const asOther = (query: string, variables?: Record<string, unknown>) =>
+  gql(query, variables, other.token);
 
 const count = (model: string, filter = {}) => mongoose.model(model).countDocuments(filter);
 
 describe('budgets', () => {
   it("can't read another user's budget", async () => {
-    expect(errorCode(await asOther(`query ($id: ID) { budget(id: $id) { id } }`, { id: owner.budgetId }))).toBe(
-      'FORBIDDEN'
-    );
+    expect(
+      errorCode(await asOther(`query ($id: ID) { budget(id: $id) { id } }`, { id: owner.budgetId }))
+    ).toBe('FORBIDDEN');
   });
 
   it('can read their own budget with no id', async () => {
@@ -62,7 +63,9 @@ describe('budgets', () => {
   it("can't run payday or change payments on another user's budget", async () => {
     const payday = await asOther(
       `mutation ($input: StartPaydayCycleInput!) { startPaydayCycle(input: $input) { success } }`,
-      { input: { budgetId: owner.budgetId, payday: '2030-01-01', paidIntoBalance: 0, leftOver: [] } }
+      {
+        input: { budgetId: owner.budgetId, payday: '2030-01-01', paidIntoBalance: 0, leftOver: [] }
+      }
     );
     expect(errorCode(payday)).toBe('FORBIDDEN');
     const paid = await asOther(

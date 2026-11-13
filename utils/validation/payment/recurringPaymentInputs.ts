@@ -46,7 +46,8 @@ const dayOf = (value: DateValue) => (value ? new Date(value).getTime() : null);
 const renewalRules = (payment: PaymentRuleFields, ctx: z.RefinementCtx) => {
   const renewal = dayOf(payment.renewalDate);
   if (renewal === null) return;
-  const issue = (message: string) => ctx.addIssue({ code: 'custom', message, path: ['renewalDate'] });
+  const issue = (message: string) =>
+    ctx.addIssue({ code: 'custom', message, path: ['renewalDate'] });
 
   if (dayOf(payment.lastPaymentDate) !== null) {
     issue('A payment can renew or stop, not both');
@@ -54,7 +55,8 @@ const renewalRules = (payment: PaymentRuleFields, ctx: z.RefinementCtx) => {
     issue('Yearly payments renew with each payment, so they have no renewal date');
   } else {
     const first = dayOf(payment.firstPaymentDate);
-    if (first !== null && renewal <= first) issue('The renewal date must be after the first payment');
+    if (first !== null && renewal <= first)
+      issue('The renewal date must be after the first payment');
   }
 };
 

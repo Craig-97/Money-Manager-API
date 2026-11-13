@@ -31,7 +31,11 @@ export const recordBalanceSet = (
     kind: PaymentRecordKind.BALANCE_SET,
     dates: [ukDay()],
     balanceChange: 0,
-    debt: { interest: 0, reduction: roundPence((previousBalance ?? balance) - balance), balanceAfter: balance }
+    debt: {
+      interest: 0,
+      reduction: roundPence((previousBalance ?? balance) - balance),
+      balanceAfter: balance
+    }
   }).save({ session });
 };
 
@@ -42,7 +46,10 @@ const OPEN_KINDS = [...CYCLE_KINDS, PaymentRecordKind.OVERPAYMENT];
 const NEWEST_FIRST = { createdAt: -1, _id: -1 } as const;
 
 // The latest open pay or skip on a recurring payment: the one undo takes back
-export const latestOpenRecord = (recurringPayment: Types.ObjectId | string, session?: ClientSession) =>
+export const latestOpenRecord = (
+  recurringPayment: Types.ObjectId | string,
+  session?: ClientSession
+) =>
   PaymentRecord.findOne({ recurringPayment, open: true, kind: { $in: CYCLE_KINDS } })
     .sort(NEWEST_FIRST)
     .session(session ?? null);

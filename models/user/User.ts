@@ -38,7 +38,13 @@ const UserSchema = new Schema<User>({
   passwordResetTokenHash: String,
   passwordResetExpires: Date,
   refreshTokens: {
-    type: [{ _id: false, hash: { type: String, required: true }, expires: { type: Date, required: true } }],
+    type: [
+      {
+        _id: false,
+        hash: { type: String, required: true },
+        expires: { type: Date, required: true }
+      }
+    ],
     default: []
   },
   tokenVersion: { type: Number, default: 0 },

@@ -21,7 +21,11 @@ describe('registering', () => {
     const body = await gql(REGISTER, {
       input: { ...user, email: '  new@example.com ', firstName: ' Ann ', surname: 'Lee  ' }
     });
-    expect(body.data.registerAndLogin.user).toEqual({ email: 'new@example.com', firstName: 'Ann', surname: 'Lee' });
+    expect(body.data.registerAndLogin.user).toEqual({
+      email: 'new@example.com',
+      firstName: 'Ann',
+      surname: 'Lee'
+    });
   });
 
   it.each([
@@ -34,9 +38,14 @@ describe('registering', () => {
     expect(body.errors?.[0].extensions?.field).toBe(field);
   });
 
-  it.each(['short1', 'nonumbers', `${'a'.repeat(72)}1`])('rejects the password %s', async password => {
-    expect(errorCode(await gql(REGISTER, { input: { ...user, password } }))).toBe('INVALID_PASSWORD');
-  });
+  it.each(['short1', 'nonumbers', `${'a'.repeat(72)}1`])(
+    'rejects the password %s',
+    async password => {
+      expect(errorCode(await gql(REGISTER, { input: { ...user, password } }))).toBe(
+        'INVALID_PASSWORD'
+      );
+    }
+  );
 });
 
 describe('profile changes', () => {
@@ -75,7 +84,15 @@ describe('budgets', () => {
         input: {
           bankBalance: 1,
           monthlyIncome: 1,
-          oneOffPayments: [{ name: 'Gift', amount: -5, dueDate: '2030-01-01', type: 'EXPENSE', category: 'GENERAL' }]
+          oneOffPayments: [
+            {
+              name: 'Gift',
+              amount: -5,
+              dueDate: '2030-01-01',
+              type: 'EXPENSE',
+              category: 'GENERAL'
+            }
+          ]
         }
       },
       token
@@ -100,7 +117,16 @@ describe('payments and notes', () => {
     const { token, budgetId } = await createUserWithBudget();
     const body = await gql(
       `mutation ($input: CreateOneOffPaymentInput!) { createOneOffPayment(input: $input) { success } }`,
-      { input: { budgetId, name: 'Trip', amount: 1, dueDate: '2030-13-01', type: 'EXPENSE', category: 'GENERAL' } },
+      {
+        input: {
+          budgetId,
+          name: 'Trip',
+          amount: 1,
+          dueDate: '2030-13-01',
+          type: 'EXPENSE',
+          category: 'GENERAL'
+        }
+      },
       token
     );
     expect(errorCode(body)).toBe('BAD_USER_INPUT');
@@ -121,15 +147,19 @@ describe('payments and notes', () => {
     };
     const ok = await gql(CREATE, { input: { ...input, name: '  Rent  ' } }, token);
     expect(ok.data.createRecurringPayment.recurringPayment.name).toBe('Rent');
-    expect(errorCode(await gql(CREATE, { input: { ...input, name: ' ' } }, token))).toBe('BAD_USER_INPUT');
+    expect(errorCode(await gql(CREATE, { input: { ...input, name: ' ' } }, token))).toBe(
+      'BAD_USER_INPUT'
+    );
   });
 
   it('rejects an empty note and one over 2000 characters', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const CREATE = `mutation ($input: CreateNoteInput!) { createNote(input: $input) { success } }`;
-    expect(errorCode(await gql(CREATE, { input: { budgetId, body: '  ' } }, token))).toBe('BAD_USER_INPUT');
-    expect(errorCode(await gql(CREATE, { input: { budgetId, body: 'x'.repeat(2001) } }, token))).toBe(
+    expect(errorCode(await gql(CREATE, { input: { budgetId, body: '  ' } }, token))).toBe(
       'BAD_USER_INPUT'
     );
+    expect(
+      errorCode(await gql(CREATE, { input: { budgetId, body: 'x'.repeat(2001) } }, token))
+    ).toBe('BAD_USER_INPUT');
   });
 });

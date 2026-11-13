@@ -103,8 +103,16 @@ describe('createBudget', () => {
     );
     expect(body.errors).toBeUndefined();
     const { budget } = body.data.createBudget;
-    expect(budget.oneOffPayments.map((p: { name: string }) => p.name).sort()).toEqual(['P1', 'P2', 'P3']);
-    expect(budget.recurringPayments.map((p: { name: string }) => p.name).sort()).toEqual(['R1', 'R2', 'R3']);
+    expect(budget.oneOffPayments.map((p: { name: string }) => p.name).sort()).toEqual([
+      'P1',
+      'P2',
+      'P3'
+    ]);
+    expect(budget.recurringPayments.map((p: { name: string }) => p.name).sort()).toEqual([
+      'R1',
+      'R2',
+      'R3'
+    ]);
   });
 
   it('creates a budget with nested recurring payments', async () => {
@@ -127,7 +135,10 @@ describe('createBudget', () => {
         input: {
           bankBalance: 1,
           monthlyIncome: 1,
-          recurringPayments: [recurring('Mortgage', 'BILLS', 750), recurring('Council tax', 'BILLS', 160)]
+          recurringPayments: [
+            recurring('Mortgage', 'BILLS', 750),
+            recurring('Council tax', 'BILLS', 160)
+          ]
         }
       },
       token
@@ -184,8 +195,20 @@ describe('budget queries', () => {
     const { token, user, budgetId } = await createUserWithBudget({
       budget: {
         oneOffPayments: [
-          { name: 'Big', amount: 900, dueDate: '2030-01-01', type: 'EXPENSE', category: 'GROCERIES' },
-          { name: 'Small', amount: 10, dueDate: '2030-01-01', type: 'EXPENSE', category: 'GROCERIES' }
+          {
+            name: 'Big',
+            amount: 900,
+            dueDate: '2030-01-01',
+            type: 'EXPENSE',
+            category: 'GROCERIES'
+          },
+          {
+            name: 'Small',
+            amount: 10,
+            dueDate: '2030-01-01',
+            type: 'EXPENSE',
+            category: 'GROCERIES'
+          }
         ]
       }
     });
@@ -308,7 +331,10 @@ describe('updateBudget', () => {
       token
     );
     expect(body.errors).toBeUndefined();
-    expect(body.data.updateBudget.budget).toEqual({ monthlyIncome: 2500, notes: [{ body: 'Kept' }] });
+    expect(body.data.updateBudget.budget).toEqual({
+      monthlyIncome: 2500,
+      notes: [{ body: 'Kept' }]
+    });
   });
 
   it('rejects an update with no fields', async () => {
@@ -317,7 +343,7 @@ describe('updateBudget', () => {
     expect(errorCode(body)).toBe('NO_VALID_FIELDS_PROVIDED');
   });
 
-  it('refuses a budget that is not the signed-in user\'s', async () => {
+  it("refuses a budget that is not the signed-in user's", async () => {
     const { token } = await createUserWithBudget();
     const body = await gql(
       UPDATE,

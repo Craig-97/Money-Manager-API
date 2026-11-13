@@ -13,7 +13,10 @@ const isUnexpected = (formatted: GraphQLFormattedError) => {
  * library messages (which can name ids and internals) never reach the browser. Errors with their
  * own code, like USER_EXISTS or BAD_USER_INPUT, pass through untouched.
  */
-export const formatError = (formatted: GraphQLFormattedError, error: unknown): GraphQLFormattedError => {
+export const formatError = (
+  formatted: GraphQLFormattedError,
+  error: unknown
+): GraphQLFormattedError => {
   if (!isUnexpected(formatted)) return formatted;
 
   logger.error({ err: unwrapResolverError(error), path: formatted.path }, 'Unexpected error');

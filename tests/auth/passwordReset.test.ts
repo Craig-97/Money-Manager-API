@@ -117,11 +117,14 @@ describe('resetPassword', () => {
     );
   });
 
-  it.each(['short1', 'nonumbers'])('rejects the weak password %s and keeps the link usable', async weak => {
-    const { email } = await createUserWithBudget({ withBudget: false });
-    const token = await requestToken(email);
+  it.each(['short1', 'nonumbers'])(
+    'rejects the weak password %s and keeps the link usable',
+    async weak => {
+      const { email } = await createUserWithBudget({ withBudget: false });
+      const token = await requestToken(email);
 
-    expect(errorCode(await gql(RESET, { token, password: weak }))).toBe('INVALID_PASSWORD');
-    expect((await gql(VALID, { token })).data.passwordResetTokenValid.valid).toBe(true);
-  });
+      expect(errorCode(await gql(RESET, { token, password: weak }))).toBe('INVALID_PASSWORD');
+      expect((await gql(VALID, { token })).data.passwordResetTokenValid.valid).toBe(true);
+    }
+  );
 });

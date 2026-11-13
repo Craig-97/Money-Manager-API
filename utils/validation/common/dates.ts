@@ -9,7 +9,12 @@ const isRealDay = (value: string) => {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(day);
 };
 
-export const isoDate = z.string().refine(isRealDay, 'Dates must be real dates in the format YYYY-MM-DD');
+export const isoDate = z
+  .string()
+  .refine(isRealDay, 'Dates must be real dates in the format YYYY-MM-DD');
 
 // Exactly YYYY-MM-DD, for values compared as strings, like payday overrides
-export const isoDay = isoDate.refine(value => value.length === 10, 'Dates must be in the format YYYY-MM-DD');
+export const isoDay = isoDate.refine(
+  value => value.length === 10,
+  'Dates must be in the format YYYY-MM-DD'
+);

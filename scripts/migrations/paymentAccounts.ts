@@ -43,8 +43,9 @@ export const migratePaymentAccounts = async ({ apply }: { apply: boolean }) => {
     const filter = { budget: paidInto.budget, type: 'EXPENSE', account: null };
     result.found += await payments.countDocuments(filter);
     if (apply) {
-      result.changed += (await payments.updateMany(filter, { $set: { account: paidInto._id } }))
-        .modifiedCount;
+      result.changed += (
+        await payments.updateMany(filter, { $set: { account: paidInto._id } })
+      ).modifiedCount;
     }
   }
   return result;

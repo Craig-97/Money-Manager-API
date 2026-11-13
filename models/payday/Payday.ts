@@ -24,7 +24,8 @@ const isoDate = {
   required: true,
   validate: {
     validator: (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v),
-    message: (props: { value: string }) => `${props.value} is not a valid date format! Use YYYY-MM-DD`
+    message: (props: { value: string }) =>
+      `${props.value} is not a valid date format! Use YYYY-MM-DD`
   }
 };
 

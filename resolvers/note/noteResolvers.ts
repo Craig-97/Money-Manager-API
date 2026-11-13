@@ -18,7 +18,10 @@ import {
 } from '../../utils';
 
 // A note can only be about a payment on its own budget
-const checkNotePayment = async (payment: string | null | undefined, budget: Types.ObjectId | string) => {
+const checkNotePayment = async (
+  payment: string | null | undefined,
+  budget: Types.ObjectId | string
+) => {
   if (!payment) return;
   if (!isValidObjectId(payment) || !(await RecurringPayment.exists({ _id: payment, budget }))) {
     throw NOTE_PAYMENT_NOT_FOUND(payment);
@@ -48,7 +51,11 @@ const createNote = async (_: unknown, { input }: { input: CreateNoteInput }, req
   return { note: createdNote, success: true };
 };
 
-const updateNote = async (_: unknown, { id, input }: { id: string; input: UpdateNoteInput }, req: Request) => {
+const updateNote = async (
+  _: unknown,
+  { id, input }: { id: string; input: UpdateNoteInput },
+  req: Request
+) => {
   checkAuth(req);
   const currentNote = await ownDocumentOrThrow(Note, { id, req, notFound: NOTE_NOT_FOUND });
   input = parseInput(noteInput, input);

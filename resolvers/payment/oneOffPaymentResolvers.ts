@@ -2,7 +2,10 @@ import type { Request } from 'express';
 import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
 import { OneOffPayment } from '../../models/payment/OneOffPayment';
 import { PaymentRecord } from '../../models/payment/PaymentRecord';
-import type { CreateOneOffPaymentInput, UpdateOneOffPaymentInput } from '../../types/payment/oneOffPaymentTypes';
+import type {
+  CreateOneOffPaymentInput,
+  UpdateOneOffPaymentInput
+} from '../../types/payment/oneOffPaymentTypes';
 import {
   PAYMENT_NOT_FOUND,
   PAYMENTS_NOT_FOUND,
@@ -16,7 +19,11 @@ import {
 } from '../../utils';
 import { accountFields, checkPaymentAccounts } from '../account/accountResolvers';
 
-const createOneOffPayment = async (_: unknown, { input }: { input: CreateOneOffPaymentInput }, req: Request) => {
+const createOneOffPayment = async (
+  _: unknown,
+  { input }: { input: CreateOneOffPaymentInput },
+  req: Request
+) => {
   checkAuth(req);
   const { budgetId, ...payment } = parseInput(newOneOff, input);
   await checkBudgetAccess(budgetId, req);
@@ -25,7 +32,9 @@ const createOneOffPayment = async (_: unknown, { input }: { input: CreateOneOffP
     await validateUniqueName(payment.name, { budgetId, session });
     await checkPaymentAccounts(payment, { budget: budgetId, session });
 
-    const createdPayment = await new OneOffPayment({ ...payment, budget: budgetId }).save({ session });
+    const createdPayment = await new OneOffPayment({ ...payment, budget: budgetId }).save({
+      session
+    });
 
     return { oneOffPayment: createdPayment, success: true };
   });

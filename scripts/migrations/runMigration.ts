@@ -25,7 +25,9 @@ export const runMigration = async (name: string, migrate: (apply: boolean) => Pr
   await mongoose.connect(target.uri);
   const where = target.live ? 'the LIVE database' : 'the dev database';
   console.log(`${name} on ${where} "${mongoose.connection.name}" (${target.variable})`);
-  console.log(apply ? 'Applying changes\n' : 'Dry run: nothing will be written. Add --apply to write.\n');
+  console.log(
+    apply ? 'Applying changes\n' : 'Dry run: nothing will be written. Add --apply to write.\n'
+  );
   try {
     await migrate(apply);
   } catch (error) {

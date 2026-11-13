@@ -75,11 +75,15 @@ const migrateBudget = async (
   }
 
   const payday = await Payday.findOne({ budget }).lean();
-  const holidays = payday?.bankHolidayRegion ? await loadHolidays(payday.bankHolidayRegion) : NO_HOLIDAYS;
+  const holidays = payday?.bankHolidayRegion
+    ? await loadHolidays(payday.bankHolidayRegion)
+    : NO_HOLIDAYS;
   const firstPaymentDate = nextPayday(payday ?? DEFAULT_PAYDAY, holidays, today);
 
   const taken = new Set(
-    (await OneOffPayment.find({ budget }, { name: 1 }).lean()).map(payment => payment.name as string)
+    (await OneOffPayment.find({ budget }, { name: 1 }).lean()).map(
+      payment => payment.name as string
+    )
   );
 
   for (const bill of bills) {

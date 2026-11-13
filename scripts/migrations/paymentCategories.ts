@@ -48,7 +48,13 @@ const EATING_OUT =
   /\b(deliveroo|just ?eat|uber ?eats|take ?away|restaurant|pub|bar|cafe|coffee|starbucks|costa|pret|greggs|pizza|nando'?s|mcdonald'?s|kfc|burger|dinner|lunch|breakfast|brunch|meal out|curry|chinese|indian|thai|sushi|kebab|chippy|chip shop)s?\b|café/i;
 
 // What money in can be: the frontend offers only these for income
-const INCOME_CATEGORIES: PaymentCategory[] = ['INCOME', 'TRANSFERS', 'GIFTS', 'EXPENSES', 'GENERAL'];
+const INCOME_CATEGORIES: PaymentCategory[] = [
+  'INCOME',
+  'TRANSFERS',
+  'GIFTS',
+  'EXPENSES',
+  'GENERAL'
+];
 
 interface Moving {
   name: string;

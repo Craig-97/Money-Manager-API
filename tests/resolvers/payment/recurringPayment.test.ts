@@ -21,7 +21,12 @@ const CREATE = `mutation ($input: CreateRecurringPaymentInput!) {
 }`;
 const UNKNOWN = '507f1f77bcf86cd799439011';
 
-const makePayment = (token: string | undefined, budgetId: string, name: string, extra: Variables = {}) =>
+const makePayment = (
+  token: string | undefined,
+  budgetId: string,
+  name: string,
+  extra: Variables = {}
+) =>
   gql(
     CREATE,
     {
@@ -60,7 +65,9 @@ describe('createRecurringPayment', () => {
     // Date fields are exposed through GraphQL String, which serializes as epoch milliseconds
     expect(recurringPayment.firstPaymentDate).toBe(String(new Date('2030-01-01').getTime()));
     const budget = await mongoose.model('Budget').findById(budgetId).populate('recurringPayments');
-    expect(budget.recurringPayments.map((r: { id: string }) => r.id)).toEqual([recurringPayment.id]);
+    expect(budget.recurringPayments.map((r: { id: string }) => r.id)).toEqual([
+      recurringPayment.id
+    ]);
   });
 
   it('keeps going with no renewal unless one is given', async () => {
@@ -88,10 +95,16 @@ describe('createRecurringPayment', () => {
   });
 
   it.each([
-    ['a renewal reminder that is not one of the choices', { renewalReminder: { off: false, days: 10 } }],
+    [
+      'a renewal reminder that is not one of the choices',
+      { renewalReminder: { off: false, days: 10 } }
+    ],
     ['a due reminder that is not one of the choices', { dueReminder: { off: false, days: 2 } }],
     ['a reminder that is off with days', { dueReminder: { off: true, days: 1 } }],
-    ['a renewal and a last payment together', { renewalDate: '2031-01-01', lastPaymentDate: '2031-06-01' }],
+    [
+      'a renewal and a last payment together',
+      { renewalDate: '2031-01-01', lastPaymentDate: '2031-06-01' }
+    ],
     ['a renewal date on a yearly payment', { renewalDate: '2031-01-01', frequency: 'ANNUALLY' }],
     ['a renewal on or before the first payment', { renewalDate: '2030-01-01' }]
   ])('rejects %s', async (_, extra) => {
@@ -121,7 +134,14 @@ describe('createRecurringPayment', () => {
     await gql(
       `mutation ($input: CreateOneOffPaymentInput!) { createOneOffPayment(input: $input) { success } }`,
       {
-        input: { budgetId, name: 'Shared', amount: 1, dueDate: '2030-06-15', type: 'EXPENSE', category: 'GROCERIES' }
+        input: {
+          budgetId,
+          name: 'Shared',
+          amount: 1,
+          dueDate: '2030-06-15',
+          type: 'EXPENSE',
+          category: 'GROCERIES'
+        }
       },
       token
     );
@@ -148,9 +168,16 @@ describe('reading recurring payments', () => {
     const { token, budgetId } = await createUserWithBudget();
     await makePayment(token, budgetId, 'Big', { amount: 900 });
     await makePayment(token, budgetId, 'Small', { amount: 5 });
-    const body = await gql(`query { budget { recurringPayments { name amount } } }`, undefined, token);
+    const body = await gql(
+      `query { budget { recurringPayments { name amount } } }`,
+      undefined,
+      token
+    );
     expect(body.errors).toBeUndefined();
-    expect(body.data.budget.recurringPayments.map((p: { name: string }) => p.name)).toEqual(['Small', 'Big']);
+    expect(body.data.budget.recurringPayments.map((p: { name: string }) => p.name)).toEqual([
+      'Small',
+      'Big'
+    ]);
   });
 });
 
@@ -209,7 +236,10 @@ describe('updateRecurringPayment', () => {
     const created = await makePayment(token, budgetId, 'Phone');
     const set = await gql(
       UPDATE,
-      { id: idOf(created), input: { renewalDate: '2031-01-01', renewalReminder: { off: false, days: 14 } } },
+      {
+        id: idOf(created),
+        input: { renewalDate: '2031-01-01', renewalReminder: { off: false, days: 14 } }
+      },
       token
     );
     expect(set.errors).toBeUndefined();
@@ -225,7 +255,11 @@ describe('updateRecurringPayment', () => {
   it('rejects a last payment on a payment that renews', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const created = await makePayment(token, budgetId, 'Phone', { renewalDate: '2031-01-01' });
-    const body = await gql(UPDATE, { id: idOf(created), input: { lastPaymentDate: '2031-06-01' } }, token);
+    const body = await gql(
+      UPDATE,
+      { id: idOf(created), input: { lastPaymentDate: '2031-06-01' } },
+      token
+    );
     expect(errorCode(body)).toBe('BAD_USER_INPUT');
   });
 

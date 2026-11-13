@@ -88,7 +88,9 @@ export const moveMoney = async (
  * account to spend from. With only one, none needs naming, and they follow where pay lands.
  */
 export const expenseAccountOf = async (budget: BudgetId, session?: ClientSession) => {
-  const spending = await Account.find({ budget, kind: AccountKind.SPENDING }).session(session ?? null);
+  const spending = await Account.find({ budget, kind: AccountKind.SPENDING }).session(
+    session ?? null
+  );
   return spending.length > 1 ? (spending.find(account => account.paidInto)?._id ?? null) : null;
 };
 
@@ -420,7 +422,10 @@ const assignPaymentAccounts = async (
 /* Sets balances the user typed in on a budget's accounts; each has to be in that budget */
 export const setBalances = async (
   budget: BudgetId,
-  { balances, session }: { balances: { accountId: string; balance: number }[]; session: ClientSession }
+  {
+    balances,
+    session
+  }: { balances: { accountId: string; balance: number }[]; session: ClientSession }
 ) => {
   // Sequential: operations within a transaction session can't run in parallel
   for (const { accountId, balance } of balances) {

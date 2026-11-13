@@ -28,7 +28,13 @@ describe('registerAndLogin', () => {
   it("rejects a budget in the input with a validation error, so nobody can join someone else's", async () => {
     const { budgetId, token } = await createUserWithBudget();
     const body = await gql(REGISTER, {
-      input: { email: 'x@example.com', password: 'Password1', firstName: 'S', surname: 'U', budget: budgetId }
+      input: {
+        email: 'x@example.com',
+        password: 'Password1',
+        firstName: 'S',
+        surname: 'U',
+        budget: budgetId
+      }
     });
     expect(body.errors).toBeDefined();
     expect(body.data).toBeUndefined();
@@ -65,7 +71,11 @@ describe('updateCurrentUser', () => {
     const first = await createUserWithBudget();
     const second = await createUserWithBudget();
 
-    const body = await gql(UPDATE, { input: { firstName: 'A', surname: 'B', email: first.email } }, second.token);
+    const body = await gql(
+      UPDATE,
+      { input: { firstName: 'A', surname: 'B', email: first.email } },
+      second.token
+    );
 
     expect(errorCode(body)).toBe('USER_EXISTS');
   });
@@ -120,13 +130,17 @@ describe('deleteCurrentUser', () => {
 
     expect(body.data.deleteCurrentUser.success).toBe(true);
     expect(errorCode(await gql(LOGIN, { email, password }))).toBe('USER_EMAIL_NOT_FOUND');
-    expect((await gql(LOGIN, { email: other.email, password: other.password })).errors).toBeUndefined();
+    expect(
+      (await gql(LOGIN, { email: other.email, password: other.password })).errors
+    ).toBeUndefined();
   });
 
   it('deletes the budget and everything on it', async () => {
     const { token, user, budgetId } = await createUserWithBudget({
       budget: {
-        oneOffPayments: [{ name: 'Gift', amount: 20, dueDate: '2030-01-01', type: 'EXPENSE', category: 'GENERAL' }],
+        oneOffPayments: [
+          { name: 'Gift', amount: 20, dueDate: '2030-01-01', type: 'EXPENSE', category: 'GENERAL' }
+        ],
         recurringPayments: [
           {
             name: 'Rent',

@@ -41,5 +41,9 @@ export const previousInterestDate = (
 ) => {
   const months = INTEREST_MONTHS[frequency];
   if (months === null) return null;
-  return dayInMonth({ year: nextDate.getUTCFullYear(), month: nextDate.getUTCMonth() - months, day });
+  return dayInMonth({
+    year: nextDate.getUTCFullYear(),
+    month: nextDate.getUTCMonth() - months,
+    day
+  });
 };

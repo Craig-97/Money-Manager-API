@@ -24,6 +24,10 @@ export const reminderTiming = (choices: readonly number[]) =>
 // Days before a date, from the choices, each once
 export const reminderDaysList = (choices: readonly number[]) =>
   z
-    .array(z.number().refine(days => choices.includes(days), `Reminders must be ${daysText(choices)} before`))
+    .array(
+      z
+        .number()
+        .refine(days => choices.includes(days), `Reminders must be ${daysText(choices)} before`)
+    )
     .max(choices.length)
     .refine(list => new Set(list).size === list.length, 'Each reminder can only be chosen once');

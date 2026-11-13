@@ -32,7 +32,10 @@ export const debtDailyInterest = (balance: number, apr: number) =>
   (Math.max(0, balance) * apr) / 100 / 365;
 
 /* What's built up by the start of `to`, at a day's interest from where it was counted to */
-export const accrue = ({ accrued, accruedTo }: Accrual, { daily, to }: { daily: number; to: Date }) =>
+export const accrue = (
+  { accrued, accruedTo }: Accrual,
+  { daily, to }: { daily: number; to: Date }
+) =>
   to <= accruedTo
     ? { accrued, accruedTo }
     : { accrued: accrued + daily * daysBetween(accruedTo, to), accruedTo: to };

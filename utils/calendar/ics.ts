@@ -51,7 +51,11 @@ const trigger = (daysBefore: number) => {
   return hours <= 0 ? `PT${-hours}H` : `-PT${hours}H`;
 };
 
-const stamp = (now: Date) => now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+const stamp = (now: Date) =>
+  now
+    .toISOString()
+    .replace(/[-:]/g, '')
+    .replace(/\.\d{3}/, '');
 
 const eventLines = (event: CalendarEvent, now: Date) => [
   'BEGIN:VEVENT',
@@ -74,7 +78,15 @@ const eventLines = (event: CalendarEvent, now: Date) => [
 ];
 
 /* The whole calendar, ready to send */
-export const writeCalendar = ({ name, events, now = new Date() }: { name: string; events: CalendarEvent[]; now?: Date }) =>
+export const writeCalendar = ({
+  name,
+  events,
+  now = new Date()
+}: {
+  name: string;
+  events: CalendarEvent[];
+  now?: Date;
+}) =>
   [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',

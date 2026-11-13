@@ -1,19 +1,19 @@
-import type { Request, Response } from "express";
-import crypto from "crypto";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import { ThemePreference } from "../../constants/user/themePreference";
-import { checkAuth } from "../../middleware/isAuth";
-import { Budget } from "../../models/budget/Budget";
-import { Account } from "../../models/account/Account";
-import { User, type UserDocument } from "../../models/user/User";
-import { Note } from "../../models/note/Note";
-import { OneOffPayment } from "../../models/payment/OneOffPayment";
-import { Payday } from "../../models/payday/Payday";
-import { RecurringPayment } from "../../models/payment/RecurringPayment";
-import { PaymentRecord } from "../../models/payment/PaymentRecord";
-import { ReminderState } from "../../models/reminder/ReminderState";
-import type { RegisterInput, UserDetailsInput } from "../../types/user/userTypes";
+import type { Request, Response } from 'express';
+import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { ThemePreference } from '../../constants/user/themePreference';
+import { checkAuth } from '../../middleware/isAuth';
+import { Budget } from '../../models/budget/Budget';
+import { Account } from '../../models/account/Account';
+import { User, type UserDocument } from '../../models/user/User';
+import { Note } from '../../models/note/Note';
+import { OneOffPayment } from '../../models/payment/OneOffPayment';
+import { Payday } from '../../models/payday/Payday';
+import { RecurringPayment } from '../../models/payment/RecurringPayment';
+import { PaymentRecord } from '../../models/payment/PaymentRecord';
+import { ReminderState } from '../../models/reminder/ReminderState';
+import type { RegisterInput, UserDetailsInput } from '../../types/user/userTypes';
 import {
   USER_NOT_FOUND,
   USER_EMAIL_NOT_FOUND,
@@ -35,8 +35,8 @@ import {
   userDetails,
   newUser,
   authLog,
-  sendPasswordResetEmail,
-} from "../../utils";
+  sendPasswordResetEmail
+} from '../../utils';
 
 const PASSWORD_RESET_EXPIRY_MINUTES = 60;
 
@@ -44,7 +44,7 @@ const createAccessToken = (user: UserDocument) =>
   jwt.sign(
     { userId: user.id, email: user.email, tv: user.tokenVersion ?? 0 },
     process.env.JWT_KEY as string,
-    { expiresIn: "1h" },
+    { expiresIn: '1h' }
   );
 
 // Written on its own rather than through user.save(), which would clash with the session pushed
@@ -56,14 +56,17 @@ const signOutEverywhere = (user: UserDocument) =>
 // a long-lived refresh token that only ever lives in an httpOnly cookie
 const startSession = async (user: UserDocument, req: Request) => {
   const refresh = createRefreshToken();
-  await User.updateOne({ _id: user._id }, {
-    $push: {
-      refreshTokens: {
-        $each: [{ hash: refresh.hash, expires: refresh.expires }],
-        $slice: -MAX_REFRESH_TOKENS,
-      },
-    },
-  });
+  await User.updateOne(
+    { _id: user._id },
+    {
+      $push: {
+        refreshTokens: {
+          $each: [{ hash: refresh.hash, expires: refresh.expires }],
+          $slice: -MAX_REFRESH_TOKENS
+        }
+      }
+    }
+  );
   setRefreshCookie(req.res as Response, refresh.token);
 
   return { user, token: createAccessToken(user), tokenExpiration: 1 };
@@ -80,7 +83,7 @@ const getUser = async (id: string) => {
 const login = async (
   _: unknown,
   { email, password }: { email: string; password: string },
-  req: Request,
+  req: Request
 ) => {
   // Saved trimmed, so a stray space when signing in still matches
   const user = await User.findOne({ email: email.trim() });
@@ -92,7 +95,7 @@ const login = async (
   if (!isEqual) {
     authLog.warn(
       { event: 'login_failed', reason: 'wrong_password', userId: user.id, ip: req.ip },
-      'Sign in failed',
+      'Sign in failed'
     );
     throw INVALID_CREDENTIALS();
   }
@@ -105,11 +108,7 @@ const tokenFindUser = async (_: unknown, _1: unknown, req: Request) => {
   return getUser(req.userId as string);
 };
 
-const registerAndLogin = async (
-  _: unknown,
-  { input }: { input: RegisterInput },
-  req: Request,
-) => {
+const registerAndLogin = async (_: unknown, { input }: { input: RegisterInput }, req: Request) => {
   await createUser(input);
   return login(_, { email: input.email, password: input.password }, req);
 };
@@ -130,28 +129,23 @@ const createUser = async (user: RegisterInput) => {
     firstName: user.firstName,
     surname: user.surname,
     email: user.email,
-    password: hashedPassword,
+    password: hashedPassword
   });
   await createdUser.save();
   authLog.info({ event: 'registered', userId: createdUser.id }, 'Registered');
 };
 
 // Always succeeds so the response doesn't reveal whether an account exists for the email
-const requestPasswordReset = async (
-  _: unknown,
-  { email }: { email: string },
-) => {
+const requestPasswordReset = async (_: unknown, { email }: { email: string }) => {
   const user = await User.findOne({ email: email });
   if (!user) {
     return { success: true };
   }
 
   // Requesting again replaces the previous token, so only the latest emailed link works
-  const token = crypto.randomBytes(32).toString("hex");
+  const token = crypto.randomBytes(32).toString('hex');
   user.passwordResetTokenHash = hashToken(token);
-  user.passwordResetExpires = new Date(
-    Date.now() + PASSWORD_RESET_EXPIRY_MINUTES * 60 * 1000,
-  );
+  user.passwordResetExpires = new Date(Date.now() + PASSWORD_RESET_EXPIRY_MINUTES * 60 * 1000);
   await user.save();
 
   authLog.info({ event: 'password_reset_requested', userId: user.id }, 'Password reset requested');
@@ -159,7 +153,7 @@ const requestPasswordReset = async (
     to: user.email,
     firstName: user.firstName,
     token,
-    expiresInMinutes: PASSWORD_RESET_EXPIRY_MINUTES,
+    expiresInMinutes: PASSWORD_RESET_EXPIRY_MINUTES
   });
 
   return { success: true };
@@ -168,14 +162,11 @@ const requestPasswordReset = async (
 const findUserByResetToken = (token: string) =>
   User.findOne({
     passwordResetTokenHash: hashToken(token),
-    passwordResetExpires: { $gt: new Date() },
+    passwordResetExpires: { $gt: new Date() }
   });
 
 // Lets the reset page show an expired link before the user types a new password
-const passwordResetTokenValid = async (
-  _: unknown,
-  { token }: { token: string },
-) => {
+const passwordResetTokenValid = async (_: unknown, { token }: { token: string }) => {
   const user = await findUserByResetToken(token);
   return { valid: Boolean(user), email: user?.email ?? null };
 };
@@ -184,7 +175,7 @@ const passwordResetTokenValid = async (
 const resetPassword = async (
   _: unknown,
   { token, password }: { token: string; password: string },
-  req: Request,
+  req: Request
 ) => {
   const user = await findUserByResetToken(token);
   if (!user) {
@@ -209,7 +200,7 @@ const resetPassword = async (
 const updateCurrentUser = async (
   _: unknown,
   { input }: { input: UserDetailsInput },
-  req: Request,
+  req: Request
 ) => {
   checkAuth(req);
   const user = await getUser(req.userId as string);
@@ -231,11 +222,8 @@ const updateCurrentUser = async (
 
 const changePassword = async (
   _: unknown,
-  {
-    currentPassword,
-    newPassword,
-  }: { currentPassword: string; newPassword: string },
-  req: Request,
+  { currentPassword, newPassword }: { currentPassword: string; newPassword: string },
+  req: Request
 ) => {
   checkAuth(req);
   const user = await getUser(req.userId as string);
@@ -263,7 +251,10 @@ const changePassword = async (
 const refreshSession = async (_: unknown, _1: unknown, req: Request) => {
   const token = readRefreshCookie(req);
   if (!token) {
-    authLog.debug({ event: 'refresh_rejected', reason: 'no_cookie', ip: req.ip }, 'Session refresh rejected');
+    authLog.debug(
+      { event: 'refresh_rejected', reason: 'no_cookie', ip: req.ip },
+      'Session refresh rejected'
+    );
     throw REFRESH_TOKEN_INVALID();
   }
 
@@ -271,11 +262,14 @@ const refreshSession = async (_: unknown, _1: unknown, req: Request) => {
   // Taking the token off the user is what claims it, so two requests can't both use it
   const user = await User.findOneAndUpdate(
     { refreshTokens: { $elemMatch: { hash, expires: { $gt: new Date() } } } },
-    { $pull: { refreshTokens: { hash } } },
+    { $pull: { refreshTokens: { hash } } }
   );
   if (!user) {
     // Used already, expired, or signed out. A used one turning up again can mean a copied cookie
-    authLog.warn({ event: 'refresh_rejected', reason: 'unknown_token', ip: req.ip }, 'Session refresh rejected');
+    authLog.warn(
+      { event: 'refresh_rejected', reason: 'unknown_token', ip: req.ip },
+      'Session refresh rejected'
+    );
     clearRefreshCookie(req.res as Response);
     throw REFRESH_TOKEN_INVALID();
   }
@@ -287,7 +281,7 @@ const logout = async (_: unknown, _1: unknown, req: Request) => {
   const token = readRefreshCookie(req);
   if (token) {
     const hash = hashToken(token);
-    await User.updateOne({ "refreshTokens.hash": hash }, { $pull: { refreshTokens: { hash } } });
+    await User.updateOne({ 'refreshTokens.hash': hash }, { $pull: { refreshTokens: { hash } } });
   }
   clearRefreshCookie(req.res as Response);
   return { success: true };
@@ -298,17 +292,20 @@ const logoutEverywhere = async (_: unknown, _1: unknown, req: Request) => {
   checkAuth(req);
   await User.updateOne(
     { _id: req.userId },
-    { $set: { refreshTokens: [] }, $inc: { tokenVersion: 1 } },
+    { $set: { refreshTokens: [] }, $inc: { tokenVersion: 1 } }
   );
   clearRefreshCookie(req.res as Response);
-  authLog.info({ event: 'logout_everywhere', userId: req.userId, ip: req.ip }, 'Signed out everywhere');
+  authLog.info(
+    { event: 'logout_everywhere', userId: req.userId, ip: req.ip },
+    'Signed out everywhere'
+  );
   return { success: true };
 };
 
 const updatePreferences = async (
   _: unknown,
   { theme, accent }: { theme?: ThemePreference | null; accent?: string | null },
-  req: Request,
+  req: Request
 ) => {
   checkAuth(req);
   const user = await getUser(req.userId as string);
@@ -324,7 +321,7 @@ const updatePreferences = async (
 
 // Deletes a user and everything on their budget
 const deleteUserAndBudget = (id: string) =>
-  withTransaction(async (session) => {
+  withTransaction(async session => {
     const user = await User.findById(id).session(session);
     if (!user) {
       throw USER_NOT_FOUND(id);
@@ -364,7 +361,7 @@ const deleteCurrentUser = async (_: unknown, _1: unknown, req: Request) => {
 export const userResolvers = {
   Query: {
     tokenFindUser,
-    passwordResetTokenValid,
+    passwordResetTokenValid
   },
   Mutation: {
     login,
@@ -377,6 +374,6 @@ export const userResolvers = {
     resetPassword,
     updateCurrentUser,
     changePassword,
-    deleteCurrentUser,
-  },
+    deleteCurrentUser
+  }
 };

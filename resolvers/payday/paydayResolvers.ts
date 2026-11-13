@@ -13,7 +13,11 @@ import {
   toIsoDay
 } from '../../utils';
 
-const updatePayday = async (_: unknown, { id, input }: { id: string; input: PaydayInput }, req: Request) => {
+const updatePayday = async (
+  _: unknown,
+  { id, input }: { id: string; input: PaydayInput },
+  req: Request
+) => {
   checkAuth(req);
   const currentPayday = await ownDocumentOrThrow(Payday, { id, req, notFound: PAYDAY_NOT_FOUND });
   input = parseInput(paydayInput, input);

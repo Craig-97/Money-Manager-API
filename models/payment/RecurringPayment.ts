@@ -5,7 +5,11 @@ import { NonWorkingDay } from '../../constants/payment/nonWorkingDay';
 import { addDays, nextOccurrence, ukDay } from '../../utils/dates';
 import { enumValues } from '../../utils/helpers/enumHelpers';
 import { PaymentRecord } from './PaymentRecord';
-import { reminderTimingSchema, USUAL_TIMING, type ReminderTiming } from '../reminder/reminderTiming';
+import {
+  reminderTimingSchema,
+  USUAL_TIMING,
+  type ReminderTiming
+} from '../reminder/reminderTiming';
 
 // A loan or card being paid off by this payment. The balance is what's left to pay, kept up to
 // date as payments are marked paid and corrected from a statement.
@@ -153,14 +157,18 @@ recurringPaymentSchema.pre('validate', function () {
 recurringPaymentSchema.post('save', async function () {
   if (!this.$locals.closeRecords) return;
   this.$locals.closeRecords = false;
-  await PaymentRecord.updateMany({ recurringPayment: this._id, open: true }, { $set: { open: false } }).session(
-    this.$session() ?? null
-  );
+  await PaymentRecord.updateMany(
+    { recurringPayment: this._id, open: true },
+    { $set: { open: false } }
+  ).session(this.$session() ?? null);
 });
 
 // Used for finding all recurring payments belonging to a budget
 recurringPaymentSchema.index({ budget: 1 });
 
-export const RecurringPayment = mongoose.model<RecurringPayment>('RecurringPayment', recurringPaymentSchema);
+export const RecurringPayment = mongoose.model<RecurringPayment>(
+  'RecurringPayment',
+  recurringPaymentSchema
+);
 
 export type RecurringPaymentDocument = HydratedDocument<RecurringPayment>;

@@ -80,7 +80,11 @@ const main = async () => {
         console.log(`${name}: would copy ${count} document(s)`);
         continue;
       }
-      if (overwrite) await to.db!.collection(name).drop().catch(() => undefined);
+      if (overwrite)
+        await to
+          .db!.collection(name)
+          .drop()
+          .catch(() => undefined);
       console.log(`${name}: copied ${await copyCollection(name, { from, to })} document(s)`);
     }
   } finally {

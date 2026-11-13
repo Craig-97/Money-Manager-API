@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-export const email = z.string().trim().max(254, 'Email is too long').email('Enter a valid email address');
+export const email = z
+  .string()
+  .trim()
+  .max(254, 'Email is too long')
+  .email('Enter a valid email address');
 
 export const personName = z
   .string()

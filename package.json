@@ -11,6 +11,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start:prod": "node dist/server.js",
     "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"**/*.ts\" \"!dist/**\"",
     "test": "jest",
     "db:copy": "tsx scripts/copyLiveToDev.ts",
     "migrate:budget": "tsx scripts/migrateBudget.ts",
@@ -58,6 +59,7 @@
     "@types/supertest": "^7.2.1",
     "jest": "^30.5.2",
     "mongodb-memory-server": "^11.3.0",
+    "prettier": "^3.9.9",
     "supertest": "^7.3.0",
     "typescript": "^7.0.2"
   }

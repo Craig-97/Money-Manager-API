@@ -59,12 +59,17 @@ const rootFields = (req: Request): RootField[] => {
   if (!req.rootFields) {
     // Apollo also accepts operations in the URL of a GET request, so read those too
     const source = req.method === 'GET' ? req.query : req.body;
-    const { query, variables: rawVariables } = (source ?? {}) as { query?: unknown; variables?: unknown };
+    const { query, variables: rawVariables } = (source ?? {}) as {
+      query?: unknown;
+      variables?: unknown;
+    };
     req.rootFields = [];
     if (typeof query === 'string') {
       try {
-        const variables = typeof rawVariables === 'string' ? JSON.parse(rawVariables) : rawVariables;
-        const vars = variables && typeof variables === 'object' ? (variables as Record<string, unknown>) : {};
+        const variables =
+          typeof rawVariables === 'string' ? JSON.parse(rawVariables) : rawVariables;
+        const vars =
+          variables && typeof variables === 'object' ? (variables as Record<string, unknown>) : {};
         for (const definition of parse(query).definitions) {
           if (definition.kind !== Kind.OPERATION_DEFINITION) continue;
           for (const selection of definition.selectionSet.selections) {
@@ -107,10 +112,18 @@ const createLimiter = ({ fields, windowMs, limit, perEmail }: Limit): RequestHan
     // rather than a failed request
     handler: (req, res) => {
       const { resetTime } = (req as Request & { rateLimit: RateLimitInfo }).rateLimit;
-      const retryAfter = Math.max(1, Math.ceil(((resetTime?.getTime() ?? Date.now()) - Date.now()) / 1000));
+      const retryAfter = Math.max(
+        1,
+        Math.ceil(((resetTime?.getTime() ?? Date.now()) - Date.now()) / 1000)
+      );
       const minutes = Math.ceil(retryAfter / 60);
       authLog.warn(
-        { event: 'rate_limited', field: matchingField(req, fields)?.name, perEmail: !!perEmail, ip: req.ip },
+        {
+          event: 'rate_limited',
+          field: matchingField(req, fields)?.name,
+          perEmail: !!perEmail,
+          ip: req.ip
+        },
         'Too many attempts'
       );
       res

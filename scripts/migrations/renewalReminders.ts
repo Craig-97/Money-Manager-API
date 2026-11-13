@@ -45,7 +45,13 @@ export const migrateRenewalReminders = async ({ apply }: { apply: boolean }) => 
   const payments = mongoose.connection.collection<StoredPayment>('recurringpayments');
   const found = await payments.find({ renewalReminderDays: { $exists: true } }).toArray();
 
-  const result: RenewalRemindersResult = { found: found.length, kept: 0, off: 0, usual: 0, changed: 0 };
+  const result: RenewalRemindersResult = {
+    found: found.length,
+    kept: 0,
+    off: 0,
+    usual: 0,
+    changed: 0
+  };
   const writes = found.map(payment => {
     const { kind, timing } = timingFor(payment);
     result[kind] += 1;

@@ -48,14 +48,18 @@ export const accountsToBudgets = async ({ apply }: { apply: boolean }) => {
     : 0;
   const renamesCollection = oldDocuments > 0;
   if (renamesCollection && (await accounts.countDocuments({ budget: { $exists: true } })) > 0) {
-    throw new Error('The accounts collection holds old budgets and bank accounts. Check it by hand first.');
+    throw new Error(
+      'The accounts collection holds old budgets and bank accounts. Check it by hand first.'
+    );
   }
 
   // The API makes an empty budgets collection as soon as it connects, so one may be waiting. One
   // with budgets in means a half-done run or data written since: merging them is a job for a person.
   const replacesEmptyBudgets = renamesCollection && names.has('budgets');
   if (replacesEmptyBudgets && (await db.collection('budgets').countDocuments()) > 0) {
-    throw new Error('Both an accounts and a budgets collection have data. Check them by hand first.');
+    throw new Error(
+      'Both an accounts and a budgets collection have data. Check them by hand first.'
+    );
   }
 
   const budgets = oldDocuments;

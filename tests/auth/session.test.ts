@@ -35,7 +35,9 @@ const signIn = async () => {
 describe('refresh cookie', () => {
   it('is set on login as an httpOnly cookie sent only to /graphql', async () => {
     const { res } = await signIn();
-    const header = (res.headers['set-cookie'] as unknown as string[]).find(c => c.startsWith('mm_refresh='));
+    const header = (res.headers['set-cookie'] as unknown as string[]).find(c =>
+      c.startsWith('mm_refresh=')
+    );
     expect(header).toMatch(/HttpOnly/i);
     expect(header).toMatch(/SameSite=Lax/i);
     expect(header).toMatch(/Path=\/graphql/);
@@ -70,7 +72,9 @@ describe('refreshSession', () => {
   it('works once, so a copied cookie is useless after the real one is used', async () => {
     const { cookie } = await signIn();
     expect((await gqlRaw(REFRESH, undefined, undefined, cookie)).body.errors).toBeUndefined();
-    expect(errorCode((await gqlRaw(REFRESH, undefined, undefined, cookie)).body)).toBe('UNAUTHENTICATED');
+    expect(errorCode((await gqlRaw(REFRESH, undefined, undefined, cookie)).body)).toBe(
+      'UNAUTHENTICATED'
+    );
   });
 
   it('rejects a request without the cookie', async () => {
@@ -78,7 +82,9 @@ describe('refreshSession', () => {
   });
 
   it('rejects an unknown cookie', async () => {
-    expect(errorCode(await gql(REFRESH, undefined, undefined, 'mm_refresh=nope'))).toBe('UNAUTHENTICATED');
+    expect(errorCode(await gql(REFRESH, undefined, undefined, 'mm_refresh=nope'))).toBe(
+      'UNAUTHENTICATED'
+    );
   });
 
   it('keeps each device signed in separately', async () => {
@@ -95,7 +101,9 @@ describe('logout', () => {
     const res = await gqlRaw(LOGOUT, undefined, undefined, cookie);
     expect(res.body.data.logout.success).toBe(true);
     expect((res.headers['set-cookie'] as unknown as string[]).join()).toMatch(/mm_refresh=;/);
-    expect(errorCode((await gqlRaw(REFRESH, undefined, undefined, cookie)).body)).toBe('UNAUTHENTICATED');
+    expect(errorCode((await gqlRaw(REFRESH, undefined, undefined, cookie)).body)).toBe(
+      'UNAUTHENTICATED'
+    );
   });
 
   it('succeeds without a session', async () => {
@@ -111,8 +119,12 @@ describe('logoutEverywhere', () => {
     const out = await gqlRaw(LOGOUT_EVERYWHERE, undefined, res.body.data.login.token, cookie);
     expect(out.body.data.logoutEverywhere.success).toBe(true);
     expect((out.headers['set-cookie'] as unknown as string[]).join()).toMatch(/mm_refresh=;/);
-    expect(errorCode((await gqlRaw(REFRESH, undefined, undefined, cookie)).body)).toBe('UNAUTHENTICATED');
-    expect(errorCode((await gqlRaw(REFRESH, undefined, undefined, other)).body)).toBe('UNAUTHENTICATED');
+    expect(errorCode((await gqlRaw(REFRESH, undefined, undefined, cookie)).body)).toBe(
+      'UNAUTHENTICATED'
+    );
+    expect(errorCode((await gqlRaw(REFRESH, undefined, undefined, other)).body)).toBe(
+      'UNAUTHENTICATED'
+    );
   });
 
   it('cancels the access tokens already issued, on every device', async () => {
@@ -134,14 +146,18 @@ describe('logoutEverywhere', () => {
     const { email, password, res, cookie } = await signIn();
     await gqlRaw(LOGOUT_EVERYWHERE, undefined, res.body.data.login.token, cookie);
     const again = await gql(LOGIN, { email, password });
-    expect((await gql(`{ tokenFindUser { email } }`, undefined, again.data.login.token)).errors).toBeUndefined();
+    expect(
+      (await gql(`{ tokenFindUser { email } }`, undefined, again.data.login.token)).errors
+    ).toBeUndefined();
   });
 
   it("leaves another user's sessions alone", async () => {
     const first = await signIn();
     const second = await signIn();
     await gqlRaw(LOGOUT_EVERYWHERE, undefined, first.res.body.data.login.token, first.cookie);
-    expect((await gqlRaw(REFRESH, undefined, undefined, second.cookie)).body.errors).toBeUndefined();
+    expect(
+      (await gqlRaw(REFRESH, undefined, undefined, second.cookie)).body.errors
+    ).toBeUndefined();
   });
 
   it('needs a signed-in user', async () => {
@@ -162,26 +178,44 @@ describe('changing the password', () => {
     expect(change.body.errors).toBeUndefined();
     const fresh = refreshCookieFrom(change) as string;
     expect(fresh).toBeDefined();
-    expect(errorCode((await gqlRaw(REFRESH, undefined, undefined, other)).body)).toBe('UNAUTHENTICATED');
-    expect(errorCode((await gqlRaw(REFRESH, undefined, undefined, cookie)).body)).toBe('UNAUTHENTICATED');
+    expect(errorCode((await gqlRaw(REFRESH, undefined, undefined, other)).body)).toBe(
+      'UNAUTHENTICATED'
+    );
+    expect(errorCode((await gqlRaw(REFRESH, undefined, undefined, cookie)).body)).toBe(
+      'UNAUTHENTICATED'
+    );
     expect((await gqlRaw(REFRESH, undefined, undefined, fresh)).body.errors).toBeUndefined();
   });
 
   it('cancels the access tokens issued before it, and the new session gets working ones', async () => {
     const { password, res, cookie } = await signIn();
     const oldToken = res.body.data.login.token;
-    const change = await gqlRaw(CHANGE_PASSWORD, { current: password, next: 'NewPassword1' }, oldToken, cookie);
+    const change = await gqlRaw(
+      CHANGE_PASSWORD,
+      { current: password, next: 'NewPassword1' },
+      oldToken,
+      cookie
+    );
 
-    expect(errorCode(await gql(`{ tokenFindUser { email } }`, undefined, oldToken))).toBe('UNAUTHENTICATED');
+    expect(errorCode(await gql(`{ tokenFindUser { email } }`, undefined, oldToken))).toBe(
+      'UNAUTHENTICATED'
+    );
     const fresh = await gqlRaw(REFRESH, undefined, undefined, refreshCookieFrom(change));
-    expect((await gql(`{ tokenFindUser { email } }`, undefined, fresh.body.data.refreshSession.token)).errors).toBeUndefined();
+    expect(
+      (await gql(`{ tokenFindUser { email } }`, undefined, fresh.body.data.refreshSession.token))
+        .errors
+    ).toBeUndefined();
   });
 });
 
 describe('updatePreferences', () => {
   it('has no theme or accent until one is chosen', async () => {
     const { res } = await signIn();
-    const me = await gql(`{ tokenFindUser { theme accent } }`, undefined, res.body.data.login.token);
+    const me = await gql(
+      `{ tokenFindUser { theme accent } }`,
+      undefined,
+      res.body.data.login.token
+    );
     expect(me.data.tokenFindUser).toEqual({ theme: null, accent: null });
   });
 
@@ -194,10 +228,15 @@ describe('updatePreferences', () => {
     expect(second.data.updatePreferences.user).toEqual({ theme: 'SYSTEM', accent: '#3D6BF5' });
   });
 
-  it.each(['red', '#fff', '#GGGGGG', 'javascript:alert(1)'])('rejects the accent %s', async accent => {
-    const { res } = await signIn();
-    expect(errorCode(await gql(PREFERENCES, { accent }, res.body.data.login.token))).toBe('INVALID_ACCENT');
-  });
+  it.each(['red', '#fff', '#GGGGGG', 'javascript:alert(1)'])(
+    'rejects the accent %s',
+    async accent => {
+      const { res } = await signIn();
+      expect(errorCode(await gql(PREFERENCES, { accent }, res.body.data.login.token))).toBe(
+        'INVALID_ACCENT'
+      );
+    }
+  );
 
   it('needs a signed-in user', async () => {
     expect(errorCode(await gql(PREFERENCES, { theme: 'DARK' }))).toBe('UNAUTHENTICATED');

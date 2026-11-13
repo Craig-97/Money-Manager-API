@@ -1,5 +1,11 @@
 import mongoose from 'mongoose';
-import { setupTestApp, teardownTestApp, clearDatabase, gql, createUserWithBudget } from '../helpers';
+import {
+  setupTestApp,
+  teardownTestApp,
+  clearDatabase,
+  gql,
+  createUserWithBudget
+} from '../helpers';
 import { accountsToBudgets } from '../../scripts/migrations/accountsToBudgets';
 import { migrateBills } from '../../scripts/migrations/billsToRecurring';
 import { removeBudgetIdLists } from '../../scripts/migrations/removeBudgetIdLists';
@@ -23,8 +29,10 @@ const today = fromIsoDay('2030-01-10');
 const loadHolidays = async () => new Set<string>();
 const run = (apply: boolean) => migrateBills({ apply, today, loadHolidays });
 
-const addBills = (budgetId: string, ...items: { name?: string; amount?: number; paid?: boolean }[]) =>
-  bills().insertMany(items.map(item => ({ budget: oid(budgetId), ...item })));
+const addBills = (
+  budgetId: string,
+  ...items: { name?: string; amount?: number; paid?: boolean }[]
+) => bills().insertMany(items.map(item => ({ budget: oid(budgetId), ...item })));
 
 const recurringNames = async (budgetId: string) =>
   (await mongoose.model('RecurringPayment').find({ budget: budgetId }).sort({ name: 1 })).map(
@@ -38,8 +46,10 @@ describe('accountsToBudgets', () => {
   // A dry run leaves the old collection and index behind, and clearing the database between tests
   // only removes records, so put both back the way the other tests expect
   afterEach(async () => {
-    if (await db().listCollections({ name: 'accounts' }).hasNext()) await db().collection('accounts').drop();
-    if (await db().collection('paydays').indexExists('account_1')) await db().collection('paydays').dropIndex('account_1');
+    if (await db().listCollections({ name: 'accounts' }).hasNext())
+      await db().collection('accounts').drop();
+    if (await db().collection('paydays').indexExists('account_1'))
+      await db().collection('paydays').dropIndex('account_1');
     await Promise.all(Object.values(mongoose.models).map(model => model.syncIndexes()));
   });
 
@@ -49,10 +59,14 @@ describe('accountsToBudgets', () => {
     await db().collection('accounts').drop();
     await db().renameCollection('budgets', 'accounts');
     for (const name of ['users', 'paydays']) {
-      await db().collection(name).updateMany({ budget: { $exists: true } }, { $rename: { budget: 'account' } });
+      await db()
+        .collection(name)
+        .updateMany({ budget: { $exists: true } }, { $rename: { budget: 'account' } });
     }
     await db().collection('paydays').dropIndex('budget_1');
-    await db().collection('paydays').createIndex({ account: 1 }, { unique: true, name: 'account_1' });
+    await db()
+      .collection('paydays')
+      .createIndex({ account: 1 }, { unique: true, name: 'account_1' });
   };
 
   it('writes nothing on a dry run', async () => {
@@ -60,15 +74,27 @@ describe('accountsToBudgets', () => {
     await asOldAccount();
 
     const result = await accountsToBudgets({ apply: false });
-    expect(result).toMatchObject({ renamesCollection: true, replacesEmptyBudgets: false, budgets: 1 });
+    expect(result).toMatchObject({
+      renamesCollection: true,
+      replacesEmptyBudgets: false,
+      budgets: 1
+    });
     expect(result.linked).toEqual(
       expect.arrayContaining([
         { collection: 'users', records: 1, indexes: [] },
         { collection: 'paydays', records: 1, indexes: ['account_1'] }
       ])
     );
-    expect(await db().collection('accounts').countDocuments({ _id: oid(budgetId) })).toBe(1);
-    expect(await db().collection('paydays').countDocuments({ account: oid(budgetId) })).toBe(1);
+    expect(
+      await db()
+        .collection('accounts')
+        .countDocuments({ _id: oid(budgetId) })
+    ).toBe(1);
+    expect(
+      await db()
+        .collection('paydays')
+        .countDocuments({ account: oid(budgetId) })
+    ).toBe(1);
   });
 
   it('renames the collection and every link, so the budget loads again', async () => {
@@ -80,8 +106,16 @@ describe('accountsToBudgets', () => {
     const names = (await db().listCollections({}, { nameOnly: true }).toArray()).map(c => c.name);
     expect(names).toContain('budgets');
     // The accounts collection is the bank accounts' now, with nothing of the old budgets left in it
-    expect(await db().collection('accounts').countDocuments({ user: { $exists: true } })).toBe(0);
-    expect(await db().collection('paydays').countDocuments({ account: { $exists: true } })).toBe(0);
+    expect(
+      await db()
+        .collection('accounts')
+        .countDocuments({ user: { $exists: true } })
+    ).toBe(0);
+    expect(
+      await db()
+        .collection('paydays')
+        .countDocuments({ account: { $exists: true } })
+    ).toBe(0);
     const indexes = (await db().collection('paydays').indexes()).map(index => index.name);
     expect(indexes).toContain('budget_1');
     expect(indexes).not.toContain('account_1');
@@ -100,14 +134,25 @@ describe('accountsToBudgets', () => {
 
   it('stops when the accounts collection holds old budgets and bank accounts', async () => {
     await createUserWithBudget();
-    await db().collection('accounts').insertOne({ user: oid('507f1f77bcf86cd799439011'), bankBalance: 1 });
-    await expect(accountsToBudgets({ apply: true })).rejects.toThrow('holds old budgets and bank accounts');
-    await db().collection('accounts').deleteMany({ user: { $exists: true } });
+    await db()
+      .collection('accounts')
+      .insertOne({ user: oid('507f1f77bcf86cd799439011'), bankBalance: 1 });
+    await expect(accountsToBudgets({ apply: true })).rejects.toThrow(
+      'holds old budgets and bank accounts'
+    );
+    await db()
+      .collection('accounts')
+      .deleteMany({ user: { $exists: true } });
   });
 
   it('has nothing to do once renamed', async () => {
     await createUserWithBudget();
-    expect(await accountsToBudgets({ apply: true })).toEqual({ renamesCollection: false, replacesEmptyBudgets: false, budgets: 0, linked: [] });
+    expect(await accountsToBudgets({ apply: true })).toEqual({
+      renamesCollection: false,
+      replacesEmptyBudgets: false,
+      budgets: 0,
+      linked: []
+    });
   });
 
   it('replaces the empty budgets collection the API makes when it connects', async () => {
@@ -115,7 +160,11 @@ describe('accountsToBudgets', () => {
     await asOldAccount();
     await db().createCollection('budgets');
 
-    expect(await accountsToBudgets({ apply: true })).toMatchObject({ renamesCollection: true, replacesEmptyBudgets: true, budgets: 1 });
+    expect(await accountsToBudgets({ apply: true })).toMatchObject({
+      renamesCollection: true,
+      replacesEmptyBudgets: true,
+      budgets: 1
+    });
     const body = await gql(`query { budget { id } }`, undefined, token);
     expect(body.data.budget).toEqual({ id: budgetId });
   });
@@ -123,8 +172,12 @@ describe('accountsToBudgets', () => {
   it('stops when both collections have data, rather than guess how to merge them', async () => {
     await createUserWithBudget();
     await db().collection('accounts').drop();
-    await db().collection('accounts').insertOne({ user: oid('507f1f77bcf86cd799439011'), bankBalance: 1 });
-    await expect(accountsToBudgets({ apply: true })).rejects.toThrow('Both an accounts and a budgets collection have data');
+    await db()
+      .collection('accounts')
+      .insertOne({ user: oid('507f1f77bcf86cd799439011'), bankBalance: 1 });
+    await expect(accountsToBudgets({ apply: true })).rejects.toThrow(
+      'Both an accounts and a budgets collection have data'
+    );
   });
 });
 
@@ -142,7 +195,11 @@ describe('migrateBills', () => {
     const { token, budgetId } = await createUserWithBudget({
       budget: { payday: { frequency: 'MONTHLY', type: 'SET_DAY', dayOfMonth: 15 } }
     });
-    await addBills(budgetId, { name: 'Rent', amount: 800, paid: true }, { name: 'Phone', amount: 20 });
+    await addBills(
+      budgetId,
+      { name: 'Rent', amount: 800, paid: true },
+      { name: 'Phone', amount: 20 }
+    );
     await run(true);
 
     const body = await gql(
@@ -152,7 +209,13 @@ describe('migrateBills', () => {
     );
     expect(body.errors).toBeUndefined();
     const firstPaymentDate = String(new Date('2030-01-15').getTime());
-    const common = { type: 'EXPENSE', category: 'GENERAL', frequency: 'MONTHLY', thisCycle: [], firstPaymentDate };
+    const common = {
+      type: 'EXPENSE',
+      category: 'GENERAL',
+      frequency: 'MONTHLY',
+      thisCycle: [],
+      firstPaymentDate
+    };
     expect(body.data.budget.recurringPayments).toEqual([
       { name: 'Phone', amount: 20, ...common },
       { name: 'Rent', amount: 800, ...common }
@@ -173,7 +236,9 @@ describe('migrateBills', () => {
   it('renames a bill whose name a one-off payment already uses', async () => {
     const { budgetId } = await createUserWithBudget({
       budget: {
-        oneOffPayments: [{ name: 'Gym', amount: 5, dueDate: '2030-02-01', type: 'EXPENSE', category: 'GROCERIES' }]
+        oneOffPayments: [
+          { name: 'Gym', amount: 5, dueDate: '2030-02-01', type: 'EXPENSE', category: 'GROCERIES' }
+        ]
       }
     });
     await addBills(budgetId, { name: 'Gym', amount: 30 });
@@ -183,7 +248,12 @@ describe('migrateBills', () => {
 
   it('leaves out bills with no name or amount', async () => {
     const { budgetId } = await createUserWithBudget();
-    await addBills(budgetId, { name: 'Rent', amount: 800 }, { name: '  ', amount: 5 }, { name: 'Odd' });
+    await addBills(
+      budgetId,
+      { name: 'Rent', amount: 800 },
+      { name: '  ', amount: 5 },
+      { name: 'Odd' }
+    );
     const [result] = await run(true);
     expect(result.unusable).toHaveLength(2);
     expect(await recurringNames(budgetId)).toEqual(['Rent']);
@@ -257,15 +327,27 @@ describe('moveHandledToRecords', () => {
       }
     );
 
-    expect(await moveHandledToRecords({ apply: false })).toEqual({ payments: 1, records: 3, moved: 0 });
+    expect(await moveHandledToRecords({ apply: false })).toEqual({
+      payments: 1,
+      records: 3,
+      moved: 0
+    });
     expect(await mongoose.model('PaymentRecord').countDocuments()).toBe(0);
 
-    expect(await moveHandledToRecords({ apply: true })).toEqual({ payments: 1, records: 3, moved: 1 });
+    expect(await moveHandledToRecords({ apply: true })).toEqual({
+      payments: 1,
+      records: 3,
+      moved: 1
+    });
     expect(await payments.findOne({ _id: oid(id) })).not.toHaveProperty('handled');
 
     const body = await gql(HANDLED, {}, token);
     const [payment] = body.data.budget.recurringPayments;
-    expect(payment.thisCycle.map((record: { kind: string }) => record.kind)).toEqual(['PAID', 'PAID', 'SKIPPED']);
+    expect(payment.thisCycle.map((record: { kind: string }) => record.kind)).toEqual([
+      'PAID',
+      'PAID',
+      'SKIPPED'
+    ]);
     expect(payment.history).toEqual([
       { kind: 'SKIPPED', balanceChange: 0, open: true },
       { kind: 'PAID', balanceChange: -45, open: true },
@@ -279,7 +361,11 @@ describe('moveHandledToRecords', () => {
   });
 
   it('has nothing to do once moved', async () => {
-    expect(await moveHandledToRecords({ apply: true })).toEqual({ payments: 0, records: 0, moved: 0 });
+    expect(await moveHandledToRecords({ apply: true })).toEqual({
+      payments: 0,
+      records: 0,
+      moved: 0
+    });
   });
 });
 
@@ -301,27 +387,61 @@ describe('migrateRenewalReminders', () => {
 
   it('keeps chosen days, keeps off ones off and has the rest follow the usual timing', async () => {
     const { budgetId } = await createUserWithBudget();
-    const days = await addPayment(budgetId, { name: 'Phone', renewalDate: new Date('2031-01-01'), renewalReminderDays: 14 });
-    const off = await addPayment(budgetId, { name: 'Broadband', renewalDate: new Date('2031-01-01'), renewalReminderDays: 0 });
-    const yearly = await addPayment(budgetId, { name: 'Car insurance', frequency: 'ANNUALLY', renewalReminderDays: 0 });
+    const days = await addPayment(budgetId, {
+      name: 'Phone',
+      renewalDate: new Date('2031-01-01'),
+      renewalReminderDays: 14
+    });
+    const off = await addPayment(budgetId, {
+      name: 'Broadband',
+      renewalDate: new Date('2031-01-01'),
+      renewalReminderDays: 0
+    });
+    const yearly = await addPayment(budgetId, {
+      name: 'Car insurance',
+      frequency: 'ANNUALLY',
+      renewalReminderDays: 0
+    });
     const plain = await addPayment(budgetId, { name: 'Gym', renewalReminderDays: 0 });
     await addPayment(budgetId, { name: 'Already moved', renewalReminder: { off: false, days: 7 } });
 
-    expect(await migrateRenewalReminders({ apply: false })).toEqual({ found: 4, kept: 1, off: 1, usual: 2, changed: 0 });
+    expect(await migrateRenewalReminders({ apply: false })).toEqual({
+      found: 4,
+      kept: 1,
+      off: 1,
+      usual: 2,
+      changed: 0
+    });
     expect(await payments().findOne({ _id: days })).toHaveProperty('renewalReminderDays', 14);
 
-    expect(await migrateRenewalReminders({ apply: true })).toEqual({ found: 4, kept: 1, off: 1, usual: 2, changed: 4 });
+    expect(await migrateRenewalReminders({ apply: true })).toEqual({
+      found: 4,
+      kept: 1,
+      off: 1,
+      usual: 2,
+      changed: 4
+    });
 
     const usual = { off: false, days: null };
-    const stored = async (id: unknown) => payments().findOne({ _id: id as mongoose.Types.ObjectId });
-    expect(await stored(days)).toMatchObject({ renewalReminder: { off: false, days: 14 }, dueReminder: usual });
+    const stored = async (id: unknown) =>
+      payments().findOne({ _id: id as mongoose.Types.ObjectId });
+    expect(await stored(days)).toMatchObject({
+      renewalReminder: { off: false, days: 14 },
+      dueReminder: usual
+    });
     expect(await stored(off)).toMatchObject({ renewalReminder: { off: true, days: null } });
     expect(await stored(yearly)).toMatchObject({ renewalReminder: usual });
     expect(await stored(plain)).toMatchObject({ renewalReminder: usual });
     expect(await stored(plain)).not.toHaveProperty('renewalReminderDays');
 
     // Run again, there's nothing left to do
-    expect(await migrateRenewalReminders({ apply: true })).toEqual({ found: 0, kept: 0, off: 0, usual: 0, changed: 0 });
+    expect(await migrateRenewalReminders({ apply: true })).toEqual({
+      found: 0,
+      kept: 0,
+      off: 0,
+      usual: 0,
+      changed: 0
+    });
   });
 });
 
@@ -381,11 +501,20 @@ describe('migratePaymentCategories', () => {
 
     const found = { recurring: 1, oneOff: 1, records: 1 };
     expect(await migratePaymentCategories({ apply: false })).toEqual({ ...found, changed: 0 });
-    expect(await collection('recurringpayments').findOne({ _id: rent })).toHaveProperty('category', 'RENT');
+    expect(await collection('recurringpayments').findOne({ _id: rent })).toHaveProperty(
+      'category',
+      'RENT'
+    );
 
     expect(await migratePaymentCategories({ apply: true })).toEqual({ ...found, changed: 3 });
-    expect(await collection('recurringpayments').findOne({ _id: rent })).toHaveProperty('category', 'BILLS');
-    expect(await collection('oneoffpayments').findOne({ _id: takeaway })).toHaveProperty('category', 'EATING_OUT');
+    expect(await collection('recurringpayments').findOne({ _id: rent })).toHaveProperty(
+      'category',
+      'BILLS'
+    );
+    expect(await collection('oneoffpayments').findOne({ _id: takeaway })).toHaveProperty(
+      'category',
+      'EATING_OUT'
+    );
     expect(await collection('paymentrecords').findOne({ _id: record })).toHaveProperty(
       'payment.category',
       'EATING_OUT'
@@ -407,22 +536,41 @@ describe('migrateAccountInterest', () => {
   it('carries a rate over as interest with no schedule, and leaves none as none', async () => {
     const budget = oid('64b000000000000000000001');
     const { insertedIds } = await accounts().insertMany([
-        { budget, name: 'Cash ISA', kind: 'SAVINGS', balance: 8650, counts: false, interestRate: 4.5 },
-        { budget, name: 'Pot', kind: 'SAVINGS', balance: 100, counts: false, interestRate: null }
+      {
+        budget,
+        name: 'Cash ISA',
+        kind: 'SAVINGS',
+        balance: 8650,
+        counts: false,
+        interestRate: 4.5
+      },
+      { budget, name: 'Pot', kind: 'SAVINGS', balance: 100, counts: false, interestRate: null }
     ]);
     const [rated, none] = [insertedIds[0], insertedIds[1]];
 
-    expect(await migrateAccountInterest({ apply: false })).toEqual({ found: 2, withRate: 1, changed: 0 });
+    expect(await migrateAccountInterest({ apply: false })).toEqual({
+      found: 2,
+      withRate: 1,
+      changed: 0
+    });
     expect((await accounts().findOne({ _id: rated }))?.interestRate).toBe(4.5);
 
-    expect(await migrateAccountInterest({ apply: true })).toEqual({ found: 2, withRate: 1, changed: 2 });
+    expect(await migrateAccountInterest({ apply: true })).toEqual({
+      found: 2,
+      withRate: 1,
+      changed: 2
+    });
     const after = await accounts().findOne({ _id: rated });
     expect(after?.interest).toEqual({ rate: 4.5, frequency: null, day: null, nextDate: null });
     expect(after).not.toHaveProperty('interestRate');
     expect((await accounts().findOne({ _id: none }))?.interest).toBeNull();
 
     // Again, it has nothing left to do
-    expect(await migrateAccountInterest({ apply: true })).toEqual({ found: 0, withRate: 0, changed: 0 });
+    expect(await migrateAccountInterest({ apply: true })).toEqual({
+      found: 0,
+      withRate: 0,
+      changed: 0
+    });
   });
 });
 
@@ -433,10 +581,38 @@ describe('migratePaymentAccounts', () => {
   it('records expenses with no account on where pay lands, only in budgets with two to spend from', async () => {
     const [two, one] = [oid('64b000000000000000000001'), oid('64b000000000000000000002')];
     const { insertedIds } = await accounts().insertMany([
-      { budget: two, name: 'Everyday', kind: 'SPENDING', paidInto: true, balance: 1000, counts: true },
-      { budget: two, name: 'Joint bills', kind: 'SPENDING', paidInto: false, balance: 2105, counts: true },
-      { budget: one, name: 'Current account', kind: 'SPENDING', paidInto: true, balance: 500, counts: true },
-      { budget: one, name: 'Cash ISA', kind: 'SAVINGS', paidInto: false, balance: 8650, counts: false }
+      {
+        budget: two,
+        name: 'Everyday',
+        kind: 'SPENDING',
+        paidInto: true,
+        balance: 1000,
+        counts: true
+      },
+      {
+        budget: two,
+        name: 'Joint bills',
+        kind: 'SPENDING',
+        paidInto: false,
+        balance: 2105,
+        counts: true
+      },
+      {
+        budget: one,
+        name: 'Current account',
+        kind: 'SPENDING',
+        paidInto: true,
+        balance: 500,
+        counts: true
+      },
+      {
+        budget: one,
+        name: 'Cash ISA',
+        kind: 'SAVINGS',
+        paidInto: false,
+        balance: 8650,
+        counts: false
+      }
     ]);
     const [everyday, joint] = [insertedIds[0], insertedIds[1]];
     await payments().insertMany([
@@ -448,10 +624,18 @@ describe('migratePaymentAccounts', () => {
     ]);
     const accountOf = async (name: string) => (await payments().findOne({ name }))?.account ?? null;
 
-    expect(await migratePaymentAccounts({ apply: false })).toEqual({ budgets: 1, found: 2, changed: 0 });
+    expect(await migratePaymentAccounts({ apply: false })).toEqual({
+      budgets: 1,
+      found: 2,
+      changed: 0
+    });
     expect(await accountOf('Energy')).toBeNull();
 
-    expect(await migratePaymentAccounts({ apply: true })).toEqual({ budgets: 1, found: 2, changed: 2 });
+    expect(await migratePaymentAccounts({ apply: true })).toEqual({
+      budgets: 1,
+      found: 2,
+      changed: 2
+    });
     expect(await accountOf('Energy')).toEqual(everyday);
     expect(await accountOf('Water')).toEqual(everyday);
     expect(await accountOf('Car')).toEqual(joint);
@@ -459,6 +643,10 @@ describe('migratePaymentAccounts', () => {
     expect(await accountOf('Rent')).toBeNull();
 
     // Again, it has nothing left to do
-    expect(await migratePaymentAccounts({ apply: true })).toEqual({ budgets: 1, found: 0, changed: 0 });
+    expect(await migratePaymentAccounts({ apply: true })).toEqual({
+      budgets: 1,
+      found: 0,
+      changed: 0
+    });
   });
 });

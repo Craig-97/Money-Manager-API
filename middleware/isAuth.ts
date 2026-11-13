@@ -4,12 +4,7 @@ import { isValidObjectId, type Types } from 'mongoose';
 import { Budget } from '../models/budget/Budget';
 import { User } from '../models/user/User';
 import { authLog } from '../utils/logger';
-import {
-  FORBIDDEN,
-  TOKEN_EXPIRED,
-  TOKEN_INVALID,
-  TOKEN_REVOKED
-} from '../utils/errors';
+import { FORBIDDEN, TOKEN_EXPIRED, TOKEN_INVALID, TOKEN_REVOKED } from '../utils/errors';
 
 export const isAuth = async (req: Request, _: Response, next: NextFunction) => {
   const authHeader = req.get('Authorization');

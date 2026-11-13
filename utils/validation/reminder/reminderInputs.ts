@@ -3,7 +3,9 @@ import { PAYMENT_REMINDER_DAYS, RENEWAL_REMINDER_DAYS } from '../../../constants
 import { isoDay } from '../common';
 
 const oneOf = (choices: readonly number[], what: string) =>
-  z.number().refine(days => choices.includes(days), `${what} must be ${choices.join(', ')} days before`);
+  z
+    .number()
+    .refine(days => choices.includes(days), `${what} must be ${choices.join(', ')} days before`);
 
 // Loose, so fields without rules here (the budget, the action, the switches) come through
 // parsing untouched
@@ -20,6 +22,9 @@ const reminderKey = z
   .regex(/^[a-z]+(:[A-Za-z0-9_-]+)+$/, 'That is not a reminder');
 
 export const remindersUpdate = z.looseObject({
-  keys: z.array(reminderKey).min(1, 'Choose at least one reminder').max(200, 'Up to 200 reminders at once'),
+  keys: z
+    .array(reminderKey)
+    .min(1, 'Choose at least one reminder')
+    .max(200, 'Up to 200 reminders at once'),
   until: isoDay.nullish()
 });
