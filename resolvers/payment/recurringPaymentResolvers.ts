@@ -6,7 +6,7 @@ import { enumValues } from '../../utils/helpers/enumHelpers';
 import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
 import type { Types } from 'mongoose';
-import { accountFields, checkPaymentAccounts } from '../account/accountResolvers';
+import { accountFields, checkPaymentAccounts, expenseAccountOf } from '../account/accountResolvers';
 import { PaymentRecord } from '../../models/payment/PaymentRecord';
 import { Note } from '../../models/note/Note';
 import { NoteRepeat } from '../../constants/note/noteRepeat';
@@ -51,9 +51,14 @@ const createRecurringPayment = async (_: unknown, { input }: { input: CreateRecu
     // Check if payment with same name exists
     await validateUniqueName(payment.name, budgetId, session);
     await checkPaymentAccounts(payment, { budget: budgetId, session });
+    // An expense that doesn't say which account it goes out of is recorded on where pay lands, once
+    // there's more than one to spend from
+    const account =
+      payment.account ?? (payment.type === PaymentType.EXPENSE ? await expenseAccountOf(budgetId, session) : null);
 
     const createdPayment = await new RecurringPayment({
       ...payment,
+      account,
       debt: withBalanceDate(payment.debt),
       budget: budgetId
     }).save({ session });
@@ -106,6 +111,12 @@ const updateRecurringPayment = async (
   }
   if (input.account !== undefined || input.paysInto || input.type !== undefined) {
     await checkPaymentAccounts(after, { budget: payment.budget });
+  }
+  // As when it's added: an expense left without an account is recorded on where pay lands, once
+  // there's more than one to spend from
+  if (after.type === PaymentType.EXPENSE && !after.account) {
+    const account = await expenseAccountOf(payment.budget);
+    if (account) input.account = String(account);
   }
 
   // An ended payment whose end moves carries on after the latest date it had dealt with

@@ -19,6 +19,7 @@ import {
   accountFor,
   accountsOf,
   checkPaymentAccounts,
+  recordPaymentAccounts,
   countedBalance,
   moveMoney,
   paidIntoAccountOf,
@@ -222,6 +223,8 @@ const createBudget = async (
     for (const payment of saved) {
       if (payment.debt) await recordBalanceSet(payment, null, session);
     }
+    // With more than one account to spend from, each expense says which it goes out of
+    await recordPaymentAccounts(budget._id, session);
 
     if (payday) {
       await new Payday({ ...payday, budget: budget._id }).save({ session });

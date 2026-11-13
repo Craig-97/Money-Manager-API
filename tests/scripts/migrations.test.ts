@@ -8,6 +8,7 @@ import { moveHandledToRecords } from '../../scripts/migrations/handledToRecords'
 import { migrateRenewalReminders } from '../../scripts/migrations/renewalReminders';
 import { migratePaymentCategories, newCategory } from '../../scripts/migrations/paymentCategories';
 import { migrateAccountInterest } from '../../scripts/migrations/accountInterest';
+import { migratePaymentAccounts } from '../../scripts/migrations/paymentAccounts';
 
 beforeAll(setupTestApp);
 afterAll(teardownTestApp);
@@ -422,5 +423,42 @@ describe('migrateAccountInterest', () => {
 
     // Again, it has nothing left to do
     expect(await migrateAccountInterest({ apply: true })).toEqual({ found: 0, withRate: 0, changed: 0 });
+  });
+});
+
+describe('migratePaymentAccounts', () => {
+  const accounts = () => mongoose.connection.collection('accounts');
+  const payments = () => mongoose.connection.collection('recurringpayments');
+
+  it('records expenses with no account on where pay lands, only in budgets with two to spend from', async () => {
+    const [two, one] = [oid('64b000000000000000000001'), oid('64b000000000000000000002')];
+    const { insertedIds } = await accounts().insertMany([
+      { budget: two, name: 'Everyday', kind: 'SPENDING', paidInto: true, balance: 1000, counts: true },
+      { budget: two, name: 'Joint bills', kind: 'SPENDING', paidInto: false, balance: 2105, counts: true },
+      { budget: one, name: 'Current account', kind: 'SPENDING', paidInto: true, balance: 500, counts: true },
+      { budget: one, name: 'Cash ISA', kind: 'SAVINGS', paidInto: false, balance: 8650, counts: false }
+    ]);
+    const [everyday, joint] = [insertedIds[0], insertedIds[1]];
+    await payments().insertMany([
+      { budget: two, name: 'Energy', type: 'EXPENSE', account: null },
+      { budget: two, name: 'Water', type: 'EXPENSE' },
+      { budget: two, name: 'Car', type: 'EXPENSE', account: joint },
+      { budget: two, name: 'Pay', type: 'INCOME', account: null },
+      { budget: one, name: 'Rent', type: 'EXPENSE', account: null }
+    ]);
+    const accountOf = async (name: string) => (await payments().findOne({ name }))?.account ?? null;
+
+    expect(await migratePaymentAccounts({ apply: false })).toEqual({ budgets: 1, found: 2, changed: 0 });
+    expect(await accountOf('Energy')).toBeNull();
+
+    expect(await migratePaymentAccounts({ apply: true })).toEqual({ budgets: 1, found: 2, changed: 2 });
+    expect(await accountOf('Energy')).toEqual(everyday);
+    expect(await accountOf('Water')).toEqual(everyday);
+    expect(await accountOf('Car')).toEqual(joint);
+    expect(await accountOf('Pay')).toBeNull();
+    expect(await accountOf('Rent')).toBeNull();
+
+    // Again, it has nothing left to do
+    expect(await migratePaymentAccounts({ apply: true })).toEqual({ budgets: 1, found: 0, changed: 0 });
   });
 });

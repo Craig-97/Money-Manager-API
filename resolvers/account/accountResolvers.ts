@@ -80,6 +80,47 @@ export const moveMoney = async (
   await found.save({ session });
 };
 
+/*
+ * The account an expense that names none is recorded on: where pay lands, once there's more than one
+ * account to spend from. With only one, none needs naming, and they follow where pay lands.
+ */
+export const expenseAccountOf = async (budget: BudgetId, session?: ClientSession) => {
+  const spending = await Account.find({ budget, kind: AccountKind.SPENDING }).session(session ?? null);
+  return spending.length > 1 ? (spending.find(account => account.paidInto)?._id ?? null) : null;
+};
+
+/*
+ * Once there's more than one account to spend from, every recurring expense says which: any that
+ * don't are recorded on where pay lands, which is where they've been going out of. So none are ever
+ * left without one.
+ */
+export const recordPaymentAccounts = async (budget: BudgetId, session: ClientSession) => {
+  const account = await expenseAccountOf(budget, session);
+  if (!account) return;
+  await RecurringPayment.updateMany(
+    { budget, type: PaymentType.EXPENSE, account: null },
+    { $set: { account } }
+  ).session(session);
+};
+
+/*
+ * Payments that name an account that's going, or an expense whose account becomes savings: they
+ * move to where pay lands, by name while there's still more than one to spend from
+ */
+const moveOffAccount = async (
+  account: AccountDocument,
+  { expenses, session }: { expenses: boolean; session: ClientSession }
+) => {
+  const filter = {
+    budget: account.budget,
+    account: account._id,
+    ...(expenses ? { type: PaymentType.EXPENSE } : {})
+  };
+  const to = await expenseAccountOf(account.budget, session);
+  await RecurringPayment.updateMany(filter, { $set: { account: to } }).session(session);
+  await OneOffPayment.updateMany(filter, { $set: { account: to } }).session(session);
+};
+
 /* Sets a balance the user typed in, dated now so the app can say how old it is */
 export const setBalance = (account: AccountDocument, balance: number) => {
   account.balance = balance;
@@ -203,16 +244,21 @@ const createAccount = async (
     purpose: purpose ?? null,
     balanceUpdatedAt: new Date()
   });
-  if (!paidInto) return withBudget(await account.save(), budgetId);
+  if (!spending) return withBudget(await account.save(), budgetId);
 
+  // Another account to spend from: payments that don't say which they go out of are recorded on
+  // where pay lands, once that's settled
   return withTransaction(async session => {
-    // Off the old one first: one account per budget is where pay lands
-    await Account.updateMany(
-      { budget: budgetId, paidInto: true },
-      { $set: { paidInto: false } }
-    ).session(session);
-    account.paidInto = true;
+    if (paidInto) {
+      // Off the old one first: one account per budget is where pay lands
+      await Account.updateMany(
+        { budget: budgetId, paidInto: true },
+        { $set: { paidInto: false } }
+      ).session(session);
+      account.paidInto = true;
+    }
     await account.save({ session });
+    await recordPaymentAccounts(budgetId, session);
     const budget = await Budget.findById(budgetId).session(session);
     if (!budget) throw BUDGET_NOT_FOUND(budgetId);
     return { account, budget, success: true };
@@ -261,16 +307,6 @@ const updateAccount = async (
     else if (becameSpending) account.interest = null;
     if (purpose !== undefined) account.purpose = purpose;
 
-    if (becameSavings) {
-      await RecurringPayment.updateMany(
-        { budget: account.budget, account: account._id, type: PaymentType.EXPENSE },
-        { $set: { account: null } }
-      ).session(session);
-      await OneOffPayment.updateMany(
-        { budget: account.budget, account: account._id, type: PaymentType.EXPENSE },
-        { $set: { account: null } }
-      ).session(session);
-    }
     if (paidInto && !account.paidInto) {
       // Off the old one first: one account per budget is where pay lands
       await Account.updateMany(
@@ -279,7 +315,10 @@ const updateAccount = async (
       ).session(session);
       account.paidInto = true;
     }
+    // Saved first, so the accounts left to spend from are counted as they are now
     await account.save({ session });
+    if (becameSavings) await moveOffAccount(account, { expenses: true, session });
+    if (becameSpending) await recordPaymentAccounts(account.budget, session);
     const budget = await Budget.findById(account.budget).session(session);
     if (!budget) throw BUDGET_NOT_FOUND(account.budget);
     return { account, budget, success: true };
@@ -294,20 +333,13 @@ const deleteAccount = async (_: unknown, { id }: { id: string }, req: Request) =
   if (account.paidInto) throw PAID_INTO_ACCOUNT_FIXED('deleted');
 
   await withTransaction(async session => {
-    const budget = account.budget;
     await RecurringPayment.updateMany(
-      { budget, account: account._id },
-      { $set: { account: null } }
-    ).session(session);
-    await RecurringPayment.updateMany(
-      { budget, paysInto: account._id },
+      { budget: account.budget, paysInto: account._id },
       { $set: { paysInto: null } }
     ).session(session);
-    await OneOffPayment.updateMany(
-      { budget, account: account._id },
-      { $set: { account: null } }
-    ).session(session);
+    // Deleted first, so the accounts left to spend from are counted without it
     await Account.deleteOne({ _id: account._id }).session(session);
+    await moveOffAccount(account, { expenses: false, session });
   });
   return withBudget(null, account.budget);
 };

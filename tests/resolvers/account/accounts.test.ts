@@ -471,6 +471,68 @@ describe('spending accounts', () => {
     expect((await currentOf(token)).name).toBe('Current account');
   });
 
+  it('records every expense on where pay lands once there’s a second account to spend from', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const make = async (name: string, extra: Record<string, unknown> = {}) =>
+      (await gql(CREATE_PAYMENT, { input: payment(budgetId, { name, category: 'BILLS', ...extra }) }, token)).data
+        .createRecurringPayment.recurringPayment;
+    const energy = await make('Energy');
+    const pay = await make('Pay', { type: 'INCOME', category: 'GENERAL' });
+    // With one, none needs naming
+    expect(energy.account).toBeNull();
+
+    const current = await currentOf(token);
+    await addSpending(token, budgetId);
+    const accountOf = async (id: string) => {
+      const stored = await mongoose.model('RecurringPayment').findById(id);
+      return stored.account ? String(stored.account) : null;
+    };
+    expect(await accountOf(energy.id)).toBe(current.id);
+    // Income lands where pay does without needing to say
+    expect(await accountOf(pay.id)).toBeNull();
+
+    // New ones, and ones put back to no account, are recorded there too
+    const water = await make('Water');
+    expect(water.account).toBe(current.id);
+    const back = await gql(UPDATE_PAYMENT, { id: water.id, input: { account: null } }, token);
+    expect(back.data.updateRecurringPayment.recurringPayment.account).toBe(current.id);
+  });
+
+  it('records them when savings become an account to spend from', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const isa = await addSavings(token, budgetId);
+    const created = await gql(CREATE_PAYMENT, { input: payment(budgetId, { name: 'Energy', category: 'BILLS' }) }, token);
+    const energy = created.data.createRecurringPayment.recurringPayment;
+
+    await gql(UPDATE, { id: isa.id, input: { kind: 'SPENDING' } }, token);
+    expect(String((await mongoose.model('RecurringPayment').findById(energy.id)).account)).toBe(
+      (await currentOf(token)).id
+    );
+  });
+
+  it('moves a deleted account’s payments to where pay lands, by name while two are left to spend from', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const joint = await addSpending(token, budgetId);
+    const pot = await addSavings(token, budgetId, { name: 'Bills pot', kind: 'SPENDING', balance: 50 });
+    const current = await currentOf(token);
+    const make = async (name: string, account: string) =>
+      (await gql(CREATE_PAYMENT, { input: payment(budgetId, { name, category: 'BILLS', account }) }, token)).data
+        .createRecurringPayment.recurringPayment;
+    const energy = await make('Energy', joint.id);
+    const water = await make('Water', pot.id);
+    const accountOf = async (id: string) => {
+      const stored = await mongoose.model('RecurringPayment').findById(id);
+      return stored.account ? String(stored.account) : null;
+    };
+
+    await gql(DELETE, { id: joint.id }, token);
+    expect(await accountOf(energy.id)).toBe(current.id);
+
+    // Down to one, they go back to not naming one
+    await gql(DELETE, { id: pot.id }, token);
+    expect(await accountOf(water.id)).toBeNull();
+  });
+
   it('pays one-offs and overpayments from the account they name', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const joint = await addSpending(token, budgetId);
@@ -541,7 +603,8 @@ describe('setting up accounts with the budget', () => {
       'Cash ISA': { kind: 'SAVINGS', counts: false, interest: { rate: 4.5 } }
     });
     expect(byName(budget.recurringPayments)).toMatchObject({
-      'Joint bills top-up': { account: null, paysInto: accounts['Joint bills'].id },
+      // With two to spend from, it says it goes out of where pay lands
+      'Joint bills top-up': { account: accounts.Everyday.id, paysInto: accounts['Joint bills'].id },
       Energy: { account: accounts['Joint bills'].id, paysInto: null }
     });
   });
