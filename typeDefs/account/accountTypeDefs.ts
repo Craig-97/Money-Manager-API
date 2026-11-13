@@ -20,6 +20,15 @@ export const accountTypeDefs = `
     # balance up to the start of accruedTo. The app adds the days since at the balance it has now.
     accrued: Float!
     accruedTo: String
+    # Payments the app added since the balance was last typed in, oldest first, to check against
+    # the bank
+    added: [InterestAdded!]!
+  }
+
+  type InterestAdded {
+    date: String!
+    amount: Float!
+    balanceAfter: Float!
   }
 
   # MONTHLY needs day (1 to 31); the others need nextDate, after today. A monthly payment's
@@ -29,13 +38,6 @@ export const accountTypeDefs = `
     frequency: InterestFrequency
     day: Int
     nextDate: String
-  }
-
-  # amount is what the bank paid. Without one there was no interest this time, so nothing's added.
-  # Either way it moves on to the next payment, or ends once a fixed-term account has matured.
-  input ConfirmInterestInput {
-    accountId: ID!
-    amount: Float
   }
 
   # A bank account in a budget: one to spend from, or savings. Balances are typed in, never linked
@@ -119,8 +121,9 @@ export const accountTypeDefs = `
     deleteAccount(id: ID!): AccountResponse!
     # Balances typed in together, e.g. the dashboard's bank balance across several accounts
     updateAccountBalances(input: UpdateAccountBalancesInput!): BudgetResponse!
-    # A savings account's interest payment, checked: added to the balance, which is dated now
-    confirmInterest(input: ConfirmInterestInput!): AccountResponse!
+    # Adds savings interest that's come since the app was last opened, each on its own date. Safe
+    # to call more than once: what's been added isn't added again.
+    catchUpInterest(budgetId: ID!): BudgetResponse!
     # Which account each of several recurring payments goes out of or into
     assignPaymentAccounts(input: AssignPaymentAccountsInput!): BudgetResponse!
   }

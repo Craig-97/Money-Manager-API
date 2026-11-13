@@ -1,7 +1,7 @@
 import { InterestFrequency } from '../../constants/account/interestFrequency';
 
 // Months from one payment to the next
-const MONTHS: Record<InterestFrequency, number | null> = {
+export const INTEREST_MONTHS: Record<InterestFrequency, number | null> = {
   MONTHLY: 1,
   QUARTERLY: 3,
   YEARLY: 12,
@@ -31,7 +31,7 @@ export const followingInterestDate = (
   { frequency, day }: { frequency: InterestFrequency; day: number },
   date: Date
 ) => {
-  const months = MONTHS[frequency];
+  const months = INTEREST_MONTHS[frequency];
   if (months === null) return null;
   return dayInMonth({ year: date.getUTCFullYear(), month: date.getUTCMonth() + months, day });
 };
@@ -44,7 +44,7 @@ export const previousInterestDate = (
   { frequency, day }: { frequency: InterestFrequency; day: number },
   nextDate: Date
 ) => {
-  const months = MONTHS[frequency];
+  const months = INTEREST_MONTHS[frequency];
   if (months === null) return null;
   return dayInMonth({ year: nextDate.getUTCFullYear(), month: nextDate.getUTCMonth() - months, day });
 };

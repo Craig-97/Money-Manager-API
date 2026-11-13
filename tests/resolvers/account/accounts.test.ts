@@ -620,9 +620,33 @@ describe('setting up accounts with the budget', () => {
 });
 
 describe('savings interest', () => {
-  const CONFIRM = `mutation ($input: ConfirmInterestInput!) {
-    confirmInterest(input: $input) { account { ${ACCOUNT} } ${BUDGET} }
+  const CATCH_UP = `mutation ($budgetId: ID!) {
+    catchUpInterest(budgetId: $budgetId) {
+      success
+      budget { bankBalance accounts { id name balance balanceUpdatedAt interest { frequency nextDate accrued added { date amount balanceAfter } } } }
+    }
   }`;
+  const catchUp = async (token: string, budgetId: string) => {
+    const body = await gql(CATCH_UP, { budgetId }, token);
+    expect(body.errors).toBeUndefined();
+    return byName(body.data.catchUpInterest.budget.accounts)['Cash ISA'];
+  };
+  const day = (days: number) => new Date(`${fromToday(days)}T00:00:00Z`);
+  // As if the app hadn't been opened for a while: the next payment was due some days ago, and
+  // interest was counted up to a day before that
+  const dueSince = (id: string, { due, countedFrom }: { due: number; countedFrom: number }) =>
+    mongoose.model('Account').updateOne(
+      { _id: id },
+      {
+        $set: {
+          'interest.nextDate': day(-due),
+          'interest.accrued': 0,
+          'interest.accruedTo': day(-countedFrom)
+        }
+      }
+    );
+  // A monthly payment's share of the AER, spread over the year's days
+  const dailyAt = (balance: number, rate: number) => (balance * 12 * ((1 + rate / 100) ** (1 / 12) - 1)) / 365;
   const iso = (ms: string) => new Date(Number(ms)).toISOString().slice(0, 10);
   // A date some days from today, as the API takes it
   const fromToday = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
@@ -651,7 +675,7 @@ describe('savings interest', () => {
     await gql(UPDATE, { id: isa.id, input: { balance: 50000 } }, token);
 
     const after = await isaOf(token);
-    expect(after.interest.accrued).toBeCloseTo(100000 * (1.0365 ** (1 / 365) - 1) * 10, 6);
+    expect(after.interest.accrued).toBeCloseTo(dailyAt(100000, 3.65) * 10, 6);
     expect(iso(after.interest.accruedTo)).toBe(today());
   });
 
@@ -664,7 +688,7 @@ describe('savings interest', () => {
 
     const after = await isaOf(token);
     expect(after.interest.rate).toBe(5);
-    expect(after.interest.accrued).toBeCloseTo(8650 * (1.045 ** (1 / 365) - 1) * 5, 6);
+    expect(after.interest.accrued).toBeCloseTo(dailyAt(8650, 4.5) * 5, 6);
   });
 
   it('works out a monthly payment’s next date from its day', async () => {
@@ -708,51 +732,87 @@ describe('savings interest', () => {
     expect(errorCode(past)).toBe('INTEREST_DATE_PASSED');
   });
 
-  it('adds checked interest to the balance, dates it now and moves on a quarter', async () => {
+  it('adds a payment that’s come on its own date, without dating the balance, keeping it to check', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const next = fromToday(10);
-    const easy = await addSavings(token, budgetId, {
-      counts: true,
-      interest: { rate: 4.1, frequency: 'QUARTERLY', nextDate: next }
-    });
+    const isa = await addSavings(token, budgetId, { interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 } });
+    await dueSince(isa.id, { due: 10, countedFrom: 40 });
 
-    const body = await gql(CONFIRM, { input: { accountId: easy.id, amount: 42.4 } }, token);
-    expect(body.errors).toBeUndefined();
-    const { account, budget } = body.data.confirmInterest;
-    expect(account.balance).toBe(8692.4);
-    expect(Number(account.balanceUpdatedAt)).toBeGreaterThanOrEqual(Number(easy.balanceUpdatedAt));
-    // It counts in free to spend, so the bank balance goes up too
-    expect(budget.bankBalance).toBe(1000 + 8692.4);
-    const moved = new Date(`${next}T00:00:00Z`);
-    moved.setUTCMonth(moved.getUTCMonth() + 3);
-    expect(iso(account.interest.nextDate)).toBe(moved.toISOString().slice(0, 10));
+    const after = await catchUp(token, budgetId);
+
+    const amount = Math.round(dailyAt(8650, 4.5) * 30 * 100) / 100;
+    expect(after.balance).toBe(8650 + amount);
+    expect(after.balanceUpdatedAt).toBe(isa.balanceUpdatedAt);
+    expect(after.interest.added).toEqual([
+      { date: String(day(-10).getTime()), amount, balanceAfter: 8650 + amount }
+    ]);
+    expect(Number(after.interest.nextDate)).toBeGreaterThan(Date.now() - 86_400_000);
+    // Again, there's nothing more to add
+    expect((await catchUp(token, budgetId)).balance).toBe(8650 + amount);
   });
 
-  it('skips a payment without touching the balance', async () => {
+  it('adds each missed payment in order, the later ones earning on the earlier', async () => {
     const { token, budgetId } = await createUserWithBudget();
-    const isa = await addSavings(token, budgetId, {
-      interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 }
-    });
+    const isa = await addSavings(token, budgetId, { interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 } });
+    const nextDate = new Date(Number(isa.interest.nextDate));
+    const monthsBack = (months: number) => {
+      const date = new Date(nextDate);
+      date.setUTCMonth(date.getUTCMonth() - months);
+      return date;
+    };
+    await mongoose.model('Account').updateOne(
+      { _id: isa.id },
+      { $set: { 'interest.nextDate': monthsBack(3), 'interest.accrued': 0, 'interest.accruedTo': monthsBack(4) } }
+    );
 
-    const body = await gql(CONFIRM, { input: { accountId: isa.id } }, token);
-    expect(body.errors).toBeUndefined();
-    const { account } = body.data.confirmInterest;
-    expect(account.balance).toBe(8650);
-    expect(account.balanceUpdatedAt).toBe(isa.balanceUpdatedAt);
-    expect(new Date(Number(account.interest.nextDate)).getUTCDate()).toBe(3);
-    expect(Number(account.interest.nextDate)).toBeGreaterThan(Number(isa.interest.nextDate));
+    const after = await catchUp(token, budgetId);
+
+    expect(after.interest.added.map((added: { date: string }) => Number(added.date))).toEqual([
+      monthsBack(3).getTime(),
+      monthsBack(2).getTime(),
+      monthsBack(1).getTime()
+    ]);
+    const [first, , last] = after.interest.added;
+    expect(last.balanceAfter).toBe(after.balance);
+    expect(first.balanceAfter).toBe(8650 + first.amount);
+    expect(Number(after.interest.nextDate)).toBe(nextDate.getTime());
   });
 
-  it('stops once a fixed-term account has matured', async () => {
+  it('adds it once when two tabs open at the same time', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const isa = await addSavings(token, budgetId, { interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 } });
+    await dueSince(isa.id, { due: 10, countedFrom: 40 });
+
+    await Promise.all([gql(CATCH_UP, { budgetId }, token), gql(CATCH_UP, { budgetId }, token)]);
+
+    const stored = await mongoose.model('Account').findById(isa.id);
+    expect(stored.interest.added).toHaveLength(1);
+    expect(stored.balance).toBe(stored.interest.added[0].balanceAfter);
+  });
+
+  it('adds a fixed term’s interest when it matures, then stops', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const bond = await addSavings(token, budgetId, {
       interest: { rate: 5, frequency: 'MATURITY', nextDate: fromToday(30) }
     });
+    await dueSince(bond.id, { due: 1, countedFrom: 366 });
 
-    const body = await gql(CONFIRM, { input: { accountId: bond.id, amount: 400 } }, token);
-    expect(body.data.confirmInterest.account.interest).toMatchObject({ frequency: 'MATURITY', nextDate: null });
-    const again = await gql(CONFIRM, { input: { accountId: bond.id, amount: 1 } }, token);
-    expect(errorCode(again)).toBe('INTEREST_NOT_SCHEDULED');
+    const after = await catchUp(token, budgetId);
+
+    expect(after.interest).toMatchObject({ frequency: 'MATURITY', nextDate: null });
+    expect(after.interest.added).toHaveLength(1);
+    // A year at 5%
+    expect(after.balance).toBe(9082.5);
+  });
+
+  it('stops asking to check what was added once the balance is typed in', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const isa = await addSavings(token, budgetId, { interest: { rate: 4.5, frequency: 'MONTHLY', day: 3 } });
+    await dueSince(isa.id, { due: 10, countedFrom: 40 });
+    await catchUp(token, budgetId);
+
+    await gql(UPDATE, { id: isa.id, input: { balance: 8682 } }, token);
+
+    expect((await catchUp(token, budgetId)).interest.added).toEqual([]);
   });
 
   it('stops for an account that becomes one to spend from', async () => {

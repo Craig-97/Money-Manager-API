@@ -1,3 +1,5 @@
+import type { InterestFrequency } from '../../constants/account/interestFrequency';
+import { INTEREST_MONTHS } from '../dates/interest';
 import { daysBetween } from '../dates/recurrence';
 
 /*
@@ -12,9 +14,18 @@ export interface Accrual {
   accruedTo: Date;
 }
 
-/* A day's interest on savings: the AER spread over the year, compounding, as banks pay it */
-export const savingsDailyInterest = (balance: number, rate: number) =>
-  Math.max(0, balance) * ((1 + rate / 100) ** (1 / 365) - 1);
+/*
+ * A day's interest on savings. The AER is what a year earns once each payment earns too, so each
+ * payment is its share of that, compounding, spread evenly over the days it covers: a month of days
+ * earns a monthly payment, and a fixed term, paid yearly, earns the AER over a year.
+ */
+export const savingsDailyInterest = (
+  balance: number,
+  { rate, frequency }: { rate: number; frequency: InterestFrequency }
+) => {
+  const perYear = 12 / (INTEREST_MONTHS[frequency] ?? 12);
+  return (Math.max(0, balance) * perYear * ((1 + rate / 100) ** (1 / perYear) - 1)) / 365;
+};
 
 /* A day's interest on a debt: the APR spread evenly over the year */
 export const debtDailyInterest = (balance: number, apr: number) =>

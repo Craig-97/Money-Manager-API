@@ -43,11 +43,6 @@ export const ACCOUNT_NOT_ALLOWED = (id: unknown, field: 'account' | 'paysInto') 
     extensions: { code: 'ACCOUNT_NOT_ALLOWED', field }
   });
 
-export const INTEREST_NOT_SCHEDULED = () =>
-  new GraphQLError('Say when this account’s interest is paid first', {
-    extensions: { code: 'INTEREST_NOT_SCHEDULED', field: 'interest' }
-  });
-
 export const INTEREST_DATE_PASSED = () =>
   new GraphQLError('Choose a date after today', {
     extensions: { code: 'INTEREST_DATE_PASSED', field: 'interest.nextDate' }

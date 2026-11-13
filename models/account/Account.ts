@@ -2,6 +2,13 @@ import mongoose, { Schema, Types } from 'mongoose';
 import { AccountKind } from '../../constants/account/accountKind';
 import { InterestFrequency } from '../../constants/account/interestFrequency';
 
+// Interest the app added on its own, for the user to check against their bank
+export interface InterestAdded {
+  date: Date;
+  amount: number;
+  balanceAfter: number;
+}
+
 /*
  * A savings account's interest. With a frequency it's worked out on each day's closing balance and
  * added on the day it's paid; without one the rate is shown only.
@@ -18,6 +25,8 @@ export interface AccountInterest {
   // No date yet means it counts from the last payment.
   accrued?: number;
   accruedTo?: Date | null;
+  // Payments added since the balance was last typed in, oldest first
+  added?: InterestAdded[];
 }
 
 /*
@@ -58,7 +67,20 @@ const AccountSchema = new Schema<Account>(
           day: { type: Number, default: null },
           nextDate: { type: Date, default: null },
           accrued: { type: Number, default: 0 },
-          accruedTo: { type: Date, default: null }
+          accruedTo: { type: Date, default: null },
+          added: {
+            type: [
+              new Schema<InterestAdded>(
+                {
+                  date: { type: Date, required: true },
+                  amount: { type: Number, required: true },
+                  balanceAfter: { type: Number, required: true }
+                },
+                { _id: false }
+              )
+            ],
+            default: []
+          }
         },
         { _id: false }
       ),

@@ -8,12 +8,6 @@ export interface AccountInterestInput {
   nextDate?: string | null;
 }
 
-export interface ConfirmInterestInput {
-  accountId: string;
-  // None: no interest this time
-  amount?: number | null;
-}
-
 export interface AccountBalanceInput {
   accountId: string;
   balance: number;

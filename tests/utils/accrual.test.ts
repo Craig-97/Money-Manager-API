@@ -18,10 +18,13 @@ describe('interest worked out each day', () => {
   });
 
   it('spreads savings AER so a year of days earns it, and a debt’s APR evenly', () => {
-    expect((1 + savingsDailyInterest(1, 4.5)) ** 365).toBeCloseTo(1.045, 10);
+    // Twelve monthly payments, each earning on the last, make the AER
+    const monthly = (savingsDailyInterest(1, { rate: 4.5, frequency: 'MONTHLY' }) * 365) / 12;
+    expect((1 + monthly) ** 12).toBeCloseTo(1.045, 10);
+    expect(savingsDailyInterest(1, { rate: 5, frequency: 'MATURITY' }) * 365).toBeCloseTo(0.05, 10);
     expect(debtDailyInterest(3650, 10)).toBeCloseTo(1, 10);
     // Nothing on a balance below nothing
-    expect(savingsDailyInterest(-50, 4.5)).toBe(0);
+    expect(savingsDailyInterest(-50, { rate: 4.5, frequency: 'MONTHLY' })).toBe(0);
   });
 
   it('adds days at a balance, and leaves what’s counted alone for a day already passed', () => {

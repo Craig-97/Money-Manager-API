@@ -11,20 +11,18 @@ import { RecurringPayment } from '../../models/payment/RecurringPayment';
 import type {
   AccountInterestInput,
   AssignPaymentAccountsInput,
-  ConfirmInterestInput,
   CreateAccountInput,
   UpdateAccountBalancesInput,
   UpdateAccountInput
 } from '../../types/account/accountTypes';
 import { followingInterestDate, nextMonthlyDate } from '../../utils/dates/interest';
 import { ukDay } from '../../utils/dates/recurrence';
-import { accrueSavings, savingsAccruedTo } from '../../utils/interest';
+import { accrueSavings, addDueInterest, savingsAccruedTo } from '../../utils/interest';
 import {
   ACCOUNT_NOT_ALLOWED,
   ACCOUNT_NOT_FOUND,
   BUDGET_NOT_FOUND,
   INTEREST_DATE_PASSED,
-  INTEREST_NOT_SCHEDULED,
   PAID_INTO_ACCOUNT_FIXED,
   PAID_INTO_ACCOUNT_MISSING,
   PAID_INTO_NOT_SPENDING,
@@ -33,7 +31,6 @@ import {
   RECURRING_PAYMENT_NOT_FOUND,
   accountBalances,
   accountInput,
-  interestCheck,
   newAccount,
   parseInput,
   roundPence,
@@ -129,6 +126,8 @@ export const setBalance = (account: AccountDocument, balance: number) => {
   // Interest so far was earned on the balance before. It isn't paid yet, so it carries on.
   accrueSavings(account);
   account.balance = balance;
+  // Checked against the bank, so interest the app added has been too
+  if (account.interest) account.interest.added = [];
   account.balanceUpdatedAt = new Date();
 };
 
@@ -438,33 +437,26 @@ export const accountFields = {
 };
 
 /*
- * A savings account's interest payment, once the user has checked it: what the bank paid goes on
- * the balance, which is dated now as they've just looked. No amount means none was paid this time.
- * Either way it moves on to the next payment, or a fixed-term account has matured and stops.
+ * Adds savings interest that's come since the app was last opened, on each payment's own date, so
+ * nobody has to. It isn't a balance the user typed in, so how old the balance is stays as it was.
+ * Each account is written only if its next date is still the one read, so two tabs opening at once
+ * can't add it twice.
  */
-const confirmInterest = async (
-  _: unknown,
-  { input }: { input: ConfirmInterestInput },
-  req: Request
-) => {
+const catchUpInterest = async (_: unknown, { budgetId }: { budgetId: string }, req: Request) => {
   checkAuth(req);
-  const account = await findOwnAccount(input.accountId, req);
-  const { amount } = parseInput(interestCheck, input);
-  const interest = account.interest;
-  if (!interest?.frequency || !interest.nextDate) throw INTEREST_NOT_SCHEDULED();
-
-  if (amount) setBalance(account, roundPence(account.balance + amount));
-  account.interest = {
-    rate: interest.rate,
-    frequency: interest.frequency,
-    day: interest.day,
-    nextDate: followingInterestDate(
-      { frequency: interest.frequency, day: interest.day ?? interest.nextDate.getUTCDate() },
-      interest.nextDate
-    )
-  };
-  await account.save();
-  return withBudget(account, account.budget);
+  await checkBudgetAccess(budgetId, req);
+  const today = ukDay();
+  const due = await Account.find({ budget: budgetId, 'interest.nextDate': { $lte: today } });
+  // Sequential, so each write is checked against what was read for it
+  for (const account of due) {
+    const was = account.interest!.nextDate;
+    if (!addDueInterest(account, today)) continue;
+    await Account.updateOne(
+      { _id: account._id, 'interest.nextDate': was },
+      { $set: { balance: account.balance, interest: account.interest } }
+    );
+  }
+  return withBudget(null, budgetId);
 };
 
 type InterestDocument = AccountInterest & { ownerDocument: () => AccountDocument };
@@ -486,6 +478,6 @@ export const accountResolvers = {
     deleteAccount,
     updateAccountBalances,
     assignPaymentAccounts,
-    confirmInterest
+    catchUpInterest
   }
 };

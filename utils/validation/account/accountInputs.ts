@@ -35,10 +35,6 @@ export const interest = z
   })
   .nullish();
 
-export const interestCheck = z.looseObject({
-  amount: money.min(0, "Interest can't be negative").nullish()
-});
-
 // Blank means none
 const purpose = z
   .string()
