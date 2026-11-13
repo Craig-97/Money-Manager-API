@@ -1,14 +1,20 @@
-import { accrue, daysFrom, debtDailyInterest, savingsDailyInterest } from '../../utils/interest';
-import { debtAccruedTo, payDebtOn, savingsAccruedTo } from '../../utils/interest';
+import {
+  accrue,
+  debtAccruedTo,
+  debtDailyInterest,
+  payDebtOn,
+  savingsAccruedTo,
+  savingsDailyInterest
+} from '../../utils/interest';
+import { daysBetween } from '../../utils/dates';
 
 const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
 
 describe('interest worked out each day', () => {
-  it('counts whole UK days, none backwards', () => {
-    expect(daysFrom(day('2026-10-01'), day('2026-11-01'))).toBe(31);
+  it('counts whole UK days', () => {
+    expect(daysBetween(day('2026-10-01'), day('2026-11-01'))).toBe(31);
     // The clocks going back don't make it a day longer
-    expect(daysFrom(day('2026-10-24'), day('2026-10-26'))).toBe(2);
-    expect(daysFrom(day('2026-11-01'), day('2026-10-01'))).toBe(0);
+    expect(daysBetween(day('2026-10-24'), day('2026-10-26'))).toBe(2);
   });
 
   it('spreads savings AER so a year of days earns it, and a debt’s APR evenly', () => {
@@ -62,11 +68,13 @@ describe('interest worked out each day', () => {
     const payment = { amount: 100, frequency: 'MONTHLY' as const, firstPaymentDate: day('2026-01-01'), debt };
 
     // 30 days at £1, then 31 days at a little less
-    expect(payDebtOn(payment, day('2026-10-01'))).toEqual({ interest: 30, reduction: 70, balanceAfter: 3580 });
-    expect(payDebtOn(payment, day('2026-11-01'))).toEqual({
-      interest: 30.41,
-      reduction: 69.59,
-      balanceAfter: 3510.41
+    expect(payDebtOn(payment, [day('2026-10-01'), day('2026-11-01')])).toEqual({
+      interest: 60.41,
+      reduction: 139.59,
+      balanceAfter: 3510.41,
+      // What had built up before, for undo
+      accruedBefore: 0,
+      accruedToBefore: day('2026-09-01')
     });
     expect(debt).toMatchObject({ accrued: 0, accruedTo: day('2026-11-01') });
   });

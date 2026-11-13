@@ -9,7 +9,7 @@ import type { OneOffPayment } from '../../models/payment/OneOffPayment';
 import type { RecurringPayment } from '../../models/payment/RecurringPayment';
 import type { ReminderTiming } from '../../models/reminder/reminderTiming';
 import { addDays, nextOccurrence, occurrencesBefore } from '../dates';
-import { payTowardsDebt } from '../helpers/moneyHelpers';
+import { payDebtOn } from '../interest';
 import { DEFAULT_PAYDAY, paydaysBetween, toIsoDay, type BankHolidays } from '../payday/paydays';
 import { goesOutOn, moveOf } from '../payday/nonWorkingDays';
 import type { NonWorkingDay } from '../../constants/payment/nonWorkingDay';
@@ -202,11 +202,24 @@ const noteEvents = (source: FeedSource): CalendarEvent[] => {
 // The day a debt's payments clear it, keeping on as they are, or null if they never would
 const debtFreeDay = (payment: RecurringPayment) => {
   if (!payment.debt || payment.debt.balance <= 0 || !payment.nextDueDate) return null;
-  let debt = { balance: payment.debt.balance, apr: payment.debt.apr };
+  // Paid on a copy, as the app pays it: each date adds the interest built up to it
+  const { amount, frequency, firstPaymentDate, nextDueDate, debt } = payment;
+  const projected = {
+    amount,
+    frequency,
+    firstPaymentDate,
+    nextDueDate,
+    debt: {
+      balance: debt.balance,
+      apr: debt.apr,
+      balanceUpdatedAt: debt.balanceUpdatedAt,
+      accrued: debt.accrued,
+      accruedTo: debt.accruedTo
+    }
+  };
   let date: Date | null = payment.nextDueDate;
   for (let k = 0; date && k < MAX_DEBT_PAYMENTS; k++) {
-    debt = { ...debt, balance: payTowardsDebt(debt, payment.amount, payment.frequency).balance };
-    if (debt.balance <= 0) return date;
+    if (payDebtOn(projected, [date]).balanceAfter <= 0) return date;
     date = nextOccurrence(payment, addDays(date, 1));
   }
   return null;

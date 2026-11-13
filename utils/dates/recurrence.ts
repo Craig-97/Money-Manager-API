@@ -36,6 +36,10 @@ export const ukDay = (date: Date = new Date()) => {
 
 export const addDays = (date: Date, days: number) => new Date(date.getTime() + days * DAY_MS);
 
+/* Whole days from one day to another, negative when it's earlier */
+export const daysBetween = (from: Date, to: Date) =>
+  Math.round((to.getTime() - from.getTime()) / DAY_MS);
+
 /*
  * The kth date a payment falls on, counting the first as 0. Month-based payments keep the first
  * date's day, moving to the end of shorter months: the 31st falls on 28 Feb, then 31 Mar.

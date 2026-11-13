@@ -76,7 +76,7 @@ import {
   skipRecurring,
   debtOverpayment,
 } from "../../utils";
-import { accrualBefore, accrueDebt, payDebtOn } from "../../utils/interest";
+import { accrueDebt, payDebtOn } from "../../utils/interest";
 import {
   addDays,
   nextOccurrence,
@@ -510,23 +510,7 @@ const recordAlreadyPaid = async (
   payment: RecurringPaymentDocument,
   { dates, session, open }: { dates: Date[]; session: ClientSession; open: boolean },
 ) => {
-  let debt: RecordDebt | undefined;
-  if (payment.debt && dates.length) {
-    const before = accrualBefore(payment.debt);
-    let interest = 0;
-    let reduction = 0;
-    for (const date of dates) {
-      const paidOff = payDebtOn({ ...payment.toObject(), debt: payment.debt }, date);
-      interest += paidOff.interest;
-      reduction += paidOff.reduction;
-    }
-    debt = {
-      interest: roundPence(interest),
-      reduction: roundPence(reduction),
-      balanceAfter: payment.debt.balance,
-      ...before,
-    };
-  }
+  const debt = payment.debt && dates.length ? payDebtOn(payment, dates) : undefined;
   const transfer = await payInto(payment, { times: dates.length, session });
   return handle(payment, PaymentRecordKind.PAID, dates, session, {
     balanceChange: 0,
@@ -570,14 +554,7 @@ const markPaymentsPaid = async (
       if (!payment.nextDueDate) return null;
       // A debt has the interest up to its date added, even when it's marked paid late, then the
       // payment taken off
-      let debt: RecordDebt | undefined;
-      if (payment.debt) {
-        const before = accrualBefore(payment.debt);
-        debt = {
-          ...payDebtOn({ ...payment.toObject(), debt: payment.debt }, payment.nextDueDate),
-          ...before,
-        };
-      }
+      const debt = payment.debt ? payDebtOn(payment, [payment.nextDueDate]) : undefined;
       const change = balanceChange(payment);
       const account = await accountFor(budgetId, { account: payment.account, session });
       const transfer = await payInto(payment, { times: 1, session });

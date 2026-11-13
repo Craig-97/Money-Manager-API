@@ -467,9 +467,7 @@ const confirmInterest = async (
   return withBudget(account, account.budget);
 };
 
-type InterestDocument = AccountInterest & {
-  ownerDocument?: () => AccountDocument;
-};
+type InterestDocument = AccountInterest & { ownerDocument: () => AccountDocument };
 
 /*
  * What's built up and from when, as the app shows it: interest that hasn't been counted yet counts
@@ -477,8 +475,7 @@ type InterestDocument = AccountInterest & {
  */
 const interestFields = {
   accrued: (interest: InterestDocument) => interest.accrued ?? 0,
-  accruedTo: (interest: InterestDocument) =>
-    interest.ownerDocument ? savingsAccruedTo(interest.ownerDocument()) : (interest.accruedTo ?? null)
+  accruedTo: (interest: InterestDocument) => savingsAccruedTo(interest.ownerDocument())
 };
 
 export const accountResolvers = {
