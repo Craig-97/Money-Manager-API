@@ -152,6 +152,29 @@ describe('payment history', () => {
     ]);
   });
 
+  it('gives one year at a time by the last date each covers, and which years it has', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const payment = await recurring(token, budgetId, { firstPaymentDate: '2030-12-31' });
+    await pay(token, budgetId, [payment.id]);
+    await pay(token, budgetId, [payment.id]);
+
+    const body = await gql(
+      `query ($id: ID!) { recurringPayment(id: $id) {
+        historyYears
+        older: history(year: 2030) { dates account }
+        none: history(year: 2029) { dates }
+      } }`,
+      { id: payment.id },
+      token
+    );
+
+    expect(body.errors).toBeUndefined();
+    const { historyYears, older, none } = body.data.recurringPayment;
+    expect(historyYears).toEqual([2031, 2030]);
+    expect(older).toEqual([{ dates: [apiDate('2030-12-31')], account: expect.any(String) }]);
+    expect(none).toEqual([]);
+  });
+
   it('notes a balance set from a statement, and how far it moved', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const payment = await recurring(token, budgetId, { debt: card });

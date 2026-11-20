@@ -22,7 +22,8 @@
     "migrate:renewal-reminders": "tsx scripts/migrateRenewalReminders.ts",
     "migrate:payment-categories": "tsx scripts/migratePaymentCategories.ts",
     "migrate:account-interest": "tsx scripts/migrateAccountInterest.ts",
-    "migrate:payment-accounts": "tsx scripts/migratePaymentAccounts.ts"
+    "migrate:payment-accounts": "tsx scripts/migratePaymentAccounts.ts",
+    "migrate:account-history": "tsx scripts/migrateAccountHistory.ts"
   },
   "keywords": [],
   "author": "",

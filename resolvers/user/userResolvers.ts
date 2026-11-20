@@ -6,6 +6,7 @@ import { ThemePreference } from '../../constants/user/themePreference';
 import { checkAuth } from '../../middleware/isAuth';
 import { Budget } from '../../models/budget/Budget';
 import { Account } from '../../models/account/Account';
+import { AccountRecord } from '../../models/account/AccountRecord';
 import { User, type UserDocument } from '../../models/user/User';
 import { Note } from '../../models/note/Note';
 import { OneOffPayment } from '../../models/payment/OneOffPayment';
@@ -337,6 +338,7 @@ const deleteUserAndBudget = (id: string) =>
       await Payday.deleteMany({ budget }).session(session);
       await ReminderState.deleteMany({ budget }).session(session);
       await Account.deleteMany({ budget }).session(session);
+      await AccountRecord.deleteMany({ budget }).session(session);
       await Budget.deleteOne({ _id: budget }).session(session);
     }
 
