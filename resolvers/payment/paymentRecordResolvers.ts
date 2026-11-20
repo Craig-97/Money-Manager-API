@@ -106,15 +106,50 @@ const paidOffThisCycle = async (debt: DebtDocument) =>
 
 const MAX_HISTORY = 200;
 
-// Everything that's happened to a payment, newest first
-const history = (payment: RecurringPaymentDocument, { limit }: { limit?: number | null }) =>
-  PaymentRecord.find({ recurringPayment: payment._id })
+// The year a record shows under: the last date it covers, as the app dates it
+const yearOf = (record: Pick<RecordDocument, 'dates' | 'createdAt'>) =>
+  (record.dates.at(-1) ?? record.createdAt).getUTCFullYear();
+
+/*
+ * Everything that's happened to a payment, newest first: the latest `limit` of them, or all of one
+ * year's. Records covering several dates go in the year of the last.
+ */
+const history = async (
+  payment: RecurringPaymentDocument,
+  { limit, year }: { limit?: number | null; year?: number | null }
+) => {
+  if (year == null) {
+    return PaymentRecord.find({ recurringPayment: payment._id })
+      .sort(NEWEST_FIRST)
+      .limit(Math.min(Math.max(limit ?? 50, 1), MAX_HISTORY))
+      .exec();
+  }
+  // Any record with a date in the year, then only those whose last date is in it
+  const records = await PaymentRecord.find({
+    recurringPayment: payment._id,
+    dates: {
+      $elemMatch: { $gte: new Date(Date.UTC(year, 0, 1)), $lt: new Date(Date.UTC(year + 1, 0, 1)) }
+    }
+  })
     .sort(NEWEST_FIRST)
-    .limit(Math.min(Math.max(limit ?? 50, 1), MAX_HISTORY))
     .exec();
+  return records.filter(record => yearOf(record) === year).slice(0, MAX_HISTORY);
+};
+
+// The years it has records in, newest first, so the app can page through them
+const historyYears = async (payment: RecurringPaymentDocument) => {
+  const records = await PaymentRecord.find({ recurringPayment: payment._id })
+    .select({ dates: 1, createdAt: 1 })
+    .exec();
+  return [...new Set(records.map(yearOf))].sort((a, b) => b - a);
+};
 
 export const paymentRecordResolvers = {
-  RecurringPayment: { thisCycle, history },
+  RecurringPayment: { thisCycle, history, historyYears },
+  // The account its money went out of or came into, as an id; none on records from before accounts
+  PaymentRecord: {
+    account: (record: RecordDocument) => (record.account ? String(record.account) : null)
+  },
   Debt: {
     paidOffThisCycle,
     // Interest built up since the last payment, and from when: one that hasn't been counted yet

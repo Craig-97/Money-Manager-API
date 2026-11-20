@@ -1,10 +1,12 @@
 import type { Request } from 'express';
 import { isValidObjectId, type ClientSession, type Types } from 'mongoose';
 import { AccountKind } from '../../constants/account/accountKind';
+import { AccountRecordKind } from '../../constants/account/accountRecordKind';
 import { InterestFrequency } from '../../constants/account/interestFrequency';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
 import { Account, type AccountInterest } from '../../models/account/Account';
+import { AccountRecord } from '../../models/account/AccountRecord';
 import { OneOffPayment } from '../../models/payment/OneOffPayment';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
 import type {
@@ -39,6 +41,11 @@ import {
   addDueInterest,
   savingsAccruedTo
 } from '../../utils';
+import {
+  recordAccountChange,
+  recordInterestAdded,
+  recordOpeningBalance
+} from './accountRecordResolvers';
 
 type AccountDocument = InstanceType<typeof Account>;
 type BudgetId = Types.ObjectId | string;
@@ -126,14 +133,25 @@ const moveOffAccount = async (
   await OneOffPayment.updateMany(filter, { $set: { account: to } }).session(session);
 };
 
-/* Sets a balance the user typed in, dated now so the app can say how old it is */
-export const setBalance = (account: AccountDocument, balance: number) => {
+/*
+ * Sets a balance the user typed in, dated now so the app can say how old it is. A different figure
+ * goes in the account's history; the same one only says it's been checked.
+ */
+export const setBalance = async (
+  account: AccountDocument,
+  balance: number,
+  session: ClientSession
+) => {
   // Interest so far was earned on the balance before. It isn't paid yet, so it carries on.
   accrueSavings(account);
+  const change = roundPence(balance - account.balance);
   account.balance = balance;
   // Checked against the bank, so interest the app added has been too
   if (account.interest) account.interest.added = [];
   account.balanceUpdatedAt = new Date();
+  if (change) {
+    await recordAccountChange(account, { kind: AccountRecordKind.BALANCE_SET, change, session });
+  }
 };
 
 // Where pay lands first, then the other spending accounts, then savings, each oldest first
@@ -276,14 +294,13 @@ const createAccount = async (
     balance,
     ...newAccountFields({ kind, counts: paidInto ? true : counts, interest, purpose })
   });
-  if (!spending) return withBudget(await account.save(), budgetId);
-
-  // Another account to spend from: payments that don't say which they go out of are recorded on
-  // where pay lands, once that's settled
+  // Its history starts at the balance it's added with. Another account to spend from: payments
+  // that don't say which they go out of are recorded on where pay lands, once that's settled.
   return withTransaction(async session => {
     if (paidInto) await makePaidInto(account, session);
     await account.save({ session });
-    await recordPaymentAccounts(budgetId, session);
+    await recordOpeningBalance(account, session);
+    if (spending) await recordPaymentAccounts(budgetId, session);
     return { account, budget: await budgetOrThrow(budgetId, session), success: true };
   });
 };
@@ -322,7 +339,7 @@ const updateAccount = async (
       ? { accrued: account.interest.accrued ?? 0, accruedTo: account.interest.accruedTo ?? null }
       : null;
     if (name !== undefined) account.name = name;
-    if (balance !== undefined) setBalance(account, balance);
+    if (balance !== undefined) await setBalance(account, balance, session);
     if (kind !== undefined) account.kind = kind;
     if (paidIntoNext) account.counts = true;
     else if (counts !== undefined) account.counts = counts;
@@ -361,6 +378,7 @@ const deleteAccount = async (_: unknown, { id }: { id: string }, req: Request) =
     ).session(session);
     // Deleted first, so the accounts left to spend from are counted without it
     await Account.deleteOne({ _id: account._id }).session(session);
+    await AccountRecord.deleteMany({ account: account._id }).session(session);
     await moveOffAccount(account, { expenses: false, session });
   });
   return withBudget(null, account.budget);
@@ -433,7 +451,7 @@ export const setBalances = async (
       ? await Account.findOne({ _id: accountId, budget }).session(session)
       : null;
     if (!account) throw ACCOUNT_NOT_FOUND(accountId);
-    setBalance(account, balance);
+    await setBalance(account, balance, session);
     await account.save({ session });
   }
 };
@@ -458,11 +476,14 @@ const catchUpInterest = async (_: unknown, { budgetId }: { budgetId: string }, r
   // Sequential, so each write is checked against what was read for it
   for (const account of due) {
     const was = account.interest!.nextDate;
+    const before = account.interest!.added?.length ?? 0;
     if (!addDueInterest(account, today)) continue;
-    await Account.updateOne(
+    const written = await Account.updateOne(
       { _id: account._id, 'interest.nextDate': was },
       { $set: { balance: account.balance, interest: account.interest } }
     );
+    const added = account.interest?.added?.slice(before) ?? [];
+    if (written.modifiedCount && added.length) await recordInterestAdded(account, added);
   }
   return withBudget(null, budgetId);
 };
@@ -478,7 +499,14 @@ const interestFields = {
   accruedTo: (interest: InterestDocument) => savingsAccruedTo(interest.ownerDocument())
 };
 
+// One of the signed-in user's accounts, e.g. to read its history
+const findAccount = async (_: unknown, { id }: { id: string }, req: Request) => {
+  checkAuth(req);
+  return ownDocumentOrThrow(Account, { id, req, notFound: ACCOUNT_NOT_FOUND });
+};
+
 export const accountResolvers = {
+  Query: { account: findAccount },
   AccountInterest: interestFields,
   Mutation: {
     createAccount,

@@ -73,6 +73,7 @@ import {
   setBalances,
   newAccountFields
 } from '../account/accountResolvers';
+import { recordOpeningBalance } from '../account/accountRecordResolvers';
 import {
   latestOpenRecord,
   recordBalanceSet,
@@ -145,6 +146,7 @@ const createBudget = async (_: unknown, { input }: { input: CreateBudgetInput },
       counts: true,
       balanceUpdatedAt: new Date()
     }).save({ session });
+    await recordOpeningBalance(paidInto, session);
     const keys = new Map<string, Types.ObjectId>([[PAID_INTO_KEY, paidInto._id]]);
     for (const { key, kind, counts, interest, purpose, ...account } of accounts ?? []) {
       const saved = await new Account({
@@ -152,6 +154,7 @@ const createBudget = async (_: unknown, { input }: { input: CreateBudgetInput },
         budget: budget._id,
         ...newAccountFields({ kind, counts, interest, purpose })
       }).save({ session });
+      await recordOpeningBalance(saved, session);
       keys.set(key, saved._id);
     }
     const idOf = (key: string | null | undefined, field: 'account' | 'paysInto') => {
@@ -333,7 +336,7 @@ const startPaydayCycle = async (
 
     // The balances the user confirmed go on last, over anything moved into accounts above
     const paidInto = await paidIntoAccountOf(budgetId, session);
-    setBalance(paidInto, paidIntoBalance);
+    await setBalance(paidInto, paidIntoBalance, session);
     await paidInto.save({ session });
     await setBalances(budgetId, { balances: accountBalances ?? [], session });
 

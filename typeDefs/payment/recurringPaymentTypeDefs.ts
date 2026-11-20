@@ -27,8 +27,11 @@ export const recurringPaymentTypeDefs = `
     # skipped, and what markPaymentsUnpaid takes back (the latest first)
     thisCycle: [PaymentRecord!]!
     # Everything that's happened to it, newest first: pays, skips, overpayments and debt balances
-    # set by hand. Records from before the current cycle can't be undone. Up to 200; 50 by default.
-    history(limit: Int): [PaymentRecord!]!
+    # set by hand. Records from before the current cycle can't be undone. The latest limit (up to
+    # 200; 50 by default), or every record of one year: those whose last date falls in it.
+    history(limit: Int, year: Int): [PaymentRecord!]!
+    # The years it has records in, newest first, for paging through its history by year
+    historyYears: [Int!]!
     # When a policy or contract renews; the payments carry on past it. Never set on yearly
     # payments, which renew with each payment.
     renewalDate: String
@@ -81,6 +84,9 @@ export const recurringPaymentTypeDefs = `
     dates: [String!]!
     # What it did to the bank balance: negative for money out
     balanceChange: Float!
+    # The account balanceChange went on. None on records from before accounts, and on ones that
+    # moved no money.
+    account: ID
     # What it did to a debt, when the payment is one
     debt: PaymentRecordDebt
     # What it added to the savings account the payment pays into

@@ -1,9 +1,11 @@
+import { AccountChangeKind } from '../../constants/account/accountChangeKind';
 import { AccountKind } from '../../constants/account/accountKind';
 import { InterestFrequency } from '../../constants/account/interestFrequency';
 import { gqlEnum } from '../../utils/helpers/enumHelpers';
 
 export const accountTypeDefs = `
   ${gqlEnum('AccountKind', AccountKind)}
+  ${gqlEnum('AccountChangeKind', AccountChangeKind)}
   ${gqlEnum('InterestFrequency', InterestFrequency)}
 
   # A savings account's interest. With a frequency it's worked out each day and each payment is
@@ -57,6 +59,27 @@ export const accountTypeDefs = `
     purpose: String
     # When the balance was last typed in
     balanceUpdatedAt: String!
+    # What moved its balance since its history started, newest first: the latest limit (up to
+    # 200; 50 by default), or every change of one year
+    history(limit: Int, year: Int): [AccountChange!]!
+    # The years it has changes in, newest first, for paging through its history by year
+    historyYears: [Int!]!
+  }
+
+  # Something that moved an account's balance: its opening balance, one typed in, interest added,
+  # a payment out of or into it, or money moved between accounts
+  type AccountChange {
+    id: ID!
+    kind: AccountChangeKind!
+    # The day it happened
+    date: String!
+    # How far it moved the balance: negative for money out; the whole balance for OPENING
+    change: Float!
+    # The balance afterwards. Exact for OPENING and BALANCE_SET; the rest is worked back from
+    # today's balance and the balances typed in.
+    balanceAfter: Float!
+    # The payment's name for PAYMENT; the other account for MOVE_IN and MOVE_OUT
+    name: String
   }
 
   # A new account, SAVINGS unless kind is given. A spending account counts in free to spend and
@@ -112,6 +135,11 @@ export const accountTypeDefs = `
     account: Account
     budget: Budget
     success: Boolean!
+  }
+
+  type Query {
+    # One of the signed-in user's accounts, e.g. to read its history
+    account(id: ID!): Account
   }
 
   type Mutation {
