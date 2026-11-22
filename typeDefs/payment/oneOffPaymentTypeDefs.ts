@@ -15,6 +15,8 @@ export const oneOffPaymentTypeDefs = `
     dueReminder: ReminderTiming!
     # The account it goes out of, or comes into. Null: the one pay lands in.
     account: ID
+    # A logo shown in place of its letter: a link to an image. Null: the letter.
+    iconUrl: String
   }
 
   input CreateOneOffPaymentInput {
@@ -27,6 +29,8 @@ export const oneOffPaymentTypeDefs = `
     dueReminder: ReminderTimingInput
     # An account in the same budget: a spending one for an expense. Null: the one pay lands in.
     account: ID
+    # https:// only; blank or null shows the letter again
+    iconUrl: String
   }
 
   # A one-off payment created alongside its budget, so it has no budgetId yet
@@ -50,6 +54,8 @@ export const oneOffPaymentTypeDefs = `
     dueReminder: ReminderTimingInput
     # An account in the same budget: a spending one for an expense. Null: the one pay lands in.
     account: ID
+    # https:// only; blank or null shows the letter again
+    iconUrl: String
   }
 
   type OneOffPaymentResponse {

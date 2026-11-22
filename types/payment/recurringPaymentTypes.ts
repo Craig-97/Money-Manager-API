@@ -30,6 +30,7 @@ export interface RecurringPaymentFields {
   account?: string | null;
   paysInto?: string | null;
   nonWorkingDay?: NonWorkingDay | null;
+  iconUrl?: string | null;
 }
 
 export interface CreateRecurringPaymentInput extends RecurringPaymentFields {

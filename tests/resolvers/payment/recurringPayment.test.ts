@@ -15,7 +15,7 @@ afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
 const FIELDS =
-  'id name amount category frequency type firstPaymentDate lastPaymentDate renewalDate dueReminder { off days } renewalReminder { off days } budget';
+  'id name amount category frequency type firstPaymentDate lastPaymentDate renewalDate dueReminder { off days } renewalReminder { off days } budget iconUrl';
 const CREATE = `mutation ($input: CreateRecurringPaymentInput!) {
   createRecurringPayment(input: $input) { success recurringPayment { ${FIELDS} } }
 }`;
@@ -209,6 +209,24 @@ describe('updateRecurringPayment', () => {
     const created = await makePayment(token, budgetId, 'Edit me');
     const body = await gql(UPDATE, { id: idOf(created), input: {} }, token);
     expect(errorCode(body)).toBe('RECURRING_PAYMENT_UPDATE_FAILED');
+  });
+
+  it('saves a logo link, and clears it when left blank', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const iconUrl = 'https://www.google.com/s2/favicons?domain=netflix.com&sz=128';
+    const created = await makePayment(token, budgetId, 'Netflix', { iconUrl: ` ${iconUrl} ` });
+    expect(created.data.createRecurringPayment.recurringPayment.iconUrl).toBe(iconUrl);
+
+    const body = await gql(UPDATE, { id: idOf(created), input: { iconUrl: ' ' } }, token);
+    expect(body.data.updateRecurringPayment.recurringPayment.iconUrl).toBeNull();
+  });
+
+  it('only takes https logo links', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    for (const iconUrl of ['http://example.com/logo.png', 'javascript:alert(1)', 'netflix.com']) {
+      const body = await makePayment(token, budgetId, 'Netflix', { iconUrl });
+      expect(errorCode(body)).toBe('BAD_USER_INPUT');
+    }
   });
 
   it('rejects paid or skipped dates with a validation error, as only paying or skipping records them', async () => {

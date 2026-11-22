@@ -48,6 +48,8 @@ export const recurringPaymentTypeDefs = `
     paysInto: ID
     # When a date on a weekend or bank holiday goes out. Null: the budget's nonWorkingDay.
     nonWorkingDay: NonWorkingDay
+    # A logo shown in place of its letter: a link to an image. Null: the letter.
+    iconUrl: String
   }
 
   # A loan or card a recurring payment pays off. Marking a payment paid takes the period's interest
@@ -130,6 +132,8 @@ export const recurringPaymentTypeDefs = `
     paysInto: ID
     # Null follows the budget's nonWorkingDay
     nonWorkingDay: NonWorkingDay
+    # https:// only; blank or null shows the letter again
+    iconUrl: String
   }
 
   # A recurring payment created alongside its budget, so it has no budgetId yet
@@ -171,6 +175,8 @@ export const recurringPaymentTypeDefs = `
     paysInto: ID
     # Null follows the budget's nonWorkingDay
     nonWorkingDay: NonWorkingDay
+    # https:// only; blank or null shows the letter again
+    iconUrl: String
   }
 
   type RecurringPaymentResponse {

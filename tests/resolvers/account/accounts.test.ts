@@ -14,7 +14,7 @@ afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
 const ACCOUNT =
-  'id name kind balance counts paidInto interest { rate frequency day nextDate } purpose balanceUpdatedAt';
+  'id name kind balance counts paidInto interest { rate frequency day nextDate } purpose iconUrl balanceUpdatedAt';
 const BUDGET = `budget { bankBalance accounts { ${ACCOUNT} } }`;
 const QUERY = `query { ${BUDGET} }`;
 const CREATE = `mutation ($input: CreateAccountInput!) {
@@ -155,6 +155,23 @@ describe('accounts', () => {
       Number(isa.balanceUpdatedAt)
     );
     expect(body.data.updateAccount.budget.bankBalance).toBe(9900);
+  });
+
+  it('saves a logo link, and clears it when left blank', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const iconUrl = 'https://www.google.com/s2/favicons?domain=trading212.com&sz=128';
+    const isa = await addSavings(token, budgetId, { iconUrl });
+    expect(isa.iconUrl).toBe(iconUrl);
+
+    const body = await gql(UPDATE, { id: isa.id, input: { iconUrl: '' } }, token);
+    expect(body.data.updateAccount.account.iconUrl).toBeNull();
+
+    const http = await gql(
+      UPDATE,
+      { id: isa.id, input: { iconUrl: 'http://example.com/a.png' } },
+      token
+    );
+    expect(errorCode(http)).toBe('BAD_USER_INPUT');
   });
 
   it("keeps where pay lands counting, and won't delete it or make it savings", async () => {

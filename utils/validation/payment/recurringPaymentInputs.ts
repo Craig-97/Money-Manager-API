@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { PaymentType } from '../../../constants/payment/paymentType';
 import { PAYMENT_REMINDER_DAYS, RENEWAL_REMINDER_DAYS } from '../../../constants/reminder';
-import { amount, isoDate, reminderTiming } from '../common';
+import { amount, iconUrl, isoDate, reminderTiming } from '../common';
 import { paymentName, paymentShape } from './paymentFields';
 
 // Loose, so fields without rules here (a category, a frequency) come through parsing untouched
@@ -22,7 +22,8 @@ export const recurringInput = z.looseObject({
   dueReminder: reminderTiming(PAYMENT_REMINDER_DAYS).optional(),
   renewalReminder: reminderTiming(RENEWAL_REMINDER_DAYS).optional(),
   // null stops tracking it as a debt
-  debt: debtInput.nullish()
+  debt: debtInput.nullish(),
+  iconUrl
 });
 
 type DateValue = Date | string | null | undefined;

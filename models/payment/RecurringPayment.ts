@@ -56,6 +56,8 @@ export interface RecurringPayment {
   // When a date on a weekend or bank holiday goes out; null follows the budget's choice. Its dates
   // stay as the schedule gives them, and are moved wherever they're compared with a payday or today.
   nonWorkingDay?: NonWorkingDay | null;
+  // A logo shown in place of its letter, as a link to an image
+  iconUrl?: string | null;
 }
 
 const debtSchema = new Schema<Debt>(
@@ -130,7 +132,8 @@ const recurringPaymentSchema = new Schema<RecurringPayment>({
   },
   account: { type: Schema.Types.ObjectId, ref: 'Account', default: null },
   paysInto: { type: Schema.Types.ObjectId, ref: 'Account', default: null },
-  nonWorkingDay: { type: String, enum: enumValues(NonWorkingDay), default: null }
+  nonWorkingDay: { type: String, enum: enumValues(NonWorkingDay), default: null },
+  iconUrl: { type: String, default: null }
 });
 
 /*
