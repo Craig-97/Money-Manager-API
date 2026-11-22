@@ -57,6 +57,8 @@ export const accountTypeDefs = `
     interest: AccountInterest
     # What it's for, e.g. "Holiday fund"
     purpose: String
+    # A logo shown in place of its letter: a link to an image. Null: the letter.
+    iconUrl: String
     # When the balance was last typed in
     balanceUpdatedAt: String!
     # What moved its balance since its history started, newest first: the latest limit (up to
@@ -94,6 +96,8 @@ export const accountTypeDefs = `
     paidInto: Boolean
     interest: AccountInterestInput
     purpose: String
+    # https:// only; blank or null shows the letter again
+    iconUrl: String
   }
 
   # Only what's given changes. A balance that's given is dated now. paidInto can only be true: it
@@ -107,6 +111,8 @@ export const accountTypeDefs = `
     # Null stops it
     interest: AccountInterestInput
     purpose: String
+    # https:// only; blank or null shows the letter again
+    iconUrl: String
   }
 
   input AccountBalanceInput {

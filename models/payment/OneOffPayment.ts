@@ -22,6 +22,8 @@ export interface OneOffPayment {
   dueReminder: ReminderTiming;
   // The account it goes out of, or comes into. None means the one pay lands in.
   account?: Types.ObjectId | null;
+  // A logo shown in place of its letter, as a link to an image
+  iconUrl?: string | null;
 }
 
 const OneOffPaymentSchema = new Schema<OneOffPayment>({
@@ -57,7 +59,8 @@ const OneOffPaymentSchema = new Schema<OneOffPayment>({
     type: reminderTimingSchema,
     default: () => ({ ...USUAL_TIMING })
   },
-  account: { type: Schema.Types.ObjectId, ref: 'Account', default: null }
+  account: { type: Schema.Types.ObjectId, ref: 'Account', default: null },
+  iconUrl: { type: String, default: null }
 });
 
 // Add indexes to the schema

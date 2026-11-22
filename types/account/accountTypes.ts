@@ -23,6 +23,7 @@ export interface CreateAccountInput {
   paidInto?: boolean | null;
   interest?: AccountInterestInput | null;
   purpose?: string | null;
+  iconUrl?: string | null;
 }
 
 export interface UpdateAccountInput {
@@ -34,6 +35,7 @@ export interface UpdateAccountInput {
   paidInto?: boolean;
   interest?: AccountInterestInput | null;
   purpose?: string | null;
+  iconUrl?: string | null;
 }
 
 export interface UpdateAccountBalancesInput {

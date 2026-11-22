@@ -14,7 +14,7 @@ beforeAll(setupTestApp);
 afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
-const FIELDS = 'id budget name amount dueDate type category';
+const FIELDS = 'id budget name amount dueDate type category iconUrl';
 const CREATE = `mutation ($input: CreateOneOffPaymentInput!) {
   createOneOffPayment(input: $input) { success oneOffPayment { ${FIELDS} } }
 }`;
@@ -126,6 +126,16 @@ describe('updateOneOffPayment', () => {
       category: 'GIFTS',
       type: 'EXPENSE'
     });
+  });
+
+  it('saves a logo link, and clears it with null', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const iconUrl = 'https://example.com/tickets.png';
+    const created = await makePayment(token, budgetId, 'Concert', { iconUrl });
+    expect(created.data.createOneOffPayment.oneOffPayment.iconUrl).toBe(iconUrl);
+
+    const body = await gql(UPDATE, { id: idOf(created), input: { iconUrl: null } }, token);
+    expect(body.data.updateOneOffPayment.oneOffPayment.iconUrl).toBeNull();
   });
 
   it('rejects renaming to an existing payment name, but keeps its own', async () => {

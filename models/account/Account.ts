@@ -47,6 +47,8 @@ export interface Account {
   interest?: AccountInterest | null;
   // What it's for, e.g. "Holiday fund"
   purpose?: string | null;
+  // A logo shown in place of its letter, as a link to an image
+  iconUrl?: string | null;
   // When the user last set the balance, so the app can say how old it is
   balanceUpdatedAt: Date;
 }
@@ -87,6 +89,7 @@ const AccountSchema = new Schema<Account>(
       default: null
     },
     purpose: { type: String, default: null },
+    iconUrl: { type: String, default: null },
     balanceUpdatedAt: { type: Date, required: true }
   },
   { timestamps: true }

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AccountKind } from '../../../constants/account/accountKind';
 import { InterestFrequency } from '../../../constants/account/interestFrequency';
-import { isoDate, money } from '../common';
+import { iconUrl, isoDate, money } from '../common';
 
 // Loose, so fields without rules here (the budget, the account ids) come through parsing untouched
 
@@ -66,7 +66,8 @@ export const newAccount = z.looseObject({
   counts: z.boolean().nullish(),
   paidInto: paidInto.nullish(),
   interest,
-  purpose
+  purpose,
+  iconUrl
 });
 
 export const accountInput = z.looseObject({
@@ -76,7 +77,8 @@ export const accountInput = z.looseObject({
   counts: z.boolean().optional(),
   paidInto: paidInto.optional(),
   interest,
-  purpose
+  purpose,
+  iconUrl
 });
 
 export const accountBalances = z.looseObject({

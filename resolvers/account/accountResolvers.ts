@@ -279,10 +279,8 @@ const createAccount = async (
   req: Request
 ) => {
   checkAuth(req);
-  const { budgetId, name, kind, balance, counts, paidInto, interest, purpose } = parseInput(
-    newAccount,
-    input
-  );
+  const { budgetId, name, kind, balance, counts, paidInto, interest, purpose, iconUrl } =
+    parseInput(newAccount, input);
   await checkBudgetAccess(budgetId, req);
   const spending = kind === AccountKind.SPENDING;
   if (paidInto && !spending) throw PAID_INTO_NOT_SPENDING();
@@ -292,6 +290,7 @@ const createAccount = async (
     budget: budgetId,
     name,
     balance,
+    iconUrl,
     ...newAccountFields({ kind, counts: paidInto ? true : counts, interest, purpose })
   });
   // Its history starts at the balance it's added with. Another account to spend from: payments
@@ -318,7 +317,7 @@ const updateAccount = async (
 ) => {
   checkAuth(req);
   const account = await ownDocumentOrThrow(Account, { id, req, notFound: ACCOUNT_NOT_FOUND });
-  const { name, kind, balance, counts, paidInto, interest, purpose } = parseInput(
+  const { name, kind, balance, counts, paidInto, interest, purpose, iconUrl } = parseInput(
     accountInput,
     input
   );
@@ -354,6 +353,7 @@ const updateAccount = async (
       account.interest = next?.frequency && builtUp ? { ...next, ...builtUp } : next;
     } else if (becameSpending) account.interest = null;
     if (purpose !== undefined) account.purpose = purpose;
+    if (iconUrl !== undefined) account.iconUrl = iconUrl;
 
     if (paidInto && !account.paidInto) await makePaidInto(account, session);
     // Saved first, so the accounts left to spend from are counted as they are now
