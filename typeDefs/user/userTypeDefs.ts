@@ -18,6 +18,8 @@ export const userTypeDefs = `
     # Not chosen yet when null, so a device keeps what it already shows
     theme: ThemePreference
     accent: String
+    # Whether the first-time tour has been offered, on any device
+    tourSeen: Boolean!
   }
 
   input RegisterInput {
@@ -72,5 +74,7 @@ export const userTypeDefs = `
     deleteCurrentUser: UserResponse!
     # Save the signed-in user's theme and accent; whatever is left out stays as it is
     updatePreferences(theme: ThemePreference, accent: String): UserResponse!
+    # Record that the signed-in user has been offered the first-time tour
+    markTourSeen: UserResponse!
   }
 `;

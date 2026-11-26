@@ -352,6 +352,16 @@ const deleteUserAndBudget = (id: string) =>
 
 // Deletes the signed-in user and everything on their budget. It takes no id, so it can only ever
 // remove the caller.
+const markTourSeen = async (_: unknown, _1: unknown, req: Request) => {
+  checkAuth(req);
+  const user = await getUser(req.userId as string);
+  user.tourSeen = true;
+  user.increment();
+  await user.save();
+
+  return { user, success: true };
+};
+
 const deleteCurrentUser = async (_: unknown, _1: unknown, req: Request) => {
   checkAuth(req);
   const result = await deleteUserAndBudget(req.userId as string);
@@ -371,6 +381,7 @@ export const userResolvers = {
     logout,
     logoutEverywhere,
     updatePreferences,
+    markTourSeen,
     registerAndLogin,
     requestPasswordReset,
     resetPassword,
