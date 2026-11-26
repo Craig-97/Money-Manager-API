@@ -8,6 +8,7 @@ import {
   refreshCookieFrom,
   createUserWithBudget
 } from '../helpers';
+import { User } from '../../models';
 
 beforeAll(setupTestApp);
 afterAll(teardownTestApp);
@@ -240,5 +241,30 @@ describe('updatePreferences', () => {
 
   it('needs a signed-in user', async () => {
     expect(errorCode(await gql(PREFERENCES, { theme: 'DARK' }))).toBe('UNAUTHENTICATED');
+  });
+});
+
+describe('markTourSeen', () => {
+  const MARK_TOUR_SEEN = `mutation { markTourSeen { success user { tourSeen } } }`;
+  const tourSeen = async (token: string) =>
+    (await gql(`{ tokenFindUser { tourSeen } }`, undefined, token)).data.tokenFindUser.tourSeen;
+
+  it('starts unseen, and stays seen once marked', async () => {
+    const { res } = await signIn();
+    const token = res.body.data.login.token;
+    expect(await tourSeen(token)).toBe(false);
+    const marked = await gql(MARK_TOUR_SEEN, undefined, token);
+    expect(marked.data.markTourSeen).toEqual({ success: true, user: { tourSeen: true } });
+    expect(await tourSeen(token)).toBe(true);
+  });
+
+  it('counts a user saved before the tour existed as unseen', async () => {
+    const { email, res } = await signIn();
+    await User.updateOne({ email }, { $unset: { tourSeen: 1 } });
+    expect(await tourSeen(res.body.data.login.token)).toBe(false);
+  });
+
+  it('needs a signed-in user', async () => {
+    expect(errorCode(await gql(MARK_TOUR_SEEN))).toBe('UNAUTHENTICATED');
   });
 });

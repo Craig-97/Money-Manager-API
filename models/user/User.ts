@@ -18,6 +18,8 @@ export interface User {
   // Not chosen yet when unset, so a new device keeps whatever it already shows
   theme?: ThemePreference;
   accent?: string;
+  // Set once the first-time tour has been offered, so another device doesn't offer it again
+  tourSeen?: boolean;
 }
 
 const UserSchema = new Schema<User>({
@@ -49,7 +51,8 @@ const UserSchema = new Schema<User>({
   },
   tokenVersion: { type: Number, default: 0 },
   theme: { type: String, enum: Object.values(ThemePreference) },
-  accent: String
+  accent: String,
+  tourSeen: { type: Boolean, default: false }
 });
 
 // Add indexes to the schema
