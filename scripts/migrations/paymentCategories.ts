@@ -10,6 +10,9 @@ import { PaymentCategory } from '../../constants/payment';
  * and everything else to Groceries. Money coming in only offers the income categories, so income
  * that would land anywhere else (most often Other) goes to Income.
  *
+ * Very old one-offs have no type or category at all, which the API now requires, so they'd stop
+ * their budget's payments loading. They become expenses in General, as migrated bills do.
+ *
  * Only categories that aren't in the new list are changed, so running it again does nothing.
  */
 
@@ -76,13 +79,15 @@ export interface PaymentCategoriesResult {
   recurring: number;
   oneOff: number;
   records: number;
+  // Payments with no type or category, given the defaults
+  missing: number;
   changed: number;
 }
 
 interface StoredPayment {
   _id: mongoose.Types.ObjectId;
   name: string;
-  category: string;
+  category?: string;
   type?: string;
 }
 
@@ -91,18 +96,24 @@ interface StoredRecord {
   payment: { name: string; category: string; type?: string };
 }
 
-// Very old payments have no category at all; those are left as they are
 const OLD = { $exists: true, $nin: Object.values(PaymentCategory) };
+const MISSING = { $or: [{ type: { $exists: false } }, { category: { $exists: false } }] };
 
 export const migratePaymentCategories = async ({ apply }: { apply: boolean }) => {
   const db = mongoose.connection;
-  const result: PaymentCategoriesResult = { recurring: 0, oneOff: 0, records: 0, changed: 0 };
+  const result: PaymentCategoriesResult = {
+    recurring: 0,
+    oneOff: 0,
+    records: 0,
+    missing: 0,
+    changed: 0
+  };
 
   const movePayments = async (name: string) => {
     const payments = db.collection<StoredPayment>(name);
     const found = await payments.find({ category: OLD }).toArray();
     const writes = found.flatMap(payment => {
-      const category = newCategory(payment.category, payment);
+      const category = newCategory(payment.category as string, payment);
       return category
         ? [{ updateOne: { filter: { _id: payment._id }, update: { $set: { category } } } }]
         : [];
@@ -111,8 +122,22 @@ export const migratePaymentCategories = async ({ apply }: { apply: boolean }) =>
     return found.length;
   };
 
+  const fillMissing = async (name: string) => {
+    const payments = db.collection<StoredPayment>(name);
+    const found = await payments.find(MISSING).toArray();
+    const writes = found.map(payment => {
+      const type = payment.type ?? 'EXPENSE';
+      const category = payment.category ?? (type === 'INCOME' ? 'INCOME' : 'GENERAL');
+      return { updateOne: { filter: { _id: payment._id }, update: { $set: { type, category } } } };
+    });
+    if (apply && writes.length) result.changed += (await payments.bulkWrite(writes)).modifiedCount;
+    return found.length;
+  };
+
   result.recurring = await movePayments('recurringpayments');
   result.oneOff = await movePayments('oneoffpayments');
+  result.missing =
+    (await fillMissing('recurringpayments')) + (await fillMissing('oneoffpayments'));
 
   const records = db.collection<StoredRecord>('paymentrecords');
   const found = await records.find({ 'payment.category': OLD }).toArray();

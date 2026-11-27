@@ -169,6 +169,21 @@ describe('accountsToBudgets', () => {
     expect(body.data.budget).toEqual({ id: budgetId });
   });
 
+  it('leaves the bank account on payments that already have a budget, so it can run again', async () => {
+    const { budgetId } = await createUserWithBudget();
+    const account = oid('507f1f77bcf86cd799439011');
+    await db()
+      .collection('recurringpayments')
+      .insertOne({ budget: oid(budgetId), account, name: 'Rent', amount: 10 });
+
+    await accountsToBudgets({ apply: true });
+
+    expect(await db().collection('recurringpayments').findOne({ name: 'Rent' })).toMatchObject({
+      budget: oid(budgetId),
+      account
+    });
+  });
+
   it('stops when both collections have data, rather than guess how to merge them', async () => {
     await createUserWithBudget();
     await db().collection('accounts').drop();
@@ -499,7 +514,7 @@ describe('migratePaymentCategories', () => {
       })
     ).insertedId;
 
-    const found = { recurring: 1, oneOff: 1, records: 1 };
+    const found = { recurring: 1, oneOff: 1, records: 1, missing: 0 };
     expect(await migratePaymentCategories({ apply: false })).toEqual({ ...found, changed: 0 });
     expect(await collection('recurringpayments').findOne({ _id: rent })).toHaveProperty(
       'category',
@@ -525,6 +540,41 @@ describe('migratePaymentCategories', () => {
       recurring: 0,
       oneOff: 0,
       records: 0,
+      missing: 0,
+      changed: 0
+    });
+  });
+
+  it('makes very old one-offs with no type or category expenses in General, once', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const old = (
+      await collection('oneoffpayments').insertOne({
+        budget: oid(budgetId),
+        name: 'Paypal Payment',
+        amount: 50
+      })
+    ).insertedId;
+
+    expect(await migratePaymentCategories({ apply: true })).toMatchObject({
+      missing: 1,
+      changed: 1
+    });
+    expect(await collection('oneoffpayments').findOne({ _id: old })).toMatchObject({
+      type: 'EXPENSE',
+      category: 'GENERAL'
+    });
+    const body = await gql(
+      `query { budget { oneOffPayments { name type category } } }`,
+      undefined,
+      token
+    );
+    expect(body.errors).toBeUndefined();
+    expect(body.data.budget.oneOffPayments).toEqual([
+      { name: 'Paypal Payment', type: 'EXPENSE', category: 'GENERAL' }
+    ]);
+
+    expect(await migratePaymentCategories({ apply: true })).toMatchObject({
+      missing: 0,
       changed: 0
     });
   });

@@ -34,7 +34,9 @@ interface LinkedResult {
   indexes: string[];
 }
 
-const OLD_FIELD = { account: { $exists: true } };
+// Records with a budget already moved over: their account is the bank account payments now name,
+// which renaming would write over the budget
+const OLD_FIELD = { account: { $exists: true }, budget: { $exists: false } };
 
 export const accountsToBudgets = async ({ apply }: { apply: boolean }) => {
   const db = mongoose.connection.db;
