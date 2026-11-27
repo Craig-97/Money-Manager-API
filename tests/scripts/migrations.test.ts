@@ -545,10 +545,13 @@ describe('migratePaymentCategories', () => {
     });
   });
 
-  it('makes very old one-offs with no type or category expenses in General, once', async () => {
+  it('makes very old one-offs expenses in General, due the day they were made, once', async () => {
     const { token, budgetId } = await createUserWithBudget();
+    // Made at 23:30 UTC on 2026-06-30, which is already 1 July in the UK
+    const madeAt = mongoose.Types.ObjectId.createFromTime(Date.UTC(2026, 5, 30, 23, 30) / 1000);
     const old = (
       await collection('oneoffpayments').insertOne({
+        _id: madeAt,
         budget: oid(budgetId),
         name: 'Paypal Payment',
         amount: 50
@@ -561,16 +564,17 @@ describe('migratePaymentCategories', () => {
     });
     expect(await collection('oneoffpayments').findOne({ _id: old })).toMatchObject({
       type: 'EXPENSE',
-      category: 'GENERAL'
+      category: 'GENERAL',
+      dueDate: fromIsoDay('2026-07-01')
     });
     const body = await gql(
-      `query { budget { oneOffPayments { name type category } } }`,
+      `query { budget { oneOffPayments { name type category dueDate } } }`,
       undefined,
       token
     );
     expect(body.errors).toBeUndefined();
     expect(body.data.budget.oneOffPayments).toEqual([
-      { name: 'Paypal Payment', type: 'EXPENSE', category: 'GENERAL' }
+      { name: 'Paypal Payment', type: 'EXPENSE', category: 'GENERAL', dueDate: expect.any(String) }
     ]);
 
     expect(await migratePaymentCategories({ apply: true })).toMatchObject({

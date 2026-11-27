@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { PaymentCategory } from '../../constants/payment';
+import { ukDay } from '../../utils/dates';
 
 /*
  * One-off and recurring payments had their own category lists. They now share one, so each old
@@ -10,8 +11,9 @@ import { PaymentCategory } from '../../constants/payment';
  * and everything else to Groceries. Money coming in only offers the income categories, so income
  * that would land anywhere else (most often Other) goes to Income.
  *
- * Very old one-offs have no type or category at all, which the API now requires, so they'd stop
- * their budget's payments loading. They become expenses in General, as migrated bills do.
+ * Very old one-offs have no type, category or due date at all, which the API now requires, so
+ * they'd stop their budget's payments loading. They become expenses in General, as migrated bills
+ * do, due on the day they were made (which their id records).
  *
  * Only categories that aren't in the new list are changed, so running it again does nothing.
  */
@@ -79,7 +81,7 @@ export interface PaymentCategoriesResult {
   recurring: number;
   oneOff: number;
   records: number;
-  // Payments with no type or category, given the defaults
+  // Payments with no type, category or (one-offs) due date, given the defaults
   missing: number;
   changed: number;
 }
@@ -89,6 +91,7 @@ interface StoredPayment {
   name: string;
   category?: string;
   type?: string;
+  dueDate?: Date;
 }
 
 interface StoredRecord {
@@ -97,7 +100,8 @@ interface StoredRecord {
 }
 
 const OLD = { $exists: true, $nin: Object.values(PaymentCategory) };
-const MISSING = { $or: [{ type: { $exists: false } }, { category: { $exists: false } }] };
+const MISSING = [{ type: { $exists: false } }, { category: { $exists: false } }];
+const NO_DUE_DATE = { dueDate: { $exists: false } };
 
 export const migratePaymentCategories = async ({ apply }: { apply: boolean }) => {
   const db = mongoose.connection;
@@ -122,13 +126,15 @@ export const migratePaymentCategories = async ({ apply }: { apply: boolean }) =>
     return found.length;
   };
 
-  const fillMissing = async (name: string) => {
+  const fillMissing = async (name: string, { dated }: { dated: boolean }) => {
     const payments = db.collection<StoredPayment>(name);
-    const found = await payments.find(MISSING).toArray();
+    const found = await payments.find({ $or: dated ? [...MISSING, NO_DUE_DATE] : MISSING }).toArray();
     const writes = found.map(payment => {
       const type = payment.type ?? 'EXPENSE';
       const category = payment.category ?? (type === 'INCOME' ? 'INCOME' : 'GENERAL');
-      return { updateOne: { filter: { _id: payment._id }, update: { $set: { type, category } } } };
+      const dueDate = dated ? (payment.dueDate ?? ukDay(payment._id.getTimestamp())) : undefined;
+      const set = dueDate ? { type, category, dueDate } : { type, category };
+      return { updateOne: { filter: { _id: payment._id }, update: { $set: set } } };
     });
     if (apply && writes.length) result.changed += (await payments.bulkWrite(writes)).modifiedCount;
     return found.length;
@@ -137,7 +143,8 @@ export const migratePaymentCategories = async ({ apply }: { apply: boolean }) =>
   result.recurring = await movePayments('recurringpayments');
   result.oneOff = await movePayments('oneoffpayments');
   result.missing =
-    (await fillMissing('recurringpayments')) + (await fillMissing('oneoffpayments'));
+    (await fillMissing('recurringpayments', { dated: false })) +
+    (await fillMissing('oneoffpayments', { dated: true }));
 
   const records = db.collection<StoredRecord>('paymentrecords');
   const found = await records.find({ 'payment.category': OLD }).toArray();

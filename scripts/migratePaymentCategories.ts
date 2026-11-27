@@ -9,6 +9,8 @@ void runMigration('Payment categories to the shared list', async apply => {
   console.log(
     `${recurring} recurring payment(s), ${oneOff} one-off payment(s) and ${records} payment record(s) have an old category.`
   );
-  console.log(`${missing} payment(s) have no type or category, and become expenses in General.`);
+  console.log(
+    `${missing} payment(s) are missing a type, category or due date, and get expense, General and the day they were made.`
+  );
   if (apply) console.log(`Changed ${changed}.`);
 });
