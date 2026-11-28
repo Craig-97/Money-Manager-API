@@ -110,6 +110,31 @@ describe('updateReminders', () => {
     );
   });
 
+  it('keeps what is done with a debt’s rate ending, as with any reminder', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const [ends, ended] = [
+      'rateends:6746d2c1f3a1b2c3d4e5f607:2031-03-01',
+      'rateended:6746d2c1f3a1b2c3d4e5f607:2031-03-01'
+    ];
+
+    const cleared = await gql(
+      UPDATE,
+      { input: { budgetId, keys: [ends], action: 'CLEAR' } },
+      token
+    );
+    const later = await gql(
+      UPDATE,
+      { input: { budgetId, keys: [ended], action: 'LATER', until: day(3) } },
+      token
+    );
+
+    expect(cleared.errors).toBeUndefined();
+    expect(cleared.data.updateReminders.states).toEqual([
+      { key: ends, read: false, cleared: true, snoozedUntil: null }
+    ]);
+    expect(later.data.updateReminders.states[0]).toMatchObject({ key: ended, cleared: false });
+  });
+
   it('clears a reminder and brings it back just as it was, still new', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const cleared = await gql(UPDATE, { input: { budgetId, keys: [KEY], action: 'CLEAR' } }, token);

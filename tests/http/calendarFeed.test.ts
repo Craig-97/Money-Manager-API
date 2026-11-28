@@ -267,6 +267,62 @@ describe('GET /cal/:token.ics', () => {
     expect(text.match(/SUMMARY:Payday/g)?.length).toBeGreaterThanOrEqual(12);
   });
 
+  it('carries a debt’s rate ending, with an alarm three months before unless set', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const debtPayment = (name: string, extra: Variables) =>
+      addPayment(token, budgetId, {
+        name,
+        category: 'FINANCES',
+        firstPaymentDate: day(-20),
+        ...extra
+      });
+    await debtPayment('Mortgage', { debt: { balance: 148200, apr: 4.29, rateEndsOn: day(200) } });
+    await debtPayment('Credit card', {
+      debt: { balance: 900, apr: 24.9, rateEndsOn: day(100) },
+      renewalReminder: { off: false, days: 30 }
+    });
+    await debtPayment('Car loan', {
+      debt: { balance: 4000, apr: 6.9, rateEndsOn: day(100) },
+      renewalReminder: { off: true }
+    });
+    await debtPayment('Gym', {});
+    const feedToken = await turnOn(token, budgetId);
+
+    const { text } = await fetchFeed(feedToken);
+
+    const mortgage = eventFor(text, 'Mortgage rate ends');
+    expect(mortgage).toContain(`DTSTART;VALUE=DATE:${compact(200)}`);
+    // 90 days before, less the 8 hours into the day the alarm counts from
+    expect(mortgage).toContain('TRIGGER:-PT2152H');
+    expect(eventFor(text, 'Credit card rate ends')).toContain('TRIGGER:-PT712H');
+    expect(eventFor(text, 'Car loan rate ends')).not.toContain('TRIGGER');
+    expect(text).not.toContain('Gym rate ends');
+  });
+
+  it('leaves rate endings out with the renewals, and once the debt is paid off', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    await addPayment(token, budgetId, {
+      name: 'Mortgage',
+      category: 'FINANCES',
+      firstPaymentDate: day(-20),
+      debt: { balance: 148200, apr: 4.29, rateEndsOn: day(200) }
+    });
+    await addPayment(token, budgetId, {
+      name: 'Card',
+      category: 'FINANCES',
+      firstPaymentDate: day(-20),
+      debt: { balance: 0, apr: 4.29, rateEndsOn: day(200) }
+    });
+
+    const feedToken = await turnOn(token, budgetId);
+    const { text } = await fetchFeed(feedToken);
+    expect(text).toContain('Mortgage rate ends');
+    expect(text).not.toContain('Card rate ends');
+
+    await turnOn(token, budgetId, { renewals: false });
+    expect((await fetchFeed(feedToken)).text).not.toContain('Mortgage rate ends');
+  });
+
   it('puts a note that follows a payment on each of its dates', async () => {
     const { token, budgetId } = await createUserWithBudget();
     const created = await addPayment(token, budgetId, {

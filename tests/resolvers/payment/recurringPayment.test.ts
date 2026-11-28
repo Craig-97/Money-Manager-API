@@ -99,6 +99,10 @@ describe('createRecurringPayment', () => {
       'a renewal reminder that is not one of the choices',
       { renewalReminder: { off: false, days: 10 } }
     ],
+    [
+      'a rate end reminder of three months on a payment that is not a debt with one',
+      { renewalReminder: { off: false, days: 90 } }
+    ],
     ['a due reminder that is not one of the choices', { dueReminder: { off: false, days: 2 } }],
     ['a reminder that is off with days', { dueReminder: { off: true, days: 1 } }],
     [

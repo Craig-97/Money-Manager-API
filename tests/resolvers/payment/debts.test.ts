@@ -15,8 +15,8 @@ beforeAll(setupTestApp);
 afterAll(teardownTestApp);
 beforeEach(clearDatabase);
 
-const DEBT = 'debt { balance startingBalance apr balanceUpdatedAt }';
-const FIELDS = `id name amount type ${DEBT}`;
+const DEBT = 'debt { balance startingBalance apr balanceUpdatedAt rateEndsOn }';
+const FIELDS = `id name amount type renewalReminder { off days } ${DEBT}`;
 const CREATE = `mutation ($input: CreateRecurringPaymentInput!) {
   createRecurringPayment(input: $input) { recurringPayment { ${FIELDS} } }
 }`;
@@ -200,6 +200,134 @@ describe('updating a debt', () => {
 
     expect(errorCode(body)).toBe('BAD_USER_INPUT');
     expect(fieldOf(body)).toBe('debt');
+  });
+});
+
+describe('when a debt’s rate ends', () => {
+  const update = (token: string, id: string, input: Variables) => gql(UPDATE, { id, input }, token);
+  const updated = (body: GqlBody) => body.data.updateRecurringPayment.recurringPayment;
+  const ends = '2031-03-01';
+  const endsAt = String(new Date(`${ends}T00:00:00Z`).getTime());
+  const threeMonths = { off: false, days: 90 };
+  const usual = { off: false, days: null };
+
+  it('is empty unless set', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const body = await makePayment(token, budgetId, { debt: card });
+    expect(created(body).debt.rateEndsOn).toBeNull();
+  });
+
+  it('is stored with the debt, with its reminder three months before', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const body = await makePayment(token, budgetId, {
+      debt: { ...card, rateEndsOn: ends },
+      renewalReminder: threeMonths
+    });
+
+    expect(body.errors).toBeUndefined();
+    expect(created(body)).toMatchObject({
+      debt: { rateEndsOn: endsAt },
+      renewalReminder: threeMonths
+    });
+  });
+
+  it.each(['2031-02-30', '01/03/2031', 'soon'])('rejects the date %s', async date => {
+    const { token, budgetId } = await createUserWithBudget();
+    const body = await makePayment(token, budgetId, { debt: { ...card, rateEndsOn: date } });
+    expect(errorCode(body)).toBe('BAD_USER_INPUT');
+    expect(fieldOf(body)).toBe('debt.rateEndsOn');
+  });
+
+  it('is set, changed and cleared from an update', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const payment = created(await makePayment(token, budgetId, { debt: card }));
+
+    const set = await update(token, payment.id, { debt: { ...card, rateEndsOn: ends } });
+    expect(updated(set).debt.rateEndsOn).toBe(endsAt);
+
+    const cleared = await update(token, payment.id, { debt: { ...card, rateEndsOn: null } });
+    expect(updated(cleared).debt.rateEndsOn).toBeNull();
+  });
+
+  it('is kept when an update of the debt leaves it out, like a new balance', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const payment = created(
+      await makePayment(token, budgetId, { debt: { ...card, rateEndsOn: ends } })
+    );
+
+    const body = await update(token, payment.id, { debt: { ...card, balance: 1100 } });
+
+    expect(updated(body).debt).toMatchObject({ balance: 1100, rateEndsOn: endsAt });
+  });
+
+  it('allows three months before only with a rate end', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+
+    const none = await makePayment(token, budgetId, { debt: card, renewalReminder: threeMonths });
+    expect(errorCode(none)).toBe('BAD_USER_INPUT');
+    expect(fieldOf(none)).toBe('renewalReminder.days');
+
+    const other = await makePayment(token, budgetId, {
+      name: 'Phone',
+      renewalReminder: threeMonths
+    });
+    expect(errorCode(other)).toBe('BAD_USER_INPUT');
+  });
+
+  it('is checked against the debt already saved when only the reminder changes', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const withEnd = created(
+      await makePayment(token, budgetId, { debt: { ...card, rateEndsOn: ends } })
+    );
+    const without = created(await makePayment(token, budgetId, { name: 'Loan', debt: card }));
+
+    const ok = await update(token, withEnd.id, { renewalReminder: threeMonths });
+    const bad = await update(token, without.id, { renewalReminder: threeMonths });
+
+    expect(updated(ok).renewalReminder).toEqual(threeMonths);
+    expect(errorCode(bad)).toBe('BAD_USER_INPUT');
+  });
+
+  it('puts the reminder back to the usual timing when the rate end goes', async () => {
+    const { token, budgetId } = await createUserWithBudget();
+    const withReminder = { debt: { ...card, rateEndsOn: ends }, renewalReminder: threeMonths };
+    const payment = created(await makePayment(token, budgetId, withReminder));
+    const again = created(await makePayment(token, budgetId, { ...withReminder, name: 'Loan' }));
+
+    const cleared = await update(token, payment.id, { debt: { ...card, rateEndsOn: null } });
+    const stopped = await update(token, again.id, { debt: null });
+
+    expect(updated(cleared).renewalReminder).toEqual(usual);
+    expect(updated(stopped).renewalReminder).toEqual(usual);
+  });
+
+  it('can be set up alongside the budget', async () => {
+    const { token } = await createUserWithBudget({ withBudget: false });
+    const body = await gql(
+      CREATE_BUDGET_DEBT,
+      {
+        input: {
+          bankBalance: 1000,
+          monthlyIncome: 2000,
+          recurringPayments: [
+            {
+              name: 'Mortgage',
+              amount: 750,
+              category: 'FINANCES',
+              frequency: 'MONTHLY',
+              type: 'EXPENSE',
+              firstPaymentDate: '2030-01-26',
+              debt: { balance: 148200, apr: 4.29, rateEndsOn: ends }
+            }
+          ]
+        }
+      },
+      token
+    );
+
+    expect(body.errors).toBeUndefined();
+    const [payment] = body.data.createBudget.budget.recurringPayments;
+    expect(payment.debt.rateEndsOn).toBe(endsAt);
   });
 });
 
