@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { PaymentType } from '../../../constants/payment/paymentType';
-import { PAYMENT_REMINDER_DAYS, RENEWAL_REMINDER_DAYS } from '../../../constants/reminder';
+import {
+  PAYMENT_REMINDER_DAYS,
+  RATE_ENDS_REMINDER_DAYS,
+  RATE_ENDS_USUAL_DAYS
+} from '../../../constants/reminder';
 import { amount, iconUrl, isoDate, reminderTiming } from '../common';
 import { paymentName, paymentShape } from './paymentFields';
 
@@ -10,7 +14,9 @@ import { paymentName, paymentShape } from './paymentFields';
 const debtInput = z.object({
   balance: amount,
   startingBalance: amount.nullish(),
-  apr: z.number().finite().min(0, "APR can't be negative").max(100, 'APR must be 100% or less')
+  apr: z.number().finite().min(0, "APR can't be negative").max(100, 'APR must be 100% or less'),
+  // null clears it
+  rateEndsOn: isoDate.nullish()
 });
 
 export const recurringInput = z.looseObject({
@@ -20,7 +26,8 @@ export const recurringInput = z.looseObject({
   lastPaymentDate: isoDate.nullish(),
   renewalDate: isoDate.nullish(),
   dueReminder: reminderTiming(PAYMENT_REMINDER_DAYS).optional(),
-  renewalReminder: reminderTiming(RENEWAL_REMINDER_DAYS).optional(),
+  // A rate end's choices too; paymentRules keeps the longest for a debt with one
+  renewalReminder: reminderTiming(RATE_ENDS_REMINDER_DAYS).optional(),
   // null stops tracking it as a debt
   debt: debtInput.nullish(),
   iconUrl
@@ -34,7 +41,8 @@ interface PaymentRuleFields {
   firstPaymentDate?: DateValue;
   lastPaymentDate?: DateValue;
   renewalDate?: DateValue;
-  debt?: unknown;
+  renewalReminder?: { days?: number | null } | null;
+  debt?: { rateEndsOn?: DateValue } | null;
 }
 
 const dayOf = (value: DateValue) => (value ? new Date(value).getTime() : null);
@@ -68,9 +76,21 @@ const debtRules = (payment: PaymentRuleFields, ctx: z.RefinementCtx) => {
   }
 };
 
+// Three months before is for a rate ending; a renewal's reminder goes no further than a month
+const reminderRules = (payment: PaymentRuleFields, ctx: z.RefinementCtx) => {
+  if (payment.renewalReminder?.days === RATE_ENDS_USUAL_DAYS && !payment.debt?.rateEndsOn) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Reminders must be 7, 14 or 30 days before, or 90 for a debt whose rate ends',
+      path: ['renewalReminder', 'days']
+    });
+  }
+};
+
 const paymentRules = (payment: PaymentRuleFields, ctx: z.RefinementCtx) => {
   renewalRules(payment, ctx);
   debtRules(payment, ctx);
+  reminderRules(payment, ctx);
 };
 
 export const newRecurring = recurringInput

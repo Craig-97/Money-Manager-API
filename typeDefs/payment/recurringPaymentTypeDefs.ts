@@ -38,6 +38,8 @@ export const recurringPaymentTypeDefs = `
     # When the reminder before each due date goes off
     dueReminder: ReminderTiming!
     # When the reminder before it renews goes off. A yearly payment counts back from each payment.
+    # A debt has no renewal, so for it this is when the reminder before its rate ends goes off, and
+    # the usual timing is 3 months before.
     renewalReminder: ReminderTiming!
     # Set when it's paying off a loan or card; only ever on an expense
     debt: Debt
@@ -69,6 +71,8 @@ export const recurringPaymentTypeDefs = `
     # up to the start of accruedTo. It's added when the next payment is marked paid.
     accrued: Float!
     accruedTo: String
+    # When a fixed or offer rate ends, e.g. a mortgage fix. Its reminder is renewalReminder.
+    rateEndsOn: String
   }
 
   # Tracks a payment as a debt. On an update, null stops tracking it.
@@ -76,6 +80,9 @@ export const recurringPaymentTypeDefs = `
     balance: Float!
     startingBalance: Float
     apr: Float!
+    # When the rate ends, YYYY-MM-DD. On an update, left out keeps it and null clears it. Setting it
+    # lets renewalReminder be 3 months (90 days) before.
+    rateEndsOn: String
   }
 
   # Something that happened to a payment

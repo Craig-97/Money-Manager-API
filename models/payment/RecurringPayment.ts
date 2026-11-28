@@ -26,6 +26,9 @@ export interface Debt {
   // payment, or when the balance was set if that's later.
   accrued?: number;
   accruedTo?: Date | null;
+  // When a fixed or offer rate ends, like a mortgage fix or a 0% card. Its reminder is the
+  // payment's renewalReminder, as a debt never has a renewal date.
+  rateEndsOn?: Date | null;
 }
 
 export interface RecurringPayment {
@@ -45,6 +48,7 @@ export interface RecurringPayment {
   // When the reminder before each due date goes off
   dueReminder: ReminderTiming;
   // When the reminder before it renews goes off. A yearly payment counts back from each payment.
+  // A debt has no renewal, so for it this is when the reminder before its rate ends goes off.
   renewalReminder: ReminderTiming;
   // Set when the payment is paying off a debt; only ever on an expense
   debt?: Debt | null;
@@ -67,7 +71,8 @@ const debtSchema = new Schema<Debt>(
     apr: { type: Number, required: true, min: 0, max: 100 },
     balanceUpdatedAt: { type: Date, default: null },
     accrued: { type: Number, default: 0 },
-    accruedTo: { type: Date, default: null }
+    accruedTo: { type: Date, default: null },
+    rateEndsOn: { type: Date, default: null }
   },
   { _id: false }
 );

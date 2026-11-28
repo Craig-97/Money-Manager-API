@@ -2,6 +2,7 @@ import { PaymentFrequency } from '../../constants/payment';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { NoteRepeat } from '../../constants/note/noteRepeat';
 import { PayFrequency } from '../../constants/payday';
+import { RATE_ENDS_USUAL_DAYS } from '../../constants/reminder';
 import type { CalendarFeed, ReminderSettings } from '../../models/budget/Budget';
 import type { Note } from '../../models/note/Note';
 import type { Payday } from '../../models/payday/Payday';
@@ -141,6 +142,27 @@ const renewalEvents = ({ feed, settings, payments, today }: FeedSource): Calenda
   });
 };
 
+// A debt's fixed or offer rate ending, until it's paid off. Like a renewal, it's one of the feed's
+// renewals, with its alarm from the payment's renewal reminder, usually 3 months before.
+const rateEndsEvents = ({ feed, payments, today }: FeedSource): CalendarEvent[] => {
+  if (!feed.renewals) return [];
+  const from = addDays(today, -DAYS_BEHIND);
+  return payments.flatMap(payment => {
+    const date = payment.debt?.rateEndsOn;
+    if (!date || payment.debt!.balance <= 0 || date < from) return [];
+    const day = toIsoDay(date);
+    return [
+      {
+        uid: `rate-ends-${payment._id.toString()}-${day}@money-manager`,
+        date: day,
+        title: `${payment.name} rate ends`,
+        description: 'Check your new rate and payment.',
+        alarms: alarmsFor(payment.renewalReminder, RATE_ENDS_USUAL_DAYS)
+      }
+    ];
+  });
+};
+
 const paydayEvents = ({
   feed,
   settings,
@@ -259,6 +281,7 @@ export const calendarEvents = (source: FeedSource) =>
     ...paymentEvents(source),
     ...oneOffEvents(source),
     ...renewalEvents(source),
+    ...rateEndsEvents(source),
     ...paydayEvents(source),
     ...noteEvents(source),
     ...debtFreeEvents(source)

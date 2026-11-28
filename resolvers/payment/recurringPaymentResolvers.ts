@@ -2,6 +2,7 @@ import type { Request } from 'express';
 import type { Types } from 'mongoose';
 import { PaymentType } from '../../constants/payment/paymentType';
 import { NoteRepeat } from '../../constants/note/noteRepeat';
+import { RATE_ENDS_USUAL_DAYS } from '../../constants/reminder';
 import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
 import { RecurringPayment } from '../../models/payment/RecurringPayment';
 import { PaymentRecord } from '../../models/payment/PaymentRecord';
@@ -79,6 +80,24 @@ const updateRecurringPayment = async (
 
   if (Object.keys(input).length === 0) {
     throw RECURRING_PAYMENT_UPDATE_FAILED();
+  }
+
+  // A debt update that leaves its rate end out keeps it, as the app's balance changes do
+  if (input.debt && input.debt.rateEndsOn === undefined) {
+    input.debt = {
+      ...input.debt,
+      rateEndsOn: payment.debt?.rateEndsOn?.toISOString().slice(0, 10) ?? null
+    };
+  }
+  // Three months before is only for a rate ending, so it goes back to the usual timing with it
+  const rateEndsAfter =
+    input.debt === undefined ? payment.debt?.rateEndsOn : input.debt?.rateEndsOn;
+  if (
+    input.renewalReminder === undefined &&
+    !rateEndsAfter &&
+    payment.renewalReminder?.days === RATE_ENDS_USUAL_DAYS
+  ) {
+    input.renewalReminder = { off: false, days: null };
   }
 
   if (input.name)

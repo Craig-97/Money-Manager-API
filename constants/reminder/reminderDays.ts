@@ -6,5 +6,10 @@ export const PAYMENT_REMINDER_DAYS = [0, 1, 3, 7] as const;
 // A renewal: a week, two weeks or a month before
 export const RENEWAL_REMINDER_DAYS = [7, 14, 30] as const;
 
+// A debt's rate ending: as a renewal, and three months before as well. Left on the usual timing it
+// goes off the last of these, as a rate ending is worth looking at in good time.
+export const RATE_ENDS_REMINDER_DAYS = [7, 14, 30, 90] as const;
+export const RATE_ENDS_USUAL_DAYS = 90;
+
 // A note's date: on the day, the day before, a week, two weeks or a month before
 export const NOTE_REMINDER_DAYS = [0, 1, 7, 14, 30] as const;

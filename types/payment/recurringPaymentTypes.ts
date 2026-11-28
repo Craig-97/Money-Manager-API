@@ -11,6 +11,7 @@ interface DebtFields {
   balance: number;
   startingBalance?: number | null;
   apr: number;
+  rateEndsOn?: string | null;
 }
 
 export interface RecurringPaymentFields {
