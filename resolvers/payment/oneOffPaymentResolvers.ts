@@ -1,0 +1,106 @@
+import type { Request } from 'express';
+import { checkAuth, checkBudgetAccess } from '../../middleware/isAuth';
+import { OneOffPayment } from '../../models/payment/OneOffPayment';
+import { PaymentRecord } from '../../models/payment/PaymentRecord';
+import type {
+  CreateOneOffPaymentInput,
+  UpdateOneOffPaymentInput
+} from '../../types/payment/oneOffPaymentTypes';
+import {
+  PAYMENT_NOT_FOUND,
+  PAYMENTS_NOT_FOUND,
+  PAYMENT_DELETE_FAILED,
+  withTransaction,
+  ownDocumentOrThrow,
+  validateUniqueName,
+  parseInput,
+  newOneOff,
+  oneOffInput
+} from '../../utils';
+import { accountFields, checkPaymentAccounts } from '../account/accountResolvers';
+
+const createOneOffPayment = async (
+  _: unknown,
+  { input }: { input: CreateOneOffPaymentInput },
+  req: Request
+) => {
+  checkAuth(req);
+  const { budgetId, ...payment } = parseInput(newOneOff, input);
+  await checkBudgetAccess(budgetId, req);
+
+  return withTransaction(async session => {
+    await validateUniqueName(payment.name, { budgetId, session });
+    await checkPaymentAccounts(payment, { budget: budgetId, session });
+
+    const createdPayment = await new OneOffPayment({ ...payment, budget: budgetId }).save({
+      session
+    });
+
+    return { oneOffPayment: createdPayment, success: true };
+  });
+};
+
+const updateOneOffPayment = async (
+  _: unknown,
+  { id, input }: { id: string; input: UpdateOneOffPaymentInput },
+  req: Request
+) => {
+  checkAuth(req);
+  const currentPayment = await ownDocumentOrThrow(OneOffPayment, {
+    id,
+    req,
+    notFound: PAYMENT_NOT_FOUND
+  });
+  input = parseInput(oneOffInput, input);
+  if (input.name) {
+    await validateUniqueName(input.name, {
+      budgetId: currentPayment.budget,
+      excludeId: currentPayment._id
+    });
+  }
+  // The account rules span the type too, so they're checked on the result
+  if (input.account !== undefined || input.type !== undefined) {
+    await checkPaymentAccounts(
+      { ...currentPayment.toObject(), ...input },
+      { budget: currentPayment.budget }
+    );
+  }
+
+  Object.assign(currentPayment, input).increment();
+  await currentPayment.save();
+
+  return { oneOffPayment: currentPayment, success: true };
+};
+
+const batchDeleteOneOffPayments = async (_: unknown, { ids }: { ids: string[] }, req: Request) => {
+  checkAuth(req);
+
+  return withTransaction(async session => {
+    // Verify all payments exist and belong to the user's budgets
+    const payments = await OneOffPayment.find({ _id: { $in: ids } }).session(session);
+    if (payments.length !== ids.length) {
+      throw PAYMENTS_NOT_FOUND(ids);
+    }
+    for (const budget of new Set(payments.map(payment => String(payment.budget)))) {
+      await checkBudgetAccess(budget, req);
+    }
+
+    const result = await OneOffPayment.deleteMany({ _id: { $in: ids } }).session(session);
+    if (result.deletedCount !== ids.length) {
+      throw PAYMENT_DELETE_FAILED();
+    }
+    // Deleting a one-off removes it completely, a paid one's record included
+    await PaymentRecord.deleteMany({ oneOffPayment: { $in: ids } }).session(session);
+
+    return { success: true, deletedCount: result.deletedCount, ids };
+  });
+};
+
+export const oneOffPaymentResolvers = {
+  OneOffPayment: accountFields,
+  Mutation: {
+    createOneOffPayment,
+    updateOneOffPayment,
+    batchDeleteOneOffPayments
+  }
+};

@@ -1,0 +1,80 @@
+import { ThemePreference } from '../../constants/user/themePreference';
+import { gqlEnum } from '../../utils/helpers/enumHelpers';
+
+export const userTypeDefs = `
+  ${gqlEnum('ThemePreference', ThemePreference)}
+
+  type Query {
+    tokenFindUser: User
+    passwordResetTokenValid(token: String!): PasswordResetTokenCheck!
+  }
+
+  type User {
+    id: ID!
+    budget: ID
+    email: String!
+    firstName: String!
+    surname: String!
+    # Not chosen yet when null, so a device keeps what it already shows
+    theme: ThemePreference
+    accent: String
+    # Whether the first-time tour has been offered, on any device
+    tourSeen: Boolean!
+  }
+
+  input RegisterInput {
+    email: String!
+    password: String!
+    firstName: String!
+    surname: String!
+  }
+
+  input UserDetailsInput {
+    firstName: String!
+    surname: String!
+    email: String!
+  }
+
+  type UserResponse {
+    user: User
+    budget: ID
+    success: Boolean!
+  }
+
+  type AuthData {
+    user: User!
+    token: String!
+    tokenExpiration: Int!
+  }
+
+  type PasswordResetTokenCheck {
+    valid: Boolean!
+    # The address the link was sent to, for the reset page to show; null when the link is not valid
+    email: String
+  }
+
+
+  type Mutation {
+    # Signs in and sets the httpOnly refresh cookie
+    login(email: String!, password: String!): AuthData!
+    # Swaps the refresh cookie for a new access token and a new cookie; UNAUTHENTICATED when there is none
+    refreshSession: AuthData!
+    # Ends this device's session and clears its cookie
+    logout: SuccessResponse!
+    # Ends every device's session, this one included, and clears this device's cookie
+    logoutEverywhere: SuccessResponse!
+    registerAndLogin(input: RegisterInput!): AuthData!
+    requestPasswordReset(email: String!): SuccessResponse!
+    resetPassword(token: String!, password: String!): AuthData!
+    # Change the signed-in user's name and email
+    updateCurrentUser(input: UserDetailsInput!): UserResponse!
+    # Change the signed-in user's password; the current one has to be right
+    changePassword(currentPassword: String!, newPassword: String!): UserResponse!
+    # Delete the signed-in user and everything on their budget
+    deleteCurrentUser: UserResponse!
+    # Save the signed-in user's theme and accent; whatever is left out stays as it is
+    updatePreferences(theme: ThemePreference, accent: String): UserResponse!
+    # Record that the signed-in user has been offered the first-time tour
+    markTourSeen: UserResponse!
+  }
+`;

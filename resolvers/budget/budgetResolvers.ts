@@ -1,0 +1,769 @@
+import type { ClientSession, Types } from 'mongoose';
+import type { Request } from 'express';
+import { PaymentType } from '../../constants/payment/paymentType';
+import { PaymentRecordKind } from '../../constants/payment/paymentRecordKind';
+import { LeftOverOutcome } from '../../constants/payday/leftOverOutcome';
+import { AccountKind, PAID_INTO_KEY } from '../../constants/account/accountKind';
+import { checkBudgetAccess, checkAuth } from '../../middleware/isAuth';
+import { Account } from '../../models/account/Account';
+import { Budget, type BudgetDocument } from '../../models/budget/Budget';
+import { User } from '../../models/user/User';
+import { Note } from '../../models/note/Note';
+import { OneOffPayment, type OneOffPaymentDocument } from '../../models/payment/OneOffPayment';
+import { Payday } from '../../models/payday/Payday';
+import {
+  RecurringPayment,
+  type RecurringPaymentDocument
+} from '../../models/payment/RecurringPayment';
+import {
+  PaymentRecord,
+  type RecordDebt,
+  type RecordTransfer
+} from '../../models/payment/PaymentRecord';
+import type {
+  CreateBudgetInput,
+  UpdateBudgetInput,
+  MarkPaymentsPaidInput,
+  MarkPaymentsUnpaidInput,
+  SkipRecurringPaymentsInput,
+  StartPaydayCycleInput,
+  LogDebtOverpaymentInput,
+  UndoDebtOverpaymentInput
+} from '../../types/budget/budgetTypes';
+import { budgetMoves, datesOutBefore, goesOutOn, moveOf } from '../../utils/payday';
+import {
+  USER_NOT_FOUND,
+  BUDGET_NOT_LINKED,
+  BUDGET_EXISTS,
+  BUDGET_UPDATE_FAILED,
+  RECURRING_PAYMENT_NOT_FOUND,
+  PAYMENT_NOT_FOUND,
+  DEBT_NOT_TRACKED,
+  OVERPAYMENT_TOO_LARGE,
+  PAYMENT_RECORD_NOT_FOUND,
+  PAYMENT_RECORD_CLOSED,
+  ACCOUNT_NOT_ALLOWED,
+  budgetOrThrow,
+  roundPence,
+  withBalanceDate,
+  withTransaction,
+  validateUniqueName,
+  parseInput,
+  newBudget,
+  budgetInput,
+  paydayCycle,
+  skipRecurring,
+  debtOverpayment,
+  accrueDebt,
+  payDebtOn,
+  addDays,
+  nextOccurrence,
+  occurrencesBefore,
+  ukDay
+} from '../../utils';
+import {
+  accountFor,
+  accountsOf,
+  checkPaymentAccounts,
+  recordPaymentAccounts,
+  countedBalance,
+  moveMoney,
+  paidIntoAccountOf,
+  setBalance,
+  setBalances,
+  newAccountFields
+} from '../account/accountResolvers';
+import { recordOpeningBalance } from '../account/accountRecordResolvers';
+import {
+  latestOpenRecord,
+  recordBalanceSet,
+  snapshotOf,
+  withThisCycle
+} from '../payment/paymentRecordResolvers';
+
+// One of the signed-in user's budgets, or their default budget when no id is given
+const findBudget = async (_: unknown, { id }: { id?: string | null }, req: Request) => {
+  checkAuth(req);
+
+  let budgetId = id;
+  if (budgetId) {
+    await checkBudgetAccess(budgetId, req);
+  } else {
+    const user = await User.findById(req.userId);
+    if (!user) {
+      throw USER_NOT_FOUND(req.userId);
+    }
+    // Setup isn't finished until the user has a budget
+    if (!user.budget) {
+      throw BUDGET_NOT_LINKED();
+    }
+    budgetId = String(user.budget);
+  }
+
+  return budgetOrThrow(budgetId);
+};
+
+// A new budget for the signed-in user, with any payments and payday set up alongside it
+const createBudget = async (_: unknown, { input }: { input: CreateBudgetInput }, req: Request) => {
+  checkAuth(req);
+  const {
+    bankBalance,
+    paidIntoName,
+    accounts = [],
+    monthlyIncome,
+    oneOffPayments = [],
+    recurringPayments = [],
+    payday
+  } = parseInput(newBudget, input);
+
+  return withTransaction(async session => {
+    const user = await User.findById(req.userId).session(session);
+    if (!user) {
+      throw USER_NOT_FOUND(req.userId);
+    }
+
+    // One budget each for now
+    const existingBudget = await Budget.findOne({ user: user._id }).session(session);
+    if (existingBudget) {
+      throw BUDGET_EXISTS(existingBudget.id);
+    }
+
+    const budget = await new Budget({
+      monthlyIncome,
+      user: user._id,
+      // Setup starts the first cycle, so the payday prompt waits for the next payday
+      cycleStartedOn: ukDay()
+    }).save({ session });
+
+    // Where pay lands, holding the balance the user started with, then the other accounts. Payments
+    // set up alongside them name them by key.
+    const paidInto = await new Account({
+      budget: budget._id,
+      name: paidIntoName ?? 'Current account',
+      kind: AccountKind.SPENDING,
+      paidInto: true,
+      balance: bankBalance,
+      counts: true,
+      balanceUpdatedAt: new Date()
+    }).save({ session });
+    await recordOpeningBalance(paidInto, session);
+    const keys = new Map<string, Types.ObjectId>([[PAID_INTO_KEY, paidInto._id]]);
+    for (const { key, kind, counts, interest, purpose, ...account } of accounts ?? []) {
+      const saved = await new Account({
+        ...account,
+        budget: budget._id,
+        ...newAccountFields({ kind, counts, interest, purpose })
+      }).save({ session });
+      await recordOpeningBalance(saved, session);
+      keys.set(key, saved._id);
+    }
+    const idOf = (key: string | null | undefined, field: 'account' | 'paysInto') => {
+      if (!key) return null;
+      const id = keys.get(key);
+      if (!id) throw ACCOUNT_NOT_ALLOWED(key, field);
+      return id;
+    };
+
+    // The budget the app opens when it isn't given one
+    user.budget = budget._id;
+    await user.save({ session });
+
+    // Check for name conflicts for all payments
+    await Promise.all(
+      [...oneOffPayments, ...recurringPayments].map(payment =>
+        validateUniqueName(payment.name, { budgetId: budget._id, session })
+      )
+    );
+
+    // Sequential: operations within a transaction session can't run in parallel
+    for (const payment of oneOffPayments ?? []) {
+      const mapped = { ...payment, account: idOf(payment.account, 'account') };
+      await checkPaymentAccounts(mapped, { budget: budget._id, session });
+      await new OneOffPayment({ ...mapped, budget: budget._id }).save({ session });
+    }
+    const saved = [];
+    for (const payment of recurringPayments ?? []) {
+      const mapped = {
+        ...payment,
+        account: idOf(payment.account, 'account'),
+        paysInto: idOf(payment.paysInto, 'paysInto')
+      };
+      await checkPaymentAccounts(mapped, { budget: budget._id, session });
+      saved.push(
+        await new RecurringPayment({
+          ...mapped,
+          debt: withBalanceDate(payment.debt),
+          budget: budget._id
+        }).save({ session })
+      );
+    }
+    // Each debt's starting balance goes in its history
+    for (const payment of saved) {
+      if (payment.debt) await recordBalanceSet(payment, null, session);
+    }
+    // With more than one account to spend from, each expense says which it goes out of
+    await recordPaymentAccounts(budget._id, session);
+
+    if (payday) {
+      await new Payday({ ...payday, budget: budget._id }).save({ session });
+    }
+
+    return { budget, success: true };
+  });
+};
+
+const updateBudget = async (
+  _: unknown,
+  { id, input }: { id: string; input: UpdateBudgetInput },
+  req: Request
+) => {
+  checkAuth(req);
+  await checkBudgetAccess(id, req);
+
+  const { monthlyIncome, nonWorkingDay } = parseInput(budgetInput, input);
+  if (monthlyIncome === undefined && !nonWorkingDay) {
+    throw BUDGET_UPDATE_FAILED();
+  }
+
+  const budget = await budgetOrThrow(id);
+
+  if (monthlyIncome !== undefined) budget.monthlyIncome = monthlyIncome;
+  // Applies straight away: the dates still to go out move, while records keep the dates they had
+  if (nonWorkingDay) budget.nonWorkingDay = nonWorkingDay;
+
+  budget.increment();
+  await budget.save();
+
+  return { budget, success: true };
+};
+
+// Payday: sets the confirmed balance and starts the new cycle. Last cycle's records are closed: they
+// stay as history but can't be undone, as the confirmed balance already allows for them. Paid
+// one-offs are cleared away. Recording the payday stops the prompt showing again for it.
+//
+// Recurring payments with dates left over from last cycle get what the user said happened: PAID
+// records them as paid and SKIPPED as skipped (both closed, and moved on to their first date from
+// payday), while DUE, or not saying, leaves them overdue. Payments due from payday to today that
+// have already gone out are recorded as paid in the new cycle. Neither changes the balance, since
+// the confirmed one already has them taken off, but a debt still goes down.
+const startPaydayCycle = async (
+  _: unknown,
+  { input }: { input: StartPaydayCycleInput },
+  req: Request
+) => {
+  checkAuth(req);
+  const { budgetId, payday, paidIntoBalance, accountBalances, leftOver, alreadyPaid } = parseInput(
+    paydayCycle,
+    input
+  );
+  await checkBudgetAccess(budgetId, req);
+
+  return withTransaction(async session => {
+    const budget = await budgetOrThrow(budgetId, session);
+
+    const cycleStart = new Date(payday);
+    const today = ukDay();
+    const payments = await RecurringPayment.find({ budget: budgetId }).session(session);
+    // Whether a date fell before payday, or has gone out by today, is decided by when it goes out
+    const moves = await budgetMoves(
+      budget,
+      await Payday.findOne({ budget: budgetId }).session(session)
+    );
+    const outcomes = new Map(
+      leftOver.map(({ recurringPaymentId, outcome }) => [recurringPaymentId, outcome])
+    );
+    const goneOut = new Set(alreadyPaid?.recurringPaymentIds ?? []);
+    for (const id of [...outcomes.keys(), ...goneOut]) {
+      if (!payments.some(payment => payment.id === id)) {
+        throw RECURRING_PAYMENT_NOT_FOUND(id);
+      }
+    }
+
+    // Done with once the cycle has ended. Anything already dealt with from payday on belongs to
+    // the new cycle, so it stays open and can still be undone.
+    await PaymentRecord.updateMany(
+      {
+        budget: budgetId,
+        open: true,
+        dates: { $not: { $elemMatch: { $gte: cycleStart } } }
+      },
+      { $set: { open: false } },
+      { session }
+    );
+    await OneOffPayment.deleteMany({
+      budget: budgetId,
+      paidAt: { $ne: null },
+      dueDate: { $lt: cycleStart }
+    }).session(session);
+
+    // Sequential: operations within a transaction session can't run in parallel
+    for (const payment of payments) {
+      let changed = false;
+      const outcome = outcomes.get(payment.id);
+      const move = moveOf(payment, moves);
+      const next = payment.nextDueDate;
+      if (
+        next &&
+        goesOutOn(next, move) < cycleStart &&
+        outcome &&
+        outcome !== LeftOverOutcome.DUE
+      ) {
+        const dates = datesOutBefore(payment, { from: next, until: cycleStart, move });
+        changed =
+          outcome === LeftOverOutcome.PAID
+            ? await recordAlreadyPaid(payment, { dates, session, open: false })
+            : await handle(payment, PaymentRecordKind.SKIPPED, dates, session, {
+                balanceChange: 0,
+                open: false
+              });
+      }
+      // Gone out since payday: its dates up to today, once it's in the new cycle
+      const after = payment.nextDueDate;
+      if (goneOut.has(payment.id) && after && goesOutOn(after, move) >= cycleStart) {
+        const dates = datesOutBefore(payment, { from: after, until: addDays(today, 1), move });
+        if (await recordAlreadyPaid(payment, { dates, session, open: true })) changed = true;
+      }
+      if (!changed) continue;
+      payment.increment();
+      await payment.save({ session });
+    }
+
+    for (const id of alreadyPaid?.oneOffPaymentIds ?? []) {
+      const payment = await oneOffInBudget(id, { budgetId, session });
+      if (payment.paidAt) continue;
+      await payOneOff(payment, { balanceChange: 0, session });
+    }
+
+    // The balances the user confirmed go on last, over anything moved into accounts above
+    const paidInto = await paidIntoAccountOf(budgetId, session);
+    await setBalance(paidInto, paidIntoBalance, session);
+    await paidInto.save({ session });
+    await setBalances(budgetId, { balances: accountBalances ?? [], session });
+
+    budget.cycleStartedOn = cycleStart;
+    budget.increment();
+    await budget.save({ session });
+
+    return { budget, success: true };
+  });
+};
+
+// What paying a payment does to the bank balance: money out comes off, money in goes on
+const balanceChange = (payment: { amount: number; type: string }) =>
+  payment.type === PaymentType.INCOME ? payment.amount : -payment.amount;
+
+type AccountId = Types.ObjectId | null | undefined;
+
+// What a change does to a balance: on the payment's own account, or on the one a record says it
+// went on (none: the one pay lands in)
+type BalanceEffect = number | { amount: number; account: AccountId };
+
+/* What moves the budget's payments off weekends and bank holidays */
+const movesOf = async (budgetId: string) => {
+  const [budget, payday] = await Promise.all([
+    budgetOrThrow(budgetId),
+    Payday.findOne({ budget: budgetId })
+  ]);
+  return budgetMoves(budget, payday);
+};
+
+/* Moves an account's balance; none means the one pay lands in */
+const moveOn = async (
+  budgetId: string,
+  { account, amount, session }: { account: AccountId; amount: number; session: ClientSession }
+) => {
+  if (!amount) return;
+  await moveMoney(await accountFor(budgetId, { account, session }), { amount, session });
+};
+
+/*
+ * Pays, skips or undoes some of a budget's recurring payments in one transaction. `change`
+ * updates a payment, writing or removing its records in the same session, and returns what it
+ * does to the balance, or null when it leaves the payment alone.
+ */
+const changeRecurringPayments = (
+  budgetId: string,
+  recurringPaymentIds: string[],
+  change: (
+    payment: RecurringPaymentDocument,
+    session: ClientSession
+  ) => Promise<BalanceEffect | null>,
+  // Further work in the same transaction, moving balances itself
+  more?: (session: ClientSession) => Promise<void>
+) =>
+  withTransaction(async session => {
+    const budget = await budgetOrThrow(budgetId, session);
+
+    // Sequential: operations within a transaction session can't run in parallel
+    for (const id of recurringPaymentIds) {
+      const payment = await RecurringPayment.findOne({
+        _id: id,
+        budget: budgetId
+      }).session(session);
+      if (!payment) {
+        throw RECURRING_PAYMENT_NOT_FOUND(id);
+      }
+      const effect = await change(payment, session);
+      if (effect === null) continue;
+      const { amount, account } =
+        typeof effect === 'number' ? { amount: effect, account: payment.account } : effect;
+      await moveOn(budgetId, { account, amount, session });
+      payment.increment();
+      await payment.save({ session });
+    }
+
+    if (more) await more(session);
+
+    budget.increment();
+    await budget.save({ session });
+
+    return { budget, success: true };
+  });
+
+/*
+ * Records some of a payment's dates as paid or skipped, moving it on to the date after the last.
+ * Returns false when there's nothing to record.
+ */
+const handle = async (
+  payment: RecurringPaymentDocument,
+  kind: typeof PaymentRecordKind.PAID | typeof PaymentRecordKind.SKIPPED,
+  dates: Date[],
+  session: ClientSession,
+  paid: {
+    balanceChange: number;
+    // The account balanceChange went on
+    account?: Types.ObjectId;
+    debt?: RecordDebt;
+    transfer?: RecordTransfer;
+    open?: boolean;
+  } = { balanceChange: 0 }
+) => {
+  if (!dates.length) return false;
+  await new PaymentRecord({
+    budget: payment.budget,
+    recurringPayment: payment._id,
+    payment: snapshotOf(payment),
+    kind,
+    dates,
+    ...paid
+  }).save({ session });
+  payment.nextDueDate = nextOccurrence(payment, addDays(dates[dates.length - 1], 1));
+  return true;
+};
+
+/*
+ * Records dates as paid that the confirmed payday balance already allows for: nothing comes off the
+ * balance, but a debt still has the interest to each date added and the payment taken off, in
+ * order. Returns false when there's nothing to record.
+ */
+const recordAlreadyPaid = async (
+  payment: RecurringPaymentDocument,
+  { dates, session, open }: { dates: Date[]; session: ClientSession; open: boolean }
+) => {
+  const debt = payment.debt && dates.length ? payDebtOn(payment, dates) : undefined;
+  const transfer = await payInto(payment, { times: dates.length, session });
+  return handle(payment, PaymentRecordKind.PAID, dates, session, {
+    balanceChange: 0,
+    debt,
+    transfer,
+    open
+  });
+};
+
+/*
+ * A payment into savings adds its amount there for each date paid, and says so for its record, so
+ * undoing takes exactly that back off
+ */
+const payInto = async (
+  payment: RecurringPaymentDocument,
+  { times, session }: { times: number; session: ClientSession }
+): Promise<RecordTransfer | undefined> => {
+  if (!payment.paysInto || !times) return undefined;
+  const amount = roundPence(payment.amount * times);
+  await moveMoney(payment.paysInto, { amount, session });
+  return { account: payment.paysInto, amount };
+};
+
+/* A one-off in the budget, or not found */
+const oneOffInBudget = async (
+  id: string,
+  { budgetId, session }: { budgetId: string; session: ClientSession }
+) => {
+  const payment = await OneOffPayment.findOne({ _id: id, budget: budgetId }).session(session);
+  if (!payment) {
+    throw PAYMENT_NOT_FOUND(id);
+  }
+  return payment;
+};
+
+/*
+ * Marks a one-off paid on its due date, or today, and records what that did to the balance: on
+ * `account`, or none when nothing came off
+ */
+const payOneOff = async (
+  payment: OneOffPaymentDocument,
+  {
+    balanceChange,
+    account,
+    session
+  }: { balanceChange: number; account?: Types.ObjectId; session: ClientSession }
+) => {
+  await new PaymentRecord({
+    budget: payment.budget,
+    oneOffPayment: payment._id,
+    payment: snapshotOf(payment),
+    kind: PaymentRecordKind.PAID,
+    dates: [payment.dueDate ?? ukDay()],
+    balanceChange,
+    account
+  }).save({ session });
+  payment.paidAt = new Date();
+  payment.increment();
+  await payment.save({ session });
+};
+
+// Paying payments from the dashboard, as the bank balance sees it. A recurring payment has its
+// next date paid and moves on to the one after. A one-off is marked paid and stays until payday,
+// so paying it can be undone.
+const markPaymentsPaid = async (
+  _: unknown,
+  { input }: { input: MarkPaymentsPaidInput },
+  req: Request
+) => {
+  checkAuth(req);
+  const { budgetId, recurringPaymentIds, oneOffPaymentIds } = input;
+  await checkBudgetAccess(budgetId, req);
+
+  return changeRecurringPayments(
+    budgetId,
+    recurringPaymentIds,
+    async (payment, session) => {
+      // Nothing to pay once it has ended
+      if (!payment.nextDueDate) return null;
+      // A debt has the interest up to its date added, even when it's marked paid late, then the
+      // payment taken off
+      const debt = payment.debt ? payDebtOn(payment, [payment.nextDueDate]) : undefined;
+      const change = balanceChange(payment);
+      const account = await accountFor(budgetId, { account: payment.account, session });
+      const transfer = await payInto(payment, { times: 1, session });
+      await handle(payment, PaymentRecordKind.PAID, [payment.nextDueDate], session, {
+        balanceChange: change,
+        account,
+        debt,
+        transfer
+      });
+      return { amount: change, account };
+    },
+    async session => {
+      for (const id of oneOffPaymentIds) {
+        const payment = await oneOffInBudget(id, { budgetId, session });
+        // Already paid: nothing more comes off
+        if (payment.paidAt) continue;
+        const change = balanceChange(payment);
+        const account = await accountFor(budgetId, { account: payment.account, session });
+        await payOneOff(payment, { balanceChange: change, account, session });
+        await moveOn(budgetId, { account, amount: change, session });
+      }
+    }
+  );
+};
+
+// Undoes the latest pay or skip this cycle on each recurring payment, bringing its dates back, and
+// makes paid one-offs unpaid. The record goes, and whatever paying did to the bank balance and a
+// debt is put back exactly, even if the payment has changed since.
+const markPaymentsUnpaid = async (
+  _: unknown,
+  { input }: { input: MarkPaymentsUnpaidInput },
+  req: Request
+) => {
+  checkAuth(req);
+  const { budgetId, recurringPaymentIds, oneOffPaymentIds } = input;
+  await checkBudgetAccess(budgetId, req);
+
+  return changeRecurringPayments(
+    budgetId,
+    recurringPaymentIds,
+    async (payment, session) => {
+      const latest = await latestOpenRecord(payment._id, session);
+      if (!latest) return null;
+      await PaymentRecord.deleteOne({ _id: latest._id }).session(session);
+      payment.nextDueDate = latest.dates[0];
+      if (payment.debt && latest.debt) {
+        payment.debt.balance = roundPence(payment.debt.balance + latest.debt.reduction);
+        // The interest it added goes back to building up. Records from before it was counted each
+        // day don't say, so it carries on from where it is.
+        if (latest.debt.accruedBefore != null) {
+          payment.debt.accrued = latest.debt.accruedBefore;
+          payment.debt.accruedTo = latest.debt.accruedToBefore ?? null;
+        }
+      }
+      if (latest.transfer) {
+        await moveMoney(latest.transfer.account, { amount: -latest.transfer.amount, session });
+      }
+      return { amount: -latest.balanceChange, account: latest.account };
+    },
+    async session => {
+      for (const id of oneOffPaymentIds ?? []) {
+        const payment = await oneOffInBudget(id, { budgetId, session });
+        const record = await PaymentRecord.findOne({
+          oneOffPayment: payment._id,
+          open: true,
+          kind: PaymentRecordKind.PAID
+        }).session(session);
+        if (!record) continue;
+        await PaymentRecord.deleteOne({ _id: record._id }).session(session);
+        payment.paidAt = null;
+        payment.increment();
+        await payment.save({ session });
+        await moveOn(budgetId, {
+          account: record.account,
+          amount: -record.balanceChange,
+          session
+        });
+      }
+    }
+  );
+};
+
+// Leaves payments' dates unpaid without touching the balance: the next date, or every date before
+// `until` (usually the next payday) to skip the rest of a cycle at once.
+const skipRecurringPayments = async (
+  _: unknown,
+  { input }: { input: SkipRecurringPaymentsInput },
+  req: Request
+) => {
+  checkAuth(req);
+  const { budgetId, recurringPaymentIds, until } = parseInput(skipRecurring, input);
+  await checkBudgetAccess(budgetId, req);
+  // Skipping the rest of a cycle takes the dates that go out before payday
+  const moves = until ? await movesOf(budgetId) : null;
+
+  return changeRecurringPayments(budgetId, recurringPaymentIds, async (payment, session) => {
+    const next = payment.nextDueDate;
+    if (!next) return null;
+    const dates =
+      until && moves
+        ? datesOutBefore(payment, {
+            from: next,
+            until: new Date(until),
+            move: moveOf(payment, moves)
+          })
+        : [next];
+    return (await handle(payment, PaymentRecordKind.SKIPPED, dates, session)) ? 0 : null;
+  });
+};
+
+// Pays extra off a debt today, on top of its usual payments. It's money out of the bank like any
+// payment, and comes straight off what's left to pay.
+const logDebtOverpayment = async (
+  _: unknown,
+  { input }: { input: LogDebtOverpaymentInput },
+  req: Request
+) => {
+  checkAuth(req);
+  const { budgetId, recurringPaymentId, amount } = parseInput(debtOverpayment, input);
+  await checkBudgetAccess(budgetId, req);
+
+  return changeRecurringPayments(budgetId, [recurringPaymentId], async (payment, session) => {
+    if (!payment.debt) {
+      throw DEBT_NOT_TRACKED(recurringPaymentId);
+    }
+    if (amount > payment.debt.balance) {
+      throw OVERPAYMENT_TOO_LARGE();
+    }
+    // Interest so far was on the balance before
+    accrueDebt(payment);
+    payment.debt.balance = roundPence(payment.debt.balance - amount);
+    const account = await accountFor(budgetId, { account: payment.account, session });
+    await new PaymentRecord({
+      budget: payment.budget,
+      recurringPayment: payment._id,
+      payment: snapshotOf(payment),
+      kind: PaymentRecordKind.OVERPAYMENT,
+      dates: [ukDay()],
+      balanceChange: -amount,
+      account,
+      debt: { interest: 0, reduction: amount, balanceAfter: payment.debt.balance }
+    }).save({ session });
+    return { amount: -amount, account };
+  });
+};
+
+// Takes back an overpayment from this cycle: the record goes, and the amount goes back on the debt
+// and the bank balance
+const undoDebtOverpayment = async (
+  _: unknown,
+  { input }: { input: UndoDebtOverpaymentInput },
+  req: Request
+) => {
+  checkAuth(req);
+  const { budgetId, recordId } = input;
+  await checkBudgetAccess(budgetId, req);
+
+  const record = await PaymentRecord.findOne({
+    _id: recordId,
+    budget: budgetId,
+    kind: PaymentRecordKind.OVERPAYMENT
+  });
+  if (!record || !record.recurringPayment) {
+    throw PAYMENT_RECORD_NOT_FOUND(recordId);
+  }
+  if (!record.open) {
+    throw PAYMENT_RECORD_CLOSED();
+  }
+
+  return changeRecurringPayments(
+    budgetId,
+    [String(record.recurringPayment)],
+    async (payment, session) => {
+      const removed = await PaymentRecord.deleteOne({
+        _id: record._id,
+        open: true
+      }).session(session);
+      if (removed.deletedCount !== 1) {
+        throw PAYMENT_RECORD_NOT_FOUND(recordId);
+      }
+      if (payment.debt && record.debt) {
+        // Interest so far was on the balance without it
+        accrueDebt(payment);
+        payment.debt.balance = roundPence(payment.debt.balance + record.debt.reduction);
+      }
+      return { amount: -record.balanceChange, account: record.account };
+    }
+  );
+};
+
+const byAmount = { amount: 1 } as const;
+
+// What's on a budget is only loaded when a query asks for it. Each returns exec()'s promise
+// rather than the query itself: Apollo calls then() more than once, and a query runs on each call.
+const budgetFields = {
+  user: (budget: BudgetDocument) => User.findById(budget.user).exec(),
+  accounts: (budget: BudgetDocument) => accountsOf(budget._id),
+  bankBalance: (budget: BudgetDocument) => countedBalance(budget._id),
+  oneOffPayments: (budget: BudgetDocument) =>
+    OneOffPayment.find({ budget: budget._id }).sort(byAmount).exec(),
+  // With this cycle's pays and skips loaded in one go, for their thisCycle field
+  recurringPayments: async (budget: BudgetDocument) =>
+    withThisCycle(await RecurringPayment.find({ budget: budget._id }).sort(byAmount).exec()),
+  notes: (budget: BudgetDocument) => Note.find({ budget: budget._id }).exec(),
+  payday: (budget: BudgetDocument) => Payday.findOne({ budget: budget._id }).exec()
+};
+
+// Export the resolvers
+export const budgetResolvers = {
+  Query: {
+    budget: findBudget
+  },
+  Mutation: {
+    createBudget,
+    updateBudget,
+    startPaydayCycle,
+    markPaymentsPaid,
+    markPaymentsUnpaid,
+    skipRecurringPayments,
+    logDebtOverpayment,
+    undoDebtOverpayment
+  },
+  Budget: budgetFields
+};

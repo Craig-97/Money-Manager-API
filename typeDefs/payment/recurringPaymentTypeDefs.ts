@@ -1,0 +1,204 @@
+import { PaymentRecordKind } from '../../constants/payment/paymentRecordKind';
+import { PaymentType } from '../../constants/payment/paymentType';
+import { PaymentFrequency, PaymentCategory, NonWorkingDay } from '../../constants/payment';
+import { gqlEnum } from '../../utils/helpers/enumHelpers';
+
+export const recurringPaymentTypeDefs = `
+  ${gqlEnum('PaymentCategory', PaymentCategory)}
+  ${gqlEnum('PaymentFrequency', PaymentFrequency)}
+  ${gqlEnum('PaymentType', PaymentType)}
+  ${gqlEnum('PaymentRecordKind', PaymentRecordKind)}
+  ${gqlEnum('NonWorkingDay', NonWorkingDay)}
+
+  type RecurringPayment {
+    id: ID!
+    budget: ID!
+    name: String!
+    amount: Float!
+    category: PaymentCategory!
+    frequency: PaymentFrequency!
+    type: PaymentType!
+    firstPaymentDate: String!
+    lastPaymentDate: String
+    # The next date still to pay or skip, worked out from the schedule. Null once it has ended.
+    # Dates are as the schedule gives them, before moving off weekends and bank holidays.
+    nextDueDate: String
+    # Its pays and skips since the cycle started, oldest first: what the dashboard shows as paid or
+    # skipped, and what markPaymentsUnpaid takes back (the latest first)
+    thisCycle: [PaymentRecord!]!
+    # Everything that's happened to it, newest first: pays, skips, overpayments and debt balances
+    # set by hand. Records from before the current cycle can't be undone. The latest limit (up to
+    # 200; 50 by default), or every record of one year: those whose last date falls in it.
+    history(limit: Int, year: Int): [PaymentRecord!]!
+    # The years it has records in, newest first, for paging through its history by year
+    historyYears: [Int!]!
+    # When a policy or contract renews; the payments carry on past it. Never set on yearly
+    # payments, which renew with each payment.
+    renewalDate: String
+    # When the reminder before each due date goes off
+    dueReminder: ReminderTiming!
+    # When the reminder before it renews goes off. A yearly payment counts back from each payment.
+    # A debt has no renewal, so for it this is when the reminder before its rate ends goes off, and
+    # the usual timing is 3 months before.
+    renewalReminder: ReminderTiming!
+    # Set when it's paying off a loan or card; only ever on an expense
+    debt: Debt
+    # The account it goes out of, or an income goes into. Null: the one pay lands in.
+    account: ID
+    # Another of the budget's accounts it moves money into, like a standing order: marking it paid
+    # adds the amount there. Only ever on an expense, and never on a debt.
+    paysInto: ID
+    # When a date on a weekend or bank holiday goes out. Null: the budget's nonWorkingDay.
+    nonWorkingDay: NonWorkingDay
+    # A logo shown in place of its letter: a link to an image. Null: the letter.
+    iconUrl: String
+  }
+
+  # A loan or card a recurring payment pays off. Marking a payment paid takes the period's interest
+  # (estimated from the APR) onto the balance, then the payment off it.
+  type Debt {
+    # What's left to pay
+    balance: Float!
+    # What was borrowed, if known
+    startingBalance: Float
+    # Yearly interest rate as a percentage, e.g. 24.9
+    apr: Float!
+    # When the balance was last set by hand, e.g. from a statement
+    balanceUpdatedAt: String
+    # How much less it owes since payday, from payments marked paid and overpayments
+    paidOffThisCycle: Float!
+    # Interest built up since the last payment, unrounded, worked out on each day's closing balance
+    # up to the start of accruedTo. It's added when the next payment is marked paid.
+    accrued: Float!
+    accruedTo: String
+    # When a fixed or offer rate ends, e.g. a mortgage fix. Its reminder is renewalReminder.
+    rateEndsOn: String
+  }
+
+  # Tracks a payment as a debt. On an update, null stops tracking it.
+  input DebtInput {
+    balance: Float!
+    startingBalance: Float
+    apr: Float!
+    # When the rate ends, YYYY-MM-DD. On an update, left out keeps it and null clears it. Setting it
+    # lets renewalReminder be 3 months (90 days) before.
+    rateEndsOn: String
+  }
+
+  # Something that happened to a payment
+  type PaymentRecord {
+    id: ID!
+    kind: PaymentRecordKind!
+    # The due dates it covers; the day it happened for an overpayment or a balance change
+    dates: [String!]!
+    # What it did to the bank balance: negative for money out
+    balanceChange: Float!
+    # The account balanceChange went on. None on records from before accounts, and on ones that
+    # moved no money.
+    account: ID
+    # What it did to a debt, when the payment is one
+    debt: PaymentRecordDebt
+    # What it added to the savings account the payment pays into
+    transfer: PaymentRecordTransfer
+    # Still in the current cycle, so it can be undone: the latest pay or skip with
+    # markPaymentsUnpaid, an overpayment with undoDebtOverpayment
+    open: Boolean!
+    createdAt: String!
+  }
+
+  type PaymentRecordTransfer {
+    account: ID!
+    amount: Float!
+  }
+
+  type PaymentRecordDebt {
+    # Interest added up to the payment's date, worked out each day from the APR
+    interest: Float!
+    # How much less is owed afterwards; negative when it went up
+    reduction: Float!
+    balanceAfter: Float!
+  }
+
+
+  input CreateRecurringPaymentInput {
+    budgetId: ID!
+    name: String!
+    amount: Float!
+    category: PaymentCategory!
+    frequency: PaymentFrequency!
+    type: PaymentType!
+    firstPaymentDate: String!
+    lastPaymentDate: String
+    renewalDate: String
+    dueReminder: ReminderTimingInput
+    renewalReminder: ReminderTimingInput
+    debt: DebtInput
+    # An account in the same budget: a spending one for an expense. Null: the one pay lands in.
+    account: ID
+    # Another account in the same budget; on an update, null stops it
+    paysInto: ID
+    # Null follows the budget's nonWorkingDay
+    nonWorkingDay: NonWorkingDay
+    # https:// only; blank or null shows the letter again
+    iconUrl: String
+  }
+
+  # A recurring payment created alongside its budget, so it has no budgetId yet
+  input RecurringPaymentInput {
+    name: String!
+    amount: Float!
+    category: PaymentCategory!
+    frequency: PaymentFrequency!
+    type: PaymentType!
+    firstPaymentDate: String!
+    lastPaymentDate: String
+    renewalDate: String
+    dueReminder: ReminderTimingInput
+    renewalReminder: ReminderTimingInput
+    debt: DebtInput
+    # An account in the same budget: a spending one for an expense. Null: the one pay lands in.
+    account: ID
+    # Another account in the same budget; on an update, null stops it
+    paysInto: ID
+    # Null follows the budget's nonWorkingDay
+    nonWorkingDay: NonWorkingDay
+  }
+
+  input UpdateRecurringPaymentInput {
+    name: String
+    amount: Float
+    category: PaymentCategory
+    frequency: PaymentFrequency
+    type: PaymentType
+    firstPaymentDate: String
+    lastPaymentDate: String
+    renewalDate: String
+    dueReminder: ReminderTimingInput
+    renewalReminder: ReminderTimingInput
+    debt: DebtInput
+    # An account in the same budget: a spending one for an expense. Null: the one pay lands in.
+    account: ID
+    # Another account in the same budget; on an update, null stops it
+    paysInto: ID
+    # Null follows the budget's nonWorkingDay
+    nonWorkingDay: NonWorkingDay
+    # https:// only; blank or null shows the letter again
+    iconUrl: String
+  }
+
+  type RecurringPaymentResponse {
+    recurringPayment: RecurringPayment
+    success: Boolean!
+  }
+
+  type Query {
+    # One of the signed-in user's recurring payments, e.g. to read a debt's history
+    recurringPayment(id: ID!): RecurringPayment
+  }
+
+  type Mutation {
+    createRecurringPayment(input: CreateRecurringPaymentInput!): RecurringPaymentResponse!
+    updateRecurringPayment(id: ID!, input: UpdateRecurringPaymentInput!): RecurringPaymentResponse!
+    batchDeleteRecurringPayments(ids: [ID!]!): DeleteResponse!
+  }
+`;
